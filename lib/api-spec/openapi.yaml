@@ -3,13 +3,25 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Customer Support AI Orchestrator API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: conversations
+    description: Chat conversation management
+  - name: messages
+    description: Messages within conversations
+  - name: categories
+    description: Intent classification categories
+  - name: rules
+    description: Orchestration rules
+  - name: sources
+    description: Knowledge sources and API connectors
+  - name: analytics
+    description: Analytics and dashboard data
 paths:
   /healthz:
     get:
@@ -24,6 +36,597 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Conversations ─────────────────────────────────────────────────────────
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List conversations
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: number
+            default: 50
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [conversations]
+      summary: Create a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationInput"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a conversation by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateConversation
+      tags: [conversations]
+      summary: Update conversation status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationUpdate"
+      responses:
+        "200":
+          description: Updated conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations/{id}/messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: List messages in a conversation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /conversations/{id}/send:
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send a message and get AI response
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageInput"
+      responses:
+        "200":
+          description: AI response with orchestration details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendMessageResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations/{id}/feedback:
+    post:
+      operationId: submitFeedback
+      tags: [conversations]
+      summary: Submit feedback for a message in a conversation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackInput"
+      responses:
+        "201":
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /conversations/{id}/logs:
+    get:
+      operationId: listConversationLogs
+      tags: [conversations]
+      summary: Get orchestrator logs for a conversation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Orchestrator logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrchestratorLog"
+
+  # ── Intent Categories ─────────────────────────────────────────────────────
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List intent categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IntentCategory"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create an intent category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntentCategory"
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update an intent category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntentCategory"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete an intent category
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Orchestrator Rules ────────────────────────────────────────────────────
+  /rules:
+    get:
+      operationId: listRules
+      tags: [rules]
+      summary: List orchestration rules
+      responses:
+        "200":
+          description: Rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrchestratorRule"
+    post:
+      operationId: createRule
+      tags: [rules]
+      summary: Create an orchestration rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrchestratorRule"
+
+  /rules/{id}:
+    patch:
+      operationId: updateRule
+      tags: [rules]
+      summary: Update an orchestration rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrchestratorRule"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteRule
+      tags: [rules]
+      summary: Delete an orchestration rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /rules/{id}/categories:
+    get:
+      operationId: listRuleCategories
+      tags: [rules]
+      summary: List categories linked to a rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Linked categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IntentCategory"
+    post:
+      operationId: linkRuleCategory
+      tags: [rules]
+      summary: Link a category to a rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleCategoryLinkInput"
+      responses:
+        "201":
+          description: Linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /rules/{id}/categories/{categoryId}:
+    delete:
+      operationId: unlinkRuleCategory
+      tags: [rules]
+      summary: Remove a category link from a rule
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: categoryId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Unlinked
+
+  # ── Knowledge Sources ─────────────────────────────────────────────────────
+  /sources:
+    get:
+      operationId: listSources
+      tags: [sources]
+      summary: List knowledge sources
+      responses:
+        "200":
+          description: Sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeSource"
+    post:
+      operationId: createSource
+      tags: [sources]
+      summary: Create a knowledge source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSource"
+
+  /sources/{id}:
+    patch:
+      operationId: updateSource
+      tags: [sources]
+      summary: Update a knowledge source
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSource"
+    delete:
+      operationId: deleteSource
+      tags: [sources]
+      summary: Delete a knowledge source
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ── API Connectors ────────────────────────────────────────────────────────
+  /connectors:
+    get:
+      operationId: listConnectors
+      tags: [sources]
+      summary: List API connectors
+      responses:
+        "200":
+          description: Connectors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiConnector"
+    post:
+      operationId: createConnector
+      tags: [sources]
+      summary: Create an API connector
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectorInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiConnector"
+
+  /connectors/{id}:
+    patch:
+      operationId: updateConnector
+      tags: [sources]
+      summary: Update an API connector
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectorUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiConnector"
+    delete:
+      operationId: deleteConnector
+      tags: [sources]
+      summary: Delete an API connector
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Analytics ─────────────────────────────────────────────────────────────
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/logs:
+    get:
+      operationId: listAnalyticsLogs
+      tags: [analytics]
+      summary: Get recent orchestrator logs for analytics
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: number
+            default: 100
+      responses:
+        "200":
+          description: Orchestrator logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrchestratorLog"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +637,447 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    # ── Conversation ──────────────────────────────────────────────────────
+    Conversation:
+      type: object
+      required: [id, status, metadata, lastActivityAt, createdAt]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        lastActivityAt:
+          type: string
+        resolvedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ConversationInput:
+      type: object
+      properties:
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ConversationUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    # ── Message ───────────────────────────────────────────────────────────
+    Message:
+      type: object
+      required: [id, conversationId, sender, content, createdAt]
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        sender:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+
+    SendMessageInput:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+
+    SendMessageResult:
+      type: object
+      required: [message, response, stages, classification, shouldAskResolution]
+      properties:
+        message:
+          $ref: "#/components/schemas/Message"
+        response:
+          type: string
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrchestratorStage"
+        classification:
+          $ref: "#/components/schemas/ClassificationResult"
+        shouldAskResolution:
+          type: boolean
+
+    FeedbackInput:
+      type: object
+      required: [messageId, rating]
+      properties:
+        messageId:
+          type: string
+        rating:
+          type: string
+        comment:
+          type: ["string", "null"]
+
+    # ── Orchestrator ──────────────────────────────────────────────────────
+    OrchestratorStage:
+      type: object
+      required: [stage, name, status]
+      properties:
+        stage:
+          type: number
+        name:
+          type: string
+        status:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    ClassificationResult:
+      type: object
+      required: [primaryCategory, confidence, secondaryCategories, entities, rule]
+      properties:
+        primaryCategory:
+          type: string
+        primaryCategoryId:
+          type: string
+        confidence:
+          type: number
+        secondaryCategories:
+          type: array
+          items:
+            type: string
+        entities:
+          type: object
+          additionalProperties: true
+        rule:
+          type: string
+        ruleId:
+          type: string
+
+    OrchestratorLog:
+      type: object
+      required: [id, conversationId, detectedCategory, confidenceScore, ruleUsed, resolutionStatus, createdAt]
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        messageId:
+          type: ["string", "null"]
+        detectedCategory:
+          type: string
+        confidenceScore:
+          type: number
+        secondaryCategories:
+          type: array
+          items:
+            type: string
+        detectedEntities:
+          type: object
+          additionalProperties: true
+        ruleUsed:
+          type: string
+        dataSourcesQueried:
+          type: array
+          items:
+            type: string
+        promptAssembled:
+          type: string
+        tokensUsed:
+          type: number
+        latencyMs:
+          type: number
+        llmModel:
+          type: string
+        resolutionStatus:
+          type: string
+        createdAt:
+          type: string
+
+    # ── Intent Category ───────────────────────────────────────────────────
+    IntentCategory:
+      type: object
+      required: [id, name, description, examples, confidenceThreshold, keywords, isEnabled, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        parentId:
+          type: ["string", "null"]
+        description:
+          type: string
+        examples:
+          type: array
+          items:
+            type: string
+        confidenceThreshold:
+          type: number
+        keywords:
+          type: array
+          items:
+            type: string
+        isEnabled:
+          type: boolean
+        sortOrder:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    CategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        parentId:
+          type: ["string", "null"]
+        description:
+          type: string
+        examples:
+          type: array
+          items:
+            type: string
+        confidenceThreshold:
+          type: number
+        keywords:
+          type: array
+          items:
+            type: string
+        isEnabled:
+          type: boolean
+        sortOrder:
+          type: number
+
+    CategoryUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: ["string", "null"]
+        description:
+          type: string
+        examples:
+          type: array
+          items:
+            type: string
+        confidenceThreshold:
+          type: number
+        keywords:
+          type: array
+          items:
+            type: string
+        isEnabled:
+          type: boolean
+        sortOrder:
+          type: number
+
+    # ── Orchestrator Rule ─────────────────────────────────────────────────
+    OrchestratorRule:
+      type: object
+      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        promptTemplate:
+          type: string
+        priority:
+          type: number
+        requiresClarificationPrompt:
+          type: string
+        escalationTrigger:
+          type: boolean
+        isEnabled:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    RuleInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        promptTemplate:
+          type: string
+        priority:
+          type: number
+        requiresClarificationPrompt:
+          type: string
+        escalationTrigger:
+          type: boolean
+        isEnabled:
+          type: boolean
+
+    RuleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        promptTemplate:
+          type: string
+        priority:
+          type: number
+        requiresClarificationPrompt:
+          type: string
+        escalationTrigger:
+          type: boolean
+        isEnabled:
+          type: boolean
+
+    RuleCategoryLinkInput:
+      type: object
+      required: [categoryId]
+      properties:
+        categoryId:
+          type: string
+
+    # ── Knowledge Source ──────────────────────────────────────────────────
+    KnowledgeSource:
+      type: object
+      required: [id, name, sourceType, connectionConfig, isEnabled, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        sourceType:
+          type: string
+        connectionConfig:
+          type: object
+          additionalProperties: true
+        isEnabled:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    SourceInput:
+      type: object
+      required: [name, sourceType]
+      properties:
+        name:
+          type: string
+        sourceType:
+          type: string
+        connectionConfig:
+          type: object
+          additionalProperties: true
+        isEnabled:
+          type: boolean
+
+    SourceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        sourceType:
+          type: string
+        connectionConfig:
+          type: object
+          additionalProperties: true
+        isEnabled:
+          type: boolean
+
+    # ── API Connector ─────────────────────────────────────────────────────
+    ApiConnector:
+      type: object
+      required: [id, name, endpointPattern, authType, isEnabled, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        endpointPattern:
+          type: string
+        authType:
+          type: string
+        isEnabled:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    ConnectorInput:
+      type: object
+      required: [name, endpointPattern, authType]
+      properties:
+        name:
+          type: string
+        endpointPattern:
+          type: string
+        authType:
+          type: string
+        isEnabled:
+          type: boolean
+
+    ConnectorUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        endpointPattern:
+          type: string
+        authType:
+          type: string
+        isEnabled:
+          type: boolean
+
+    # ── Analytics ─────────────────────────────────────────────────────────
+    AnalyticsSummary:
+      type: object
+      required: [totalConversations, activeConversations, resolvedConversations, escalatedConversations, avgConfidenceScore, totalMessages, positiveRatings, negativeRatings]
+      properties:
+        totalConversations:
+          type: number
+        activeConversations:
+          type: number
+        resolvedConversations:
+          type: number
+        escalatedConversations:
+          type: number
+        avgConfidenceScore:
+          type: number
+        totalMessages:
+          type: number
+        positiveRatings:
+          type: number
+        negativeRatings:
+          type: number
