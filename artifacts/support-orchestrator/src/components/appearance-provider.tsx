@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { useAuth } from "@clerk/react";
 import { useLocation } from "wouter";
 import {
@@ -8,8 +8,6 @@ import {
   getGetAgentAppearanceQueryKey,
 } from "@workspace/api-client-react";
 import type { Appearance } from "@workspace/api-client-react";
-import { applyCtaCssVars, clearCtaCssVars } from "@/lib/appearance-theme";
-
 type AppearanceContextValue = {
   appearance: Appearance | undefined;
   isLoading: boolean;
@@ -48,14 +46,6 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   const data = agentId ? agentAppearance.data : globalAppearance.data;
   const isLoading = agentId ? agentAppearance.isLoading : globalAppearance.isLoading;
-
-  useEffect(() => {
-    if (!data) return;
-    applyCtaCssVars(document.documentElement, data.ctaColor);
-    return () => {
-      clearCtaCssVars(document.documentElement);
-    };
-  }, [data]);
 
   return (
     <AppearanceContext.Provider value={{ appearance: data, isLoading }}>
