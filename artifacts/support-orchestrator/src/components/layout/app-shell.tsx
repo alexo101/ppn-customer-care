@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useLocation, useSearch } from 'wouter';
 import { useClerk, useUser } from '@clerk/react';
 import {
@@ -12,6 +13,16 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAppearance } from '@/components/appearance-provider';
 
 export function AppShell({ children, activeTab = 'chat' }: { children: React.ReactNode; activeTab?: string }) {
@@ -19,6 +30,7 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
   const search = useSearch();
   const { signOut } = useClerk();
   const { user } = useUser();
+  const [signOutOpen, setSignOutOpen] = useState(false);
   
   const { appearance } = useAppearance();
   const currentTab = new URLSearchParams(search).get('tab') || 'dashboard';
@@ -94,7 +106,14 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
               <div className="text-[10px] text-sidebar-foreground/50 font-mono">OP_CLEARANCE_1</div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-sidebar-foreground/50 hover:text-sidebar-foreground" onClick={() => signOut()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            title="Close session"
+            aria-label="Close session"
+            onClick={() => setSignOutOpen(true)}
+          >
             <LogOutIcon className="w-3.5 h-3.5" />
           </Button>
         </div>
@@ -104,6 +123,23 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
       <main className="flex-1 flex flex-col min-w-0 bg-background relative z-10">
         {children}
       </main>
+
+      <AlertDialog open={signOutOpen} onOpenChange={setSignOutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close session</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close your session? You will need to sign in again to continue.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => signOut()}>
+              Close session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
