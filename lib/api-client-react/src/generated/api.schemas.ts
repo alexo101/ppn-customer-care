@@ -252,6 +252,51 @@ export interface AnalyticsSummary {
   negativeRatings: number;
 }
 
+export interface Appearance {
+  id: string;
+  /** @nullable */
+  websiteUrl?: string | null;
+  ctaColor: string;
+  backgroundColor: string;
+  /** @nullable */
+  logoUrl?: string | null;
+  /** @nullable */
+  importedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppearanceUpdate {
+  /** @nullable */
+  websiteUrl?: string | null;
+  ctaColor?: string;
+  backgroundColor?: string;
+  /** @nullable */
+  logoUrl?: string | null;
+}
+
+export interface ImportAppearanceInput {
+  url: string;
+}
+
+export interface ImportAppearanceResult {
+  appearance: Appearance;
+  /** @nullable */
+  pageTitle?: string | null;
+  ctaColorCandidates?: string[];
+  backgroundColorCandidates?: string[];
+  logoCandidates?: string[];
+}
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+}
+
+export interface RegisterResult {
+  ticket: string;
+}
+
 export type ListConversationsParams = {
 status?: string;
 limit?: number;

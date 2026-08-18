@@ -8,10 +8,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { AppShell } from '@/components/layout/app-shell';
 import { ProtectedRoute } from '@/components/auth-provider';
+import { AppearanceProvider } from '@/components/appearance-provider';
 import Home from '@/pages/home';
 import Login from '@/pages/login';
+import Signup from '@/pages/signup';
 import Chat from '@/pages/chat';
 import Admin from '@/pages/admin';
+import Appearance from '@/pages/appearance';
 import Widget from '@/pages/widget';
 import NotFound from '@/pages/not-found';
 
@@ -64,7 +67,8 @@ function Router() {
     <RoutedErrorBoundary>
       <Switch>
         <Route path="/" component={Home} />
-        <Route path="/login" component={Login} />
+        <Route path="/login/*?" component={Login} />
+        <Route path="/signup/*?" component={Signup} />
         <Route path="/widget" component={Widget} />
         <Route path="/chat">
           <ProtectedRoute>
@@ -77,6 +81,13 @@ function Router() {
           <ProtectedRoute>
             <AppShell activeTab="admin">
               <Admin />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/appearance">
+          <ProtectedRoute>
+            <AppShell activeTab="appearance">
+              <Appearance />
             </AppShell>
           </ProtectedRoute>
         </Route>
@@ -94,15 +105,17 @@ function ClerkProviderWithRoutes() {
       publishableKey={clerkPubKey!}
       proxyUrl={clerkProxyUrl}
       signInUrl={`${basePath}/login`}
-      signUpUrl={`${basePath}/login`}
+      signUpUrl={`${basePath}/signup`}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
-          <Router />
-          <Toaster />
+          <AppearanceProvider>
+            <Router />
+            <Toaster />
+          </AppearanceProvider>
         </TooltipProvider>
       </QueryClientProvider>
     </ClerkProvider>

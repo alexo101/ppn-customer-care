@@ -8,6 +8,8 @@
 
 export * from './analyticsSummary';
 export * from './apiConnector';
+export * from './appearance';
+export * from './appearanceUpdate';
 export * from './categoryInput';
 export * from './categoryUpdate';
 export * from './classificationResult';
@@ -23,6 +25,8 @@ export * from './conversationUpdateMetadata';
 export * from './errorResponse';
 export * from './feedbackInput';
 export * from './healthStatus';
+export * from './importAppearanceInput';
+export * from './importAppearanceResult';
 export * from './intentCategory';
 export * from './knowledgeSource';
 export * from './knowledgeSourceConnectionConfig';
@@ -34,6 +38,8 @@ export * from './orchestratorLogDetectedEntities';
 export * from './orchestratorRule';
 export * from './orchestratorStage';
 export * from './orchestratorStageDetails';
+export * from './registerInput';
+export * from './registerResult';
 export * from './ruleCategoryLinkInput';
 export * from './ruleInput';
 export * from './ruleUpdate';

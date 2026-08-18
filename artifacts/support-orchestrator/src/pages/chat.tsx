@@ -37,17 +37,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { useAppearance } from '@/components/appearance-provider';
 
 export default function Chat() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [debugOpen, setDebugOpen] = useState(true);
+  const { appearance } = useAppearance();
   
   const queryClient = useQueryClient();
   const { data: conversations = [], isLoading: loadingConvos } = useListConversations();
@@ -133,8 +129,15 @@ export default function Chat() {
           setDebugOpen={setDebugOpen} 
         />
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-background">
-          <MessageSquare className="w-12 h-12 mb-4 opacity-20" />
+        <div
+          className="flex-1 flex flex-col items-center justify-center text-muted-foreground"
+          style={appearance?.backgroundColor ? { backgroundColor: appearance.backgroundColor } : undefined}
+        >
+          {appearance?.logoUrl ? (
+            <img src={appearance.logoUrl} alt="Brand logo" className="w-16 h-16 mb-4 object-contain rounded-md bg-white/80 p-2 shadow-sm" />
+          ) : (
+            <MessageSquare className="w-12 h-12 mb-4 opacity-20" />
+          )}
           <p className="text-sm">Select a thread to view details</p>
         </div>
       )}
@@ -167,6 +170,7 @@ function ActiveChat({
   debugOpen: boolean;
   setDebugOpen: (v: boolean) => void;
 }) {
+  const { appearance } = useAppearance();
   const { data: convo } = useGetConversation(conversationId);
   const { data: messages = [], refetch: refetchMessages } = useListMessages(conversationId);
   const { data: logs = [], refetch: refetchLogs } = useListConversationLogs(conversationId);
@@ -206,6 +210,9 @@ function ActiveChat({
       <div className={cn("flex flex-col h-full bg-background transition-all duration-300", debugOpen ? "w-2/3" : "w-full")}>
         <div className="h-14 flex items-center justify-between px-6 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-3">
+            {appearance?.logoUrl && (
+              <img src={appearance.logoUrl} alt="Brand logo" className="h-7 w-7 rounded-md object-contain bg-white/90 p-0.5 border border-border" />
+            )}
             <h2 className="font-medium text-sm">{(convo?.metadata as any)?.subject || 'Conversation'}</h2>
             {convo && <StatusBadge status={convo.status} />}
           </div>
@@ -216,7 +223,11 @@ function ActiveChat({
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-6" ref={scrollRef}>
+        <ScrollArea
+          className="flex-1 p-6"
+          ref={scrollRef}
+          style={appearance?.backgroundColor ? { backgroundColor: appearance.backgroundColor } : undefined}
+        >
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.map((msg, i) => {
               const isUser = msg.sender === 'user';

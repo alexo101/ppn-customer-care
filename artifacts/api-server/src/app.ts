@@ -64,8 +64,17 @@ app.use(
     },
   }),
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+
+app.use((req, _res, next) => {
+  if (req.originalUrl.includes("/auth") || req.path.includes("/auth")) {
+    // #region agent log
+    fetch('http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0657f2'},body:JSON.stringify({sessionId:'0657f2',hypothesisId:'A',location:'app.ts:incoming',message:'API received auth-related request',data:{method:req.method,originalUrl:req.originalUrl,path:req.path,baseUrl:req.baseUrl},timestamp:Date.now(),runId:'pre-fix'})}).catch(()=>{});
+    // #endregion
+  }
+  next();
+});
 
 // Resolve publishable key from incoming request host
 app.use(
@@ -78,5 +87,14 @@ app.use(
 );
 
 app.use("/api", router);
+
+app.use((req, _res, next) => {
+  if (req.originalUrl.includes("/auth") || req.path.includes("register")) {
+    // #region agent log
+    fetch('http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0657f2'},body:JSON.stringify({sessionId:'0657f2',hypothesisId:'B',location:'app.ts:unmatched',message:'Request fell through API router (no matching route)',data:{method:req.method,originalUrl:req.originalUrl,path:req.path,baseUrl:req.baseUrl},timestamp:Date.now(),runId:'pre-fix'})}).catch(()=>{});
+    // #endregion
+  }
+  next();
+});
 
 export default app;

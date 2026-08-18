@@ -4,23 +4,26 @@ import {
   LayoutDashboard,
   MessageSquare,
   Network,
-  LogOut,
   FolderTree,
   GitMerge,
   Database,
-  Terminal,
+  Palette,
   LogOutIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useAppearance } from '@/components/appearance-provider';
 
 export function AppShell({ children, activeTab = 'chat' }: { children: React.ReactNode; activeTab?: string }) {
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
   
+  const { appearance } = useAppearance();
+
   const navItems = [
     { icon: MessageSquare, label: 'Orchestrator', href: '/chat', match: '/chat' },
+    { icon: Palette, label: 'Appearance', href: '/appearance', match: '/appearance' },
     { icon: LayoutDashboard, label: 'Analytics', href: '/admin', match: '/admin' },
   ];
 
@@ -39,7 +42,11 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
       {/* Sidebar */}
       <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col flex-shrink-0 relative z-20">
         <div className="h-14 flex items-center px-4 border-b border-sidebar-border font-medium tracking-tight">
-          <Network className="w-4 h-4 mr-2 text-sidebar-primary" />
+          {appearance?.logoUrl ? (
+            <img src={appearance.logoUrl} alt="Brand logo" className="w-5 h-5 mr-2 rounded-sm object-contain bg-white/90 p-px" />
+          ) : (
+            <Network className="w-4 h-4 mr-2 text-sidebar-primary" />
+          )}
           <span className="font-mono text-[13px]">SYS_ORCHESTRATOR</span>
         </div>
         

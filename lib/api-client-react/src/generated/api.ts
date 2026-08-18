@@ -22,6 +22,8 @@ import type {
 import type {
   AnalyticsSummary,
   ApiConnector,
+  Appearance,
+  AppearanceUpdate,
   CategoryInput,
   CategoryUpdate,
   ConnectorInput,
@@ -32,6 +34,8 @@ import type {
   ErrorResponse,
   FeedbackInput,
   HealthStatus,
+  ImportAppearanceInput,
+  ImportAppearanceResult,
   IntentCategory,
   KnowledgeSource,
   ListAnalyticsLogsParams,
@@ -39,6 +43,8 @@ import type {
   Message,
   OrchestratorLog,
   OrchestratorRule,
+  RegisterInput,
+  RegisterResult,
   RuleCategoryLinkInput,
   RuleInput,
   RuleUpdate,
@@ -2302,4 +2308,296 @@ export function useListAnalyticsLogs<TData = Awaited<ReturnType<typeof listAnaly
 
 
 
+
+export const getGetAppearanceUrl = () => {
+
+
+
+
+  return `/api/appearance`
+}
+
+/**
+ * Returns the authenticated user's saved appearance, creating defaults if none exist.
+ * @summary Get chat appearance settings
+ */
+export const getAppearance = async ( options?: Parameters<typeof customFetch>[1]): Promise<Appearance> => {
+
+  return customFetch<Appearance>(getGetAppearanceUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAppearanceQueryKey = () => {
+    return [
+    `/api/appearance`
+    ] as const;
+    }
+
+
+export const getGetAppearanceQueryOptions = <TData = Awaited<ReturnType<typeof getAppearance>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAppearance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAppearanceQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAppearance>>> = ({ signal }) => getAppearance({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAppearance>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAppearanceQueryResult = NonNullable<Awaited<ReturnType<typeof getAppearance>>>
+export type GetAppearanceQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get chat appearance settings
+ */
+
+export function useGetAppearance<TData = Awaited<ReturnType<typeof getAppearance>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAppearance>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAppearanceQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAppearanceUrl = () => {
+
+
+
+
+  return `/api/appearance`
+}
+
+/**
+ * @summary Update chat appearance settings
+ */
+export const updateAppearance = async (appearanceUpdate: AppearanceUpdate, options?: Parameters<typeof customFetch>[1]): Promise<Appearance> => {
+
+  return customFetch<Appearance>(getUpdateAppearanceUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(appearanceUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAppearanceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAppearance>>, TError,{data: BodyType<AppearanceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAppearance>>, TError,{data: BodyType<AppearanceUpdate>}, TContext> => {
+
+const mutationKey = ['updateAppearance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAppearance>>, {data: BodyType<AppearanceUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAppearance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAppearanceMutationResult = NonNullable<Awaited<ReturnType<typeof updateAppearance>>>
+    export type UpdateAppearanceMutationBody = BodyType<AppearanceUpdate>
+    export type UpdateAppearanceMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update chat appearance settings
+ */
+export const useUpdateAppearance = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAppearance>>, TError,{data: BodyType<AppearanceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAppearance>>,
+        TError,
+        {data: BodyType<AppearanceUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAppearanceMutationOptions(options));
+    }
+
+export const getImportAppearanceUrl = () => {
+
+
+
+
+  return `/api/appearance/import`
+}
+
+/**
+ * Visits the given homepage, detects CTA color, background color, and logo, then saves them.
+ * @summary Import main styling from a website homepage
+ */
+export const importAppearance = async (importAppearanceInput: ImportAppearanceInput, options?: Parameters<typeof customFetch>[1]): Promise<ImportAppearanceResult> => {
+
+  return customFetch<ImportAppearanceResult>(getImportAppearanceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(importAppearanceInput)
+  }
+);}
+
+
+
+
+
+export const getImportAppearanceMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importAppearance>>, TError,{data: BodyType<ImportAppearanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importAppearance>>, TError,{data: BodyType<ImportAppearanceInput>}, TContext> => {
+
+const mutationKey = ['importAppearance'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importAppearance>>, {data: BodyType<ImportAppearanceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importAppearance(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportAppearanceMutationResult = NonNullable<Awaited<ReturnType<typeof importAppearance>>>
+    export type ImportAppearanceMutationBody = BodyType<ImportAppearanceInput>
+    export type ImportAppearanceMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Import main styling from a website homepage
+ */
+export const useImportAppearance = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importAppearance>>, TError,{data: BodyType<ImportAppearanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importAppearance>>,
+        TError,
+        {data: BodyType<ImportAppearanceInput>},
+        TContext
+      > => {
+      return useMutation(getImportAppearanceMutationOptions(options));
+    }
+
+export const getRegisterUrl = () => {
+
+
+
+
+  return `/api/auth/register`
+}
+
+/**
+ * @summary Create an account without an email verification code
+ */
+export const register = async (registerInput: RegisterInput, options?: Parameters<typeof customFetch>[1]): Promise<RegisterResult> => {
+
+  return customFetch<RegisterResult>(getRegisterUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registerInput)
+  }
+);}
+
+
+
+
+
+export const getRegisterMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<RegisterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<RegisterInput>}, TContext> => {
+
+const mutationKey = ['register'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof register>>, {data: BodyType<RegisterInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  register(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterMutationResult = NonNullable<Awaited<ReturnType<typeof register>>>
+    export type RegisterMutationBody = BodyType<RegisterInput>
+    export type RegisterMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create an account without an email verification code
+ */
+export const useRegister = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<RegisterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof register>>,
+        TError,
+        {data: BodyType<RegisterInput>},
+        TContext
+      > => {
+      return useMutation(getRegisterMutationOptions(options));
+    }
 

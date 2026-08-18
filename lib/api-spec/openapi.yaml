@@ -22,6 +22,10 @@ tags:
     description: Knowledge sources and API connectors
   - name: analytics
     description: Analytics and dashboard data
+  - name: appearance
+    description: Chat appearance and website style import
+  - name: auth
+    description: Registration without email verification codes
 paths:
   /healthz:
     get:
@@ -627,6 +631,90 @@ paths:
                 items:
                   $ref: "#/components/schemas/OrchestratorLog"
 
+  # ── Appearance ────────────────────────────────────────────────────────────
+  /appearance:
+    get:
+      operationId: getAppearance
+      tags: [appearance]
+      summary: Get chat appearance settings
+      description: Returns the authenticated user's saved appearance, creating defaults if none exist.
+      responses:
+        "200":
+          description: Appearance settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appearance"
+    put:
+      operationId: updateAppearance
+      tags: [appearance]
+      summary: Update chat appearance settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppearanceUpdate"
+      responses:
+        "200":
+          description: Updated appearance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appearance"
+
+  /appearance/import:
+    post:
+      operationId: importAppearance
+      tags: [appearance]
+      summary: Import main styling from a website homepage
+      description: Visits the given homepage, detects CTA color, background color, and logo, then saves them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportAppearanceInput"
+      responses:
+        "200":
+          description: Detected and saved appearance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportAppearanceResult"
+        "400":
+          description: Invalid URL or import failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Create an account without an email verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResult"
+        "400":
+          description: Invalid input or account already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1081,3 +1169,81 @@ components:
           type: number
         negativeRatings:
           type: number
+
+    # ── Appearance ────────────────────────────────────────────────────────
+    Appearance:
+      type: object
+      required: [id, ctaColor, backgroundColor, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        websiteUrl:
+          type: ["string", "null"]
+        ctaColor:
+          type: string
+        backgroundColor:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        importedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AppearanceUpdate:
+      type: object
+      properties:
+        websiteUrl:
+          type: ["string", "null"]
+        ctaColor:
+          type: string
+        backgroundColor:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+
+    ImportAppearanceInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+
+    ImportAppearanceResult:
+      type: object
+      required: [appearance]
+      properties:
+        appearance:
+          $ref: "#/components/schemas/Appearance"
+        pageTitle:
+          type: ["string", "null"]
+        ctaColorCandidates:
+          type: array
+          items:
+            type: string
+        backgroundColorCandidates:
+          type: array
+          items:
+            type: string
+        logoCandidates:
+          type: array
+          items:
+            type: string
+
+    RegisterInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    RegisterResult:
+      type: object
+      required: [ticket]
+      properties:
+        ticket:
+          type: string

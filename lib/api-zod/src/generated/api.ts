@@ -608,3 +608,80 @@ export const ListAnalyticsLogsResponseItem = zod.object({
 export const ListAnalyticsLogsResponse = zod.array(ListAnalyticsLogsResponseItem)
 
 
+/**
+ * Returns the authenticated user's saved appearance, creating defaults if none exist.
+ * @summary Get chat appearance settings
+ */
+export const GetAppearanceResponse = zod.object({
+  "id": zod.string(),
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string(),
+  "backgroundColor": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "importedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update chat appearance settings
+ */
+export const UpdateAppearanceBody = zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string().optional(),
+  "backgroundColor": zod.string().optional(),
+  "logoUrl": zod.string().nullish()
+})
+
+export const UpdateAppearanceResponse = zod.object({
+  "id": zod.string(),
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string(),
+  "backgroundColor": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "importedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * Visits the given homepage, detects CTA color, background color, and logo, then saves them.
+ * @summary Import main styling from a website homepage
+ */
+export const ImportAppearanceBody = zod.object({
+  "url": zod.string()
+})
+
+export const ImportAppearanceResponse = zod.object({
+  "appearance": zod.object({
+  "id": zod.string(),
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string(),
+  "backgroundColor": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "importedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "pageTitle": zod.string().nullish(),
+  "ctaColorCandidates": zod.array(zod.string()).optional(),
+  "backgroundColorCandidates": zod.array(zod.string()).optional(),
+  "logoCandidates": zod.array(zod.string()).optional()
+})
+
+
+/**
+ * @summary Create an account without an email verification code
+ */
+export const RegisterBody = zod.object({
+  "email": zod.string(),
+  "password": zod.string()
+})
+
+export const RegisterResponse = zod.object({
+  "ticket": zod.string()
+})
+
+
