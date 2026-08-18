@@ -551,9 +551,6 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                   )}
                 >
                   <div className="flex items-center gap-3 min-w-0 pr-2">
-                    <div className="w-8 h-8 rounded-md bg-muted/60 dark:bg-muted/40 flex items-center justify-center text-muted-foreground font-mono text-[11px] font-bold shrink-0 border border-border/40">
-                      tg
-                    </div>
                     <span className="font-medium text-sm text-foreground truncate">{cat.name}</span>
                   </div>
 

@@ -46,7 +46,7 @@ export default function CreateAgentPage() {
       return;
     }
     if (step < STEPS.length - 1) setStep(step + 1);
-    else if (agentId) setLocation(`/agents/${agentId}`);
+    else if (agentId) setLocation(`/agents/${agentId}/appearance`);
   };
 
   return (

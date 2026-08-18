@@ -100,6 +100,13 @@ function Router() {
             </AppShell>
           </ProtectedRoute>
         </Route>
+        <Route path="/agents/:id/:section">
+          <ProtectedRoute>
+            <AppShell activeTab="agents">
+              <EditAgentPage />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
         <Route path="/agents/:id">
           <ProtectedRoute>
             <AppShell activeTab="agents">

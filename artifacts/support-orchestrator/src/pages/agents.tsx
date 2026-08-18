@@ -55,7 +55,7 @@ export default function AgentsBoard() {
               {agents.map((agent) => (
                 <Card key={agent.id} className="shadow-none border-border hover:border-primary/40 transition-colors">
                   <CardHeader className="flex flex-row items-start justify-between gap-3">
-                    <Link href={`/agents/${agent.id}`} className="min-w-0 flex-1">
+                    <Link href={`/agents/${agent.id}/appearance`} className="min-w-0 flex-1">
                       <CardTitle className="text-sm font-medium truncate">{agent.name}</CardTitle>
                       <CardDescription className="text-xs mt-1 line-clamp-2">
                         {agent.description || "No description"}
