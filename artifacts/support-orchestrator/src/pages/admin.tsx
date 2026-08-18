@@ -432,9 +432,6 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="text-blue-600 dark:text-blue-400">
-                <Layers className="w-5 h-5" />
-              </div>
               <h2 className="font-semibold text-base tracking-tight text-foreground">Categories</h2>
               <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
                 {parentCategories.length}
@@ -446,7 +443,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                 setIsAddingCategory(true);
                 setNewCategoryName('');
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-8 px-3.5 rounded-md flex items-center gap-1.5 shadow-sm transition-colors"
+              className="h-8 text-xs flex items-center gap-1.5 px-3.5 rounded-md"
             >
               <Plus className="w-3.5 h-3.5" />
               Add Category
