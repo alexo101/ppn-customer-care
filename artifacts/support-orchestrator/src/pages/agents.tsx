@@ -19,7 +19,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
-import { format } from "date-fns";
 
 export default function AgentsBoard() {
   const { data: agents = [], isLoading } = useListAgents();
@@ -61,9 +60,6 @@ export default function AgentsBoard() {
                       <CardDescription className="text-xs mt-1 line-clamp-2">
                         {agent.description || "No description"}
                       </CardDescription>
-                      <p className="text-[11px] text-muted-foreground mt-3">
-                        Created {format(new Date(agent.createdAt), "MMM d, yyyy")}
-                      </p>
                     </Link>
                     <Button
                       variant="ghost"
