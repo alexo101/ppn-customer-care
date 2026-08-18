@@ -1,12 +1,7 @@
 import { Link, useParams } from "wouter";
-import { useGetAgent, useUpdateAgent, getListAgentsQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useGetAgent } from "@workspace/api-client-react";
 import { ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Accordion,
   AccordionContent,
@@ -20,16 +15,6 @@ export default function EditAgentPage() {
   const params = useParams<{ id: string }>();
   const agentId = params.id;
   const { data: agent, isLoading } = useGetAgent(agentId);
-  const updateAgent = useUpdateAgent();
-  const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-
-  useEffect(() => {
-    if (!agent) return;
-    setName(agent.name);
-    setDescription(agent.description);
-  }, [agent]);
 
   if (!agentId) return null;
 
@@ -49,30 +34,11 @@ export default function EditAgentPage() {
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Loading agent...</p>
           ) : (
-            <Accordion type="multiple" defaultValue={["details", "conversations"]} className="space-y-3">
-              <AccordionItem value="details" className="border border-border rounded-xl px-4 bg-card">
-                <AccordionTrigger className="text-sm font-medium">Details</AccordionTrigger>
-                <AccordionContent className="space-y-4 pb-4">
-                  <div className="space-y-2 max-w-lg">
-                    <Label htmlFor="edit-agent-name">Name</Label>
-                    <Input id="edit-agent-name" value={name} onChange={(e) => setName(e.target.value)} />
-                  </div>
-                  <div className="space-y-2 max-w-lg">
-                    <Label htmlFor="edit-agent-description">Description</Label>
-                    <Textarea id="edit-agent-description" value={description} onChange={(e) => setDescription(e.target.value)} />
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={!name.trim() || updateAgent.isPending}
-                    onClick={() =>
-                      updateAgent.mutate(
-                        { id: agentId, data: { name: name.trim(), description } },
-                        { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() }) },
-                      )
-                    }
-                  >
-                    Save details
-                  </Button>
+            <Accordion type="multiple" defaultValue={["appearance", "conversations"]} className="space-y-3">
+              <AccordionItem value="appearance" className="border border-border rounded-xl px-4 bg-card">
+                <AccordionTrigger className="text-sm font-medium">Appearance</AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <AppearanceEditor agentId={agentId} />
                 </AccordionContent>
               </AccordionItem>
 
@@ -101,13 +67,6 @@ export default function EditAgentPage() {
                 <AccordionTrigger className="text-sm font-medium">Sources</AccordionTrigger>
                 <AccordionContent className="pb-4">
                   <SourcesTab agentId={agentId} />
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="appearance" className="border border-border rounded-xl px-4 bg-card">
-                <AccordionTrigger className="text-sm font-medium">Appearance</AccordionTrigger>
-                <AccordionContent className="pb-4">
-                  <AppearanceEditor agentId={agentId} />
                 </AccordionContent>
               </AccordionItem>
             </Accordion>

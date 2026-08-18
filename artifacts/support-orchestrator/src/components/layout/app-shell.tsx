@@ -20,64 +20,86 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useAppearance } from '@/components/appearance-provider';
+import { useListAgents } from '@workspace/api-client-react';
 
 export function AppShell({ children, activeTab = 'chat' }: { children: React.ReactNode; activeTab?: string }) {
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const { data: agents = [] } = useListAgents();
   
   const { appearance } = useAppearance();
-
-  const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard', match: '/dashboard' },
-    { icon: Bot, label: 'Agents', href: '/agents', match: '/agents' },
-  ];
+  const agentsSectionActive = location === '/agents' || location.startsWith('/agents/new');
 
   return (
     <div className="flex h-[100dvh] w-full bg-background overflow-hidden text-sm">
-      {/* Sidebar */}
-      <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col flex-shrink-0 relative z-20">
-        <div className="h-14 flex items-center px-4 border-b border-sidebar-border font-medium tracking-tight">
+      {/* Sidebar — 20% narrower than the previous w-64 (16rem → 12.8rem) */}
+      <aside className="w-[12.8rem] bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col flex-shrink-0 relative z-20">
+        <div className="h-14 flex items-center px-3 border-b border-sidebar-border font-medium tracking-tight">
           <Link href="/dashboard" className="flex items-center min-w-0">
             {appearance?.logoUrl ? (
-              <img src={appearance.logoUrl} alt="Brand logo" className="w-5 h-5 mr-2 rounded-sm object-contain bg-white/90 p-px" />
+              <img src={appearance.logoUrl} alt="Brand logo" className="w-5 h-5 mr-2 rounded-sm object-contain bg-white/90 p-px shrink-0" />
             ) : (
-              <Network className="w-4 h-4 mr-2 text-sidebar-primary" />
+              <Network className="w-4 h-4 mr-2 text-sidebar-primary shrink-0" />
             )}
-            <span className="font-mono text-[13px]">SYS_ORCHESTRATOR</span>
+            <span className="font-mono text-[13px] truncate">SYS_ORCHESTRATOR</span>
           </Link>
         </div>
         
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          <div className="text-[10px] uppercase font-mono tracking-wider text-sidebar-foreground/50 mb-2 px-2">Core Systems</div>
-          {navItems.map((item) => (
-            <Link key={item.href} href={item.href} className={cn(
-              "flex items-center gap-3 px-2 py-2 rounded-md transition-colors",
-              location.startsWith(item.match) 
-                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" 
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}>
-              <item.icon className="w-4 h-4" />
-              {item.label}
-            </Link>
-          ))}
+        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+          <Link href="/dashboard" className={cn(
+            "flex items-center gap-3 px-2 py-2 rounded-md transition-colors",
+            location.startsWith('/dashboard')
+              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          )}>
+            <LayoutDashboard className="w-4 h-4 shrink-0" />
+            Dashboard
+          </Link>
+          <Link href="/agents" className={cn(
+            "flex items-center gap-3 px-2 py-2 rounded-md transition-colors",
+            agentsSectionActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          )}>
+            <Bot className="w-4 h-4 shrink-0" />
+            Agents
+          </Link>
+          {agents.map((agent) => {
+            const href = `/agents/${agent.id}`;
+            const isActive = location === href || location.startsWith(`${href}/`);
+            return (
+              <Link
+                key={agent.id}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2 ml-4 pl-2 pr-2 py-1.5 rounded-md transition-colors text-[13px]",
+                  isActive
+                    ? "bg-sidebar-primary/20 text-sidebar-primary font-medium"
+                    : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                )}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-70" />
+                <span className="truncate">{agent.name}</span>
+              </Link>
+            );
+          })}
         </nav>
         
-        <div className="p-4 border-t border-sidebar-border flex items-center justify-between">
-          <div className="flex items-center gap-2 overflow-hidden">
+        <div className="p-3 border-t border-sidebar-border flex items-center justify-between gap-1">
+          <div className="flex items-center gap-2 overflow-hidden min-w-0">
             <div className="w-7 h-7 rounded-full bg-sidebar-accent flex items-center justify-center text-[10px] font-medium shrink-0">
               {user?.primaryEmailAddress?.emailAddress.charAt(0).toUpperCase() || 'U'}
             </div>
-            <div className="truncate text-xs">
+            <div className="truncate text-xs min-w-0">
               <div className="font-medium truncate">{user?.primaryEmailAddress?.emailAddress || 'User'}</div>
-              <div className="text-[10px] text-sidebar-foreground/50 font-mono">OP_CLEARANCE_1</div>
             </div>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            className="h-7 w-7 text-sidebar-foreground/50 hover:text-sidebar-foreground shrink-0"
             title="Close session"
             aria-label="Close session"
             onClick={() => setSignOutOpen(true)}

@@ -12,11 +12,10 @@ import { AppearanceEditor } from "@/components/appearance-editor";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
-  { id: "details", label: "Details" },
+  { id: "appearance", label: "Appearance" },
   { id: "categories", label: "Categories" },
   { id: "rules", label: "Rules" },
   { id: "sources", label: "Sources" },
-  { id: "appearance", label: "Appearance" },
 ] as const;
 
 export default function CreateAgentPage() {
@@ -40,7 +39,7 @@ export default function CreateAgentPage() {
         });
         setAgentId(created.id);
         queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });
-        setStep(1);
+        return;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not create agent.");
       }
@@ -86,7 +85,7 @@ export default function CreateAgentPage() {
                   "text-xs px-3 py-1.5 rounded-full border transition-colors",
                   index === step
                     ? "bg-primary text-primary-foreground border-primary"
-                    : index < step
+                    : index < step || (index === 0 && agentId)
                       ? "bg-primary/10 text-primary border-primary/20"
                       : "bg-background text-muted-foreground border-border",
                 )}
@@ -102,23 +101,31 @@ export default function CreateAgentPage() {
         <div className="max-w-7xl mx-auto">
           {error && <p className="text-sm text-destructive mb-4">{error}</p>}
 
-          {step === 0 && (
-            <div className="max-w-lg space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="agent-name">Agent name</Label>
+          {step === 0 && !agentId && (
+            <div className="max-w-lg space-y-3">
+              <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                <div className="pb-3 border-b border-border">
+                  <h3 className="text-sm font-medium">Name</h3>
+                  <p className="text-xs text-muted-foreground mt-1">Display name for this agent.</p>
+                </div>
+                <Label htmlFor="agent-name" className="sr-only">Name</Label>
                 <Input id="agent-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Billing support" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="agent-description">Description</Label>
-                <Textarea id="agent-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What this agent handles" />
+              <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                <div className="pb-3 border-b border-border">
+                  <h3 className="text-sm font-medium">Description</h3>
+                  <p className="text-xs text-muted-foreground mt-1">What this agent handles.</p>
+                </div>
+                <Label htmlFor="agent-description" className="sr-only">Description</Label>
+                <Textarea id="agent-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary of this agent" />
               </div>
             </div>
           )}
 
+          {step === 0 && agentId && <AppearanceEditor agentId={agentId} />}
           {step === 1 && agentId && <CategoriesTab agentId={agentId} />}
           {step === 2 && agentId && <RulesTab agentId={agentId} />}
           {step === 3 && agentId && <SourcesTab agentId={agentId} />}
-          {step === 4 && agentId && <AppearanceEditor agentId={agentId} />}
         </div>
       </div>
     </div>
