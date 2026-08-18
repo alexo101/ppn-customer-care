@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: agents
+    description: Per-agent workspaces
   - name: conversations
     description: Chat conversation management
   - name: messages
@@ -41,6 +43,185 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
 
+  # ── Agents ────────────────────────────────────────────────────────────────
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      summary: List agents for the authenticated user
+      responses:
+        "200":
+          description: Agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+    post:
+      operationId: createAgent
+      tags: [agents]
+      summary: Create an agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+
+  /agents/{id}:
+    get:
+      operationId: getAgent
+      tags: [agents]
+      summary: Get an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateAgent
+      tags: [agents]
+      summary: Update an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAgent
+      tags: [agents]
+      summary: Delete an agent and its nested data
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /agents/{id}/appearance:
+    get:
+      operationId: getAgentAppearance
+      tags: [appearance]
+      summary: Get appearance for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Appearance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appearance"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateAgentAppearance
+      tags: [appearance]
+      summary: Update appearance for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppearanceUpdate"
+      responses:
+        "200":
+          description: Updated appearance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appearance"
+
+  /agents/{id}/appearance/import:
+    post:
+      operationId: importAgentAppearance
+      tags: [appearance]
+      summary: Import styling from a website for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportAppearanceInput"
+      responses:
+        "200":
+          description: Detected and saved appearance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportAppearanceResult"
+        "400":
+          description: Invalid URL or import failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ── Conversations ─────────────────────────────────────────────────────────
   /conversations:
     get:
@@ -48,6 +229,10 @@ paths:
       tags: [conversations]
       summary: List conversations
       parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
         - in: query
           name: status
           schema:
@@ -242,6 +427,11 @@ paths:
       operationId: listCategories
       tags: [categories]
       summary: List intent categories
+      parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
       responses:
         "200":
           description: Categories
@@ -319,6 +509,11 @@ paths:
       operationId: listRules
       tags: [rules]
       summary: List orchestration rules
+      parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
       responses:
         "200":
           description: Rules
@@ -460,6 +655,11 @@ paths:
       operationId: listSources
       tags: [sources]
       summary: List knowledge sources
+      parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
       responses:
         "200":
           description: Sources
@@ -531,6 +731,11 @@ paths:
       operationId: listConnectors
       tags: [sources]
       summary: List API connectors
+      parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
       responses:
         "200":
           description: Connectors
@@ -741,6 +946,39 @@ components:
       required:
         - success
 
+    # ── Agent ─────────────────────────────────────────────────────────────
+    Agent:
+      type: object
+      required: [id, name, description, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    AgentInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    AgentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
     # ── Conversation ──────────────────────────────────────────────────────
     Conversation:
       type: object
@@ -759,10 +997,14 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        agentId:
+          type: ["string", "null"]
 
     ConversationInput:
       type: object
       properties:
+        agentId:
+          type: string
         metadata:
           type: object
           additionalProperties: true
@@ -935,12 +1177,16 @@ components:
           type: string
         updatedAt:
           type: string
+        agentId:
+          type: ["string", "null"]
 
     CategoryInput:
       type: object
       required: [name]
       properties:
         name:
+          type: string
+        agentId:
           type: string
         parentId:
           type: ["string", "null"]
@@ -1017,6 +1263,8 @@ components:
       properties:
         name:
           type: string
+        agentId:
+          type: string
         description:
           type: string
         promptTemplate:
@@ -1082,6 +1330,8 @@ components:
       properties:
         name:
           type: string
+        agentId:
+          type: string
         sourceType:
           type: string
         connectionConfig:
@@ -1128,6 +1378,8 @@ components:
       required: [name, endpointPattern, authType]
       properties:
         name:
+          type: string
+        agentId:
           type: string
         endpointPattern:
           type: string

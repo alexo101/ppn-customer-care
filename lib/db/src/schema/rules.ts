@@ -2,10 +2,12 @@ import { pgTable, text, timestamp, boolean, integer, uuid } from "drizzle-orm/pg
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { intentCategoriesTable } from "./categories";
+import { agentsTable } from "./agents";
 
 export const orchestratorRulesTable = pgTable("orchestrator_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id"), // Clerk user ID of the owner; nullable for legacy seeded rows
+  agentId: uuid("agent_id").references(() => agentsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   promptTemplate: text("prompt_template").notNull().default(""),

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearch } from 'wouter';
+import { Redirect } from 'wouter';
 import { 
   useGetAnalyticsSummary,
   useListAnalyticsLogs,
@@ -61,29 +61,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 
 export default function Admin() {
-  const search = useSearch();
-  const tab = new URLSearchParams(search).get('tab') || 'dashboard';
-
-  return (
-    <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
-      <div className="h-14 px-6 border-b border-border flex items-center justify-between bg-card shrink-0">
-        <h1 className="text-lg font-medium tracking-tight capitalize">{tab}</h1>
-      </div>
-      
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-7xl mx-auto">
-          {tab === 'dashboard' && <DashboardTab />}
-          {tab === 'conversations' && <ConversationsTab />}
-          {tab === 'categories' && <CategoriesTab />}
-          {tab === 'rules' && <RulesTab />}
-          {tab === 'sources' && <SourcesTab />}
-        </div>
-      </div>
-    </div>
-  );
+  return <Redirect to="/agents" />;
 }
 
-function DashboardTab() {
+export function DashboardTab() {
   const { data: stats } = useGetAnalyticsSummary();
   const { data: logs = [] } = useListAnalyticsLogs({ limit: 10 });
 
@@ -158,9 +139,9 @@ function StatCard({ title, value, icon: Icon, variant = "default" }: any) {
   );
 }
 
-function ConversationsTab() {
+export function ConversationsTab({ agentId }: { agentId: string }) {
   const [filter, setFilter] = useState('');
-  const { data: convos = [] } = useListConversations(filter ? { status: filter } : {});
+  const { data: convos = [] } = useListConversations({ agentId, ...(filter ? { status: filter } : {}) });
 
   return (
     <Card className="shadow-none border-border">
@@ -209,7 +190,7 @@ function ConversationsTab() {
                 <TableCell className="text-muted-foreground">{format(new Date(convo.lastActivityAt), 'MMM d, HH:mm')}</TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
-                    <a href={`/chat?id=${convo.id}`}><ExternalLink className="w-3.5 h-3.5" /></a>
+                    <a href={`/agents/${agentId}/chat?id=${convo.id}`}><ExternalLink className="w-3.5 h-3.5" /></a>
                   </Button>
                 </TableCell>
               </TableRow>
@@ -221,8 +202,8 @@ function ConversationsTab() {
   );
 }
 
-function CategoriesTab() {
-  const { data: categories = [] } = useListCategories();
+export function CategoriesTab({ agentId }: { agentId: string }) {
+  const { data: categories = [] } = useListCategories({ agentId });
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createCategory = useCreateCategory();
@@ -272,7 +253,7 @@ function CategoriesTab() {
       { id: cat.id, data: { isEnabled: checked } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
         },
       }
     );
@@ -283,7 +264,7 @@ function CategoriesTab() {
       { id: sub.id, data: { isEnabled: checked } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
         },
       }
     );
@@ -297,6 +278,7 @@ function CategoriesTab() {
       {
         data: {
           name: trimmed,
+          agentId,
           parentId: null,
           description: '',
           examples: [],
@@ -311,7 +293,7 @@ function CategoriesTab() {
           setIsAddingCategory(false);
           setNewCategoryName('');
           setSelectedCategoryId(created.id);
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
             title: 'Category created',
             description: `Created "${created.name}"`,
@@ -330,7 +312,7 @@ function CategoriesTab() {
       {
         onSuccess: () => {
           setEditingCategoryId(null);
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
             title: 'Category updated',
             description: 'Name updated successfully',
@@ -352,7 +334,7 @@ function CategoriesTab() {
           if (selectedCategoryId === cat.id) {
             setSelectedCategoryId(null);
           }
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
             title: 'Category deleted',
             description: `Deleted "${cat.name}" and all its subcategories`,
@@ -370,6 +352,7 @@ function CategoriesTab() {
       {
         data: {
           name: trimmed,
+          agentId,
           parentId: activeSelectedCategory.id,
           description: '',
           examples: [],
@@ -383,7 +366,7 @@ function CategoriesTab() {
         onSuccess: (created) => {
           setIsAddingSubcategory(false);
           setNewSubcategoryName('');
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
             title: 'Subcategory created',
             description: `Added "${created.name}" to ${activeSelectedCategory.name}`,
@@ -402,7 +385,7 @@ function CategoriesTab() {
       {
         onSuccess: () => {
           setEditingSubId(null);
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
             title: 'Subcategory updated',
             description: 'Name updated successfully',
@@ -417,7 +400,7 @@ function CategoriesTab() {
       { id: sub.id, data: { parentId: targetCat.id } },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
             title: 'Subcategory moved',
             description: `Moved "${sub.name}" to "${targetCat.name}"`,
@@ -432,7 +415,7 @@ function CategoriesTab() {
       { id: sub.id },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
             title: 'Subcategory deleted',
             description: `Deleted "${sub.name}"`,
@@ -483,9 +466,6 @@ function CategoriesTab() {
           <div className="space-y-2.5">
             {isAddingCategory && (
               <div className="border border-blue-400/80 dark:border-blue-500/80 bg-blue-50/40 dark:bg-blue-950/20 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-blue-300 dark:ring-blue-800">
-                <div className="w-8 h-8 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground font-mono text-[11px] font-bold shrink-0 border border-border/40">
-                  tg
-                </div>
                 <Input
                   autoFocus
                   placeholder="New Category"
@@ -918,8 +898,8 @@ function CategoriesTab() {
   );
 }
 
-function RulesTab() {
-  const { data: rules = [] } = useListRules();
+export function RulesTab({ agentId }: { agentId: string }) {
+  const { data: rules = [] } = useListRules({ agentId });
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const createRule = useCreateRule();
@@ -930,6 +910,7 @@ function RulesTab() {
     createRule.mutate({
       data: {
         name: formData.get('name') as string,
+        agentId,
         description: formData.get('description') as string,
         promptTemplate: formData.get('prompt') as string,
         requiresClarificationPrompt: formData.get('clarification') as string || undefined,
@@ -940,7 +921,7 @@ function RulesTab() {
     }, {
       onSuccess: () => {
         setOpen(false);
-        queryClient.invalidateQueries({ queryKey: getListRulesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListRulesQueryKey({ agentId }) });
       }
     });
   };
@@ -1032,9 +1013,9 @@ function RulesTab() {
   );
 }
 
-function SourcesTab() {
-  const { data: sources = [] } = useListSources();
-  const { data: connectors = [] } = useListConnectors();
+export function SourcesTab({ agentId }: { agentId: string }) {
+  const { data: sources = [] } = useListSources({ agentId });
+  const { data: connectors = [] } = useListConnectors({ agentId });
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

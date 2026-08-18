@@ -8,5 +8,6 @@
 import type { ConversationInputMetadata } from './conversationInputMetadata';
 
 export interface ConversationInput {
+  agentId?: string;
   metadata?: ConversationInputMetadata;
 }

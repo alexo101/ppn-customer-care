@@ -3,6 +3,7 @@ import { eq, and, or, isNull } from "drizzle-orm";
 import { db, orchestratorRulesTable, ruleCategoryLinksTable, intentCategoriesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
+  ListRulesQueryParams,
   CreateRuleBody,
   UpdateRuleParams,
   UpdateRuleBody,
@@ -13,14 +14,37 @@ import {
   UnlinkRuleCategoryParams,
 } from "@workspace/api-zod";
 
+import { getOwnedAgent } from "../lib/agents";
+
 const router: IRouter = Router();
 
-// Returns rules belonging to the authenticated user plus system defaults (null userId).
+const ownerFilter = (userId: string) =>
+  or(eq(orchestratorRulesTable.userId, userId), isNull(orchestratorRulesTable.userId));
+
 router.get("/rules", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ListRulesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const agentId = parsed.data.agentId;
+  if (agentId) {
+    const agent = await getOwnedAgent(req.userId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+  }
+
+  const where = agentId
+    ? and(ownerFilter(req.userId), eq(orchestratorRulesTable.agentId, agentId))
+    : ownerFilter(req.userId);
+
   const rows = await db
     .select()
     .from(orchestratorRulesTable)
-    .where(or(eq(orchestratorRulesTable.userId, req.userId), isNull(orchestratorRulesTable.userId)))
+    .where(where)
     .orderBy(orchestratorRulesTable.priority);
   res.json(rows.map(toRule));
 });
@@ -32,10 +56,20 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  let agentId = parsed.data.agentId ?? null;
+  if (agentId) {
+    const agent = await getOwnedAgent(req.userId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+  }
+
   const [row] = await db
     .insert(orchestratorRulesTable)
     .values({
       userId: req.userId,
+      agentId,
       name: parsed.data.name,
       description: parsed.data.description ?? "",
       promptTemplate: parsed.data.promptTemplate ?? "",
@@ -215,6 +249,7 @@ function toRule(row: typeof orchestratorRulesTable.$inferSelect) {
     requiresClarificationPrompt: row.requiresClarificationPrompt,
     escalationTrigger: row.escalationTrigger,
     isEnabled: row.isEnabled,
+    agentId: row.agentId ?? null,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };

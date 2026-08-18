@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearch } from 'wouter';
 import { 
   useCreateConversation, 
   useSendMessage, 
   useListMessages,
-  useGetConversation
+  useGetConversation,
+  useGetAgentAppearance,
+  getGetAgentAppearanceQueryKey,
 } from '@workspace/api-client-react';
 import { Send, Bot, Loader2, Minus, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,9 +17,15 @@ import { useAppearance } from '@/components/appearance-provider';
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CTA_COLOR } from '@/lib/appearance-theme';
 
 export default function Widget() {
+  const search = useSearch();
+  const agentId = new URLSearchParams(search).get('agentId') || undefined;
   const [isOpen, setIsOpen] = useState(false);
   const [convoId, setConvoId] = useState<string | null>(null);
-  const { appearance } = useAppearance();
+  const { appearance: sessionAppearance } = useAppearance();
+  const { data: agentAppearance } = useGetAgentAppearance(agentId ?? '', {
+    query: { enabled: Boolean(agentId), queryKey: getGetAgentAppearanceQueryKey(agentId ?? '') },
+  });
+  const appearance = agentAppearance ?? sessionAppearance;
 
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
   const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
@@ -43,7 +52,7 @@ export default function Widget() {
     setIsOpen(true);
     if (!convoId && !createConvo.isPending) {
       createConvo.mutate({ 
-        data: { metadata: { source: "widget" } }
+        data: { metadata: { source: "widget" }, ...(agentId ? { agentId } : {}) }
       }, {
         onSuccess: (data) => setConvoId(data.id)
       });

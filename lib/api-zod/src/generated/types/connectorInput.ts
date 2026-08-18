@@ -8,6 +8,7 @@
 
 export interface ConnectorInput {
   name: string;
+  agentId?: string;
   endpointPattern: string;
   authType: string;
   isEnabled?: boolean;

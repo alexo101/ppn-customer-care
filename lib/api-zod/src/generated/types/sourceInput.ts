@@ -9,6 +9,7 @@ import type { SourceInputConnectionConfig } from './sourceInputConnectionConfig'
 
 export interface SourceInput {
   name: string;
+  agentId?: string;
   sourceType: string;
   connectionConfig?: SourceInputConnectionConfig;
   isEnabled?: boolean;

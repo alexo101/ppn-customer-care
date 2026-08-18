@@ -15,4 +15,6 @@ export interface Conversation {
   /** @nullable */
   resolvedAt?: string | null;
   createdAt: string;
+  /** @nullable */
+  agentId?: string | null;
 }

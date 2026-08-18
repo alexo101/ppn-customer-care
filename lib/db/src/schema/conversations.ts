@@ -1,10 +1,12 @@
 import { pgTable, text, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { agentsTable } from "./agents";
 
 export const conversationsTable = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id"), // Clerk user ID of the owner; nullable for legacy seeded rows
+  agentId: uuid("agent_id").references(() => agentsTable.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("active"),
   metadata: jsonb("metadata").notNull().default({}),
   lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),

@@ -17,6 +17,24 @@ export interface SuccessResponse {
   success: boolean;
 }
 
+export interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentInput {
+  name: string;
+  description?: string;
+}
+
+export interface AgentUpdate {
+  name?: string;
+  description?: string;
+}
+
 export type ConversationMetadata = { [key: string]: unknown };
 
 export interface Conversation {
@@ -27,11 +45,14 @@ export interface Conversation {
   /** @nullable */
   resolvedAt?: string | null;
   createdAt: string;
+  /** @nullable */
+  agentId?: string | null;
 }
 
 export type ConversationInputMetadata = { [key: string]: unknown };
 
 export interface ConversationInput {
+  agentId?: string;
   metadata?: ConversationInputMetadata;
 }
 
@@ -124,10 +145,13 @@ export interface IntentCategory {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  agentId?: string | null;
 }
 
 export interface CategoryInput {
   name: string;
+  agentId?: string;
   /** @nullable */
   parentId?: string | null;
   description?: string;
@@ -165,6 +189,7 @@ export interface OrchestratorRule {
 
 export interface RuleInput {
   name: string;
+  agentId?: string;
   description?: string;
   promptTemplate?: string;
   priority?: number;
@@ -203,6 +228,7 @@ export type SourceInputConnectionConfig = { [key: string]: unknown };
 
 export interface SourceInput {
   name: string;
+  agentId?: string;
   sourceType: string;
   connectionConfig?: SourceInputConnectionConfig;
   isEnabled?: boolean;
@@ -229,6 +255,7 @@ export interface ApiConnector {
 
 export interface ConnectorInput {
   name: string;
+  agentId?: string;
   endpointPattern: string;
   authType: string;
   isEnabled?: boolean;
@@ -298,8 +325,25 @@ export interface RegisterResult {
 }
 
 export type ListConversationsParams = {
+agentId?: string;
 status?: string;
 limit?: number;
+};
+
+export type ListCategoriesParams = {
+agentId?: string;
+};
+
+export type ListRulesParams = {
+agentId?: string;
+};
+
+export type ListSourcesParams = {
+agentId?: string;
+};
+
+export type ListConnectorsParams = {
+agentId?: string;
 };
 
 export type ListAnalyticsLogsParams = {

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
 import { AppShell } from '@/components/layout/app-shell';
 import { ProtectedRoute } from '@/components/auth-provider';
 import { AppearanceProvider } from '@/components/appearance-provider';
@@ -14,7 +14,11 @@ import Login from '@/pages/login';
 import Signup from '@/pages/signup';
 import Chat from '@/pages/chat';
 import Admin from '@/pages/admin';
+import Dashboard from '@/pages/dashboard';
 import Appearance from '@/pages/appearance';
+import AgentsBoard from '@/pages/agents';
+import CreateAgentPage from '@/pages/agent-new';
+import EditAgentPage from '@/pages/agent-edit';
 import Widget from '@/pages/widget';
 import NotFound from '@/pages/not-found';
 
@@ -62,6 +66,11 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+function AgentChat() {
+  const params = useParams<{ id: string }>();
+  return <Chat agentId={params.id} />;
+}
+
 function Router() {
   return (
     <RoutedErrorBoundary>
@@ -70,6 +79,41 @@ function Router() {
         <Route path="/login/*?" component={Login} />
         <Route path="/signup/*?" component={Signup} />
         <Route path="/widget" component={Widget} />
+        <Route path="/dashboard">
+          <ProtectedRoute>
+            <AppShell activeTab="dashboard">
+              <Dashboard />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/agents/new">
+          <ProtectedRoute>
+            <AppShell activeTab="agents">
+              <CreateAgentPage />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/agents/:id/chat">
+          <ProtectedRoute>
+            <AppShell activeTab="agents">
+              <AgentChat />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/agents/:id">
+          <ProtectedRoute>
+            <AppShell activeTab="agents">
+              <EditAgentPage />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/agents">
+          <ProtectedRoute>
+            <AppShell activeTab="agents">
+              <AgentsBoard />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
         <Route path="/chat">
           <ProtectedRoute>
             <AppShell activeTab="chat">

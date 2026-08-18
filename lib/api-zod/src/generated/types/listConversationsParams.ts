@@ -7,6 +7,7 @@
  */
 
 export type ListConversationsParams = {
+agentId?: string;
 status?: string;
 limit?: number;
 };

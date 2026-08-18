@@ -13,7 +13,7 @@ import { useRegister } from '@workspace/api-client-react';
 function SignedInRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return null;
-  if (isSignedIn) return <Redirect to="/chat" />;
+  if (isSignedIn) return <Redirect to="/dashboard" />;
   return null;
 }
 
@@ -51,7 +51,7 @@ function SignupForm() {
       });
       if (attempt.createdSessionId) {
         await setActive({ session: attempt.createdSessionId });
-        setLocation('/chat');
+        setLocation('/dashboard');
         return;
       }
       setError('Account created, but sign-in could not be completed. Try logging in.');

@@ -8,7 +8,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 function SignedInRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return null;
-  if (isSignedIn) return <Redirect to="/chat" />;
+  if (isSignedIn) return <Redirect to="/dashboard" />;
   return null;
 }
 
@@ -21,7 +21,7 @@ export default function Login() {
           routing="path"
           path={`${basePath}/login`}
           signUpUrl={`${basePath}/signup`}
-          fallbackRedirectUrl={`${basePath}/chat`}
+          fallbackRedirectUrl={`${basePath}/dashboard`}
         />
       </Show>
     </AuthLayout>

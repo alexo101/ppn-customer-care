@@ -8,6 +8,7 @@
 
 export interface CategoryInput {
   name: string;
+  agentId?: string;
   /** @nullable */
   parentId?: string | null;
   description?: string;

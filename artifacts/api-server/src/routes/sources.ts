@@ -3,25 +3,49 @@ import { eq, and, or, isNull } from "drizzle-orm";
 import { db, knowledgeSourcesTable, apiConnectorsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
+  ListSourcesQueryParams,
   CreateSourceBody,
   UpdateSourceParams,
   UpdateSourceBody,
   DeleteSourceParams,
+  ListConnectorsQueryParams,
   CreateConnectorBody,
   UpdateConnectorParams,
   UpdateConnectorBody,
   DeleteConnectorParams,
 } from "@workspace/api-zod";
 
+import { getOwnedAgent } from "../lib/agents";
+
 const router: IRouter = Router();
 
 const ownerOrSystem = (table: typeof knowledgeSourcesTable | typeof apiConnectorsTable, userId: string) =>
   or(eq(table.userId, userId), isNull(table.userId));
 
-// ── Knowledge Sources ─────────────────────────────────────────────────────
+async function requireAgent(userId: string, agentId: string | undefined, res: { status: (n: number) => { json: (b: unknown) => void } }) {
+  if (!agentId) return true;
+  const agent = await getOwnedAgent(userId, agentId);
+  if (!agent) {
+    res.status(404).json({ error: "Agent not found" });
+    return false;
+  }
+  return true;
+}
+
 router.get("/sources", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ListSourcesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
+
+  const where = parsed.data.agentId
+    ? and(ownerOrSystem(knowledgeSourcesTable, req.userId), eq(knowledgeSourcesTable.agentId, parsed.data.agentId))
+    : ownerOrSystem(knowledgeSourcesTable, req.userId);
+
   const rows = await db.select().from(knowledgeSourcesTable)
-    .where(ownerOrSystem(knowledgeSourcesTable, req.userId))
+    .where(where)
     .orderBy(knowledgeSourcesTable.name);
   res.json(rows.map(toSource));
 });
@@ -33,10 +57,15 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (parsed.data.agentId) {
+    if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
+  }
+
   const [row] = await db
     .insert(knowledgeSourcesTable)
     .values({
       userId: req.userId,
+      agentId: parsed.data.agentId ?? null,
       name: parsed.data.name,
       sourceType: parsed.data.sourceType,
       connectionConfig: (parsed.data.connectionConfig as Record<string, unknown>) ?? {},
@@ -103,8 +132,19 @@ router.delete("/sources/:id", requireAuth, async (req, res): Promise<void> => {
 
 // ── API Connectors ────────────────────────────────────────────────────────
 router.get("/connectors", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ListConnectorsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
+
+  const where = parsed.data.agentId
+    ? and(ownerOrSystem(apiConnectorsTable, req.userId), eq(apiConnectorsTable.agentId, parsed.data.agentId))
+    : ownerOrSystem(apiConnectorsTable, req.userId);
+
   const rows = await db.select().from(apiConnectorsTable)
-    .where(ownerOrSystem(apiConnectorsTable, req.userId))
+    .where(where)
     .orderBy(apiConnectorsTable.name);
   res.json(rows.map(toConnector));
 });
@@ -116,10 +156,15 @@ router.post("/connectors", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (parsed.data.agentId) {
+    if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
+  }
+
   const [row] = await db
     .insert(apiConnectorsTable)
     .values({
       userId: req.userId,
+      agentId: parsed.data.agentId ?? null,
       name: parsed.data.name,
       endpointPattern: parsed.data.endpointPattern,
       authType: parsed.data.authType,

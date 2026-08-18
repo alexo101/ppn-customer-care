@@ -18,11 +18,163 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary List agents for the authenticated user
+ */
+export const ListAgentsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAgentsResponse = zod.array(ListAgentsResponseItem)
+
+
+/**
+ * @summary Create an agent
+ */
+export const CreateAgentBody = zod.object({
+  "name": zod.string(),
+  "description": zod.string().optional()
+})
+
+export const CreateAgentResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get an agent
+ */
+export const GetAgentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetAgentResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update an agent
+ */
+export const UpdateAgentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateAgentBody = zod.object({
+  "name": zod.string().optional(),
+  "description": zod.string().optional()
+})
+
+export const UpdateAgentResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an agent and its nested data
+ */
+export const DeleteAgentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteAgentResponse = zod.void()
+
+
+/**
+ * @summary Get appearance for an agent
+ */
+export const GetAgentAppearanceParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetAgentAppearanceResponse = zod.object({
+  "id": zod.string(),
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string(),
+  "backgroundColor": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "importedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update appearance for an agent
+ */
+export const UpdateAgentAppearanceParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateAgentAppearanceBody = zod.object({
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string().optional(),
+  "backgroundColor": zod.string().optional(),
+  "logoUrl": zod.string().nullish()
+})
+
+export const UpdateAgentAppearanceResponse = zod.object({
+  "id": zod.string(),
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string(),
+  "backgroundColor": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "importedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Import styling from a website for an agent
+ */
+export const ImportAgentAppearanceParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ImportAgentAppearanceBody = zod.object({
+  "url": zod.string()
+})
+
+export const ImportAgentAppearanceResponse = zod.object({
+  "appearance": zod.object({
+  "id": zod.string(),
+  "websiteUrl": zod.string().nullish(),
+  "ctaColor": zod.string(),
+  "backgroundColor": zod.string(),
+  "logoUrl": zod.string().nullish(),
+  "importedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}),
+  "pageTitle": zod.string().nullish(),
+  "ctaColorCandidates": zod.array(zod.string()).optional(),
+  "backgroundColorCandidates": zod.array(zod.string()).optional(),
+  "logoCandidates": zod.array(zod.string()).optional()
+})
+
+
+/**
  * @summary List conversations
  */
 export const listConversationsQueryLimitDefault = 50;
 
 export const ListConversationsQueryParams = zod.object({
+  "agentId": zod.coerce.string().optional(),
   "status": zod.coerce.string().optional(),
   "limit": zod.coerce.number().default(listConversationsQueryLimitDefault)
 })
@@ -33,7 +185,8 @@ export const ListConversationsResponseItem = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()),
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 export const ListConversationsResponse = zod.array(ListConversationsResponseItem)
 
@@ -42,6 +195,7 @@ export const ListConversationsResponse = zod.array(ListConversationsResponseItem
  * @summary Create a new conversation
  */
 export const CreateConversationBody = zod.object({
+  "agentId": zod.string().optional(),
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
 })
 
@@ -51,7 +205,8 @@ export const CreateConversationResponse = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()),
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 
 
@@ -68,7 +223,8 @@ export const GetConversationResponse = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()),
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 
 
@@ -90,7 +246,8 @@ export const UpdateConversationResponse = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()),
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 
 
@@ -198,6 +355,10 @@ export const ListConversationLogsResponse = zod.array(ListConversationLogsRespon
 /**
  * @summary List intent categories
  */
+export const ListCategoriesQueryParams = zod.object({
+  "agentId": zod.coerce.string().optional()
+})
+
 export const ListCategoriesResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -209,7 +370,8 @@ export const ListCategoriesResponseItem = zod.object({
   "isEnabled": zod.boolean(),
   "sortOrder": zod.number(),
   "createdAt": zod.string(),
-  "updatedAt": zod.string()
+  "updatedAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
 
@@ -219,6 +381,7 @@ export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
  */
 export const CreateCategoryBody = zod.object({
   "name": zod.string(),
+  "agentId": zod.string().optional(),
   "parentId": zod.string().nullish(),
   "description": zod.string().optional(),
   "examples": zod.array(zod.string()).optional(),
@@ -239,7 +402,8 @@ export const CreateCategoryResponse = zod.object({
   "isEnabled": zod.boolean(),
   "sortOrder": zod.number(),
   "createdAt": zod.string(),
-  "updatedAt": zod.string()
+  "updatedAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 
 
@@ -272,7 +436,8 @@ export const UpdateCategoryResponse = zod.object({
   "isEnabled": zod.boolean(),
   "sortOrder": zod.number(),
   "createdAt": zod.string(),
-  "updatedAt": zod.string()
+  "updatedAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 
 
@@ -289,6 +454,10 @@ export const DeleteCategoryResponse = zod.void()
 /**
  * @summary List orchestration rules
  */
+export const ListRulesQueryParams = zod.object({
+  "agentId": zod.coerce.string().optional()
+})
+
 export const ListRulesResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -309,6 +478,7 @@ export const ListRulesResponse = zod.array(ListRulesResponseItem)
  */
 export const CreateRuleBody = zod.object({
   "name": zod.string(),
+  "agentId": zod.string().optional(),
   "description": zod.string().optional(),
   "promptTemplate": zod.string().optional(),
   "priority": zod.number().optional(),
@@ -390,7 +560,8 @@ export const ListRuleCategoriesResponseItem = zod.object({
   "isEnabled": zod.boolean(),
   "sortOrder": zod.number(),
   "createdAt": zod.string(),
-  "updatedAt": zod.string()
+  "updatedAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 export const ListRuleCategoriesResponse = zod.array(ListRuleCategoriesResponseItem)
 
@@ -425,6 +596,10 @@ export const UnlinkRuleCategoryResponse = zod.void()
 /**
  * @summary List knowledge sources
  */
+export const ListSourcesQueryParams = zod.object({
+  "agentId": zod.coerce.string().optional()
+})
+
 export const ListSourcesResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -442,6 +617,7 @@ export const ListSourcesResponse = zod.array(ListSourcesResponseItem)
  */
 export const CreateSourceBody = zod.object({
   "name": zod.string(),
+  "agentId": zod.string().optional(),
   "sourceType": zod.string(),
   "connectionConfig": zod.record(zod.string(), zod.unknown()).optional(),
   "isEnabled": zod.boolean().optional()
@@ -496,6 +672,10 @@ export const DeleteSourceResponse = zod.void()
 /**
  * @summary List API connectors
  */
+export const ListConnectorsQueryParams = zod.object({
+  "agentId": zod.coerce.string().optional()
+})
+
 export const ListConnectorsResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -513,6 +693,7 @@ export const ListConnectorsResponse = zod.array(ListConnectorsResponseItem)
  */
 export const CreateConnectorBody = zod.object({
   "name": zod.string(),
+  "agentId": zod.string().optional(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
   "isEnabled": zod.boolean().optional()

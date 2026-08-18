@@ -8,6 +8,7 @@
 
 export interface RuleInput {
   name: string;
+  agentId?: string;
   description?: string;
   promptTemplate?: string;
   priority?: number;

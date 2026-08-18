@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useSearch } from 'wouter';
 import { 
   useListConversations, 
   useGetConversation, 
@@ -39,28 +39,34 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useAppearance } from '@/components/appearance-provider';
 
-export default function Chat() {
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+export default function Chat({ agentId }: { agentId?: string }) {
+  const search = useSearch();
+  const queryId = new URLSearchParams(search).get('id');
+  const [activeId, setActiveId] = useState<string | null>(queryId);
+  const [searchText, setSearch] = useState('');
   const [debugOpen, setDebugOpen] = useState(true);
   const { appearance } = useAppearance();
   
   const queryClient = useQueryClient();
-  const { data: conversations = [], isLoading: loadingConvos } = useListConversations();
+  const { data: conversations = [], isLoading: loadingConvos } = useListConversations(agentId ? { agentId } : undefined);
+
+  useEffect(() => {
+    if (queryId) setActiveId(queryId);
+  }, [queryId]);
   
   const filteredConvos = conversations.filter(c => 
-    c.id.toLowerCase().includes(search.toLowerCase()) || 
-    (c.metadata as any)?.subject?.toLowerCase().includes(search.toLowerCase())
+    c.id.toLowerCase().includes(searchText.toLowerCase()) || 
+    (c.metadata as any)?.subject?.toLowerCase().includes(searchText.toLowerCase())
   );
 
   const createConvo = useCreateConversation();
   
   const handleCreate = () => {
     createConvo.mutate({ 
-      data: { metadata: { subject: "New Support Query", source: "console" } }
+      data: { metadata: { subject: "New Support Query", source: "console" }, ...(agentId ? { agentId } : {}) }
     }, {
       onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey(agentId ? { agentId } : undefined) });
         setActiveId(data.id);
       }
     });
@@ -82,7 +88,7 @@ export default function Chat() {
             <Input 
               placeholder="Search ID or subject..." 
               className="pl-8 h-8 text-xs bg-background shadow-none"
-              value={search}
+              value={searchText}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
@@ -125,6 +131,7 @@ export default function Chat() {
       {activeId ? (
         <ActiveChat 
           conversationId={activeId} 
+          agentId={agentId}
           debugOpen={debugOpen} 
           setDebugOpen={setDebugOpen} 
         />
@@ -163,10 +170,12 @@ function StatusBadge({ status }: { status: string }) {
 
 function ActiveChat({ 
   conversationId, 
+  agentId,
   debugOpen, 
   setDebugOpen 
 }: { 
   conversationId: string;
+  agentId?: string;
   debugOpen: boolean;
   setDebugOpen: (v: boolean) => void;
 }) {
@@ -199,7 +208,7 @@ function ActiveChat({
         setInput('');
         refetchMessages();
         refetchLogs();
-        queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey(agentId ? { agentId } : undefined) });
       }
     });
   };

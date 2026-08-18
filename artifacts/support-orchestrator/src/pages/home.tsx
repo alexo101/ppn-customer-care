@@ -1,8 +1,12 @@
-import { Link } from 'wouter';
+import { Link, Redirect } from 'wouter';
+import { useAuth } from '@clerk/react';
 import { Button } from '@/components/ui/button';
 import { Network, ArrowRight, ShieldCheck, Zap, Activity } from 'lucide-react';
 
 export default function Home() {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (isLoaded && isSignedIn) return <Redirect to="/dashboard" />;
+
   return (
     <div className="min-h-screen bg-background flex flex-col text-foreground font-sans">
       <header className="h-16 border-b border-border flex items-center justify-between px-6 bg-card">
@@ -14,7 +18,7 @@ export default function Home() {
           <Link href="/login">
             <Button variant="ghost" className="font-mono text-xs">LOGIN</Button>
           </Link>
-          <Link href="/chat">
+          <Link href="/dashboard">
             <Button className="font-mono text-xs shadow-none">LAUNCH_CONSOLE</Button>
           </Link>
         </nav>
@@ -39,7 +43,7 @@ export default function Home() {
               A high-density mission control for AI-driven conversations. Manage intents, configure orchestration rules, and monitor resolution workflows in real-time.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-              <Link href="/chat">
+              <Link href="/dashboard">
                 <Button size="lg" className="font-mono tracking-wide px-8 h-12 w-full sm:w-auto shadow-none">
                   ACCESS_SYSTEM <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>

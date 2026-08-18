@@ -3,21 +3,43 @@ import { eq, and, or, isNull } from "drizzle-orm";
 import { db, intentCategoriesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
+  ListCategoriesQueryParams,
   CreateCategoryBody,
   UpdateCategoryParams,
   UpdateCategoryBody,
   DeleteCategoryParams,
 } from "@workspace/api-zod";
+import { getOwnedAgent } from "../lib/agents";
 
 const router: IRouter = Router();
 
-// Returns categories belonging to the authenticated user,
-// plus categories with no owner (seeded system defaults).
+const ownerFilter = (userId: string) =>
+  or(eq(intentCategoriesTable.userId, userId), isNull(intentCategoriesTable.userId));
+
 router.get("/categories", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ListCategoriesQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const agentId = parsed.data.agentId;
+  if (agentId) {
+    const agent = await getOwnedAgent(req.userId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+  }
+
+  const where = agentId
+    ? and(ownerFilter(req.userId), eq(intentCategoriesTable.agentId, agentId))
+    : ownerFilter(req.userId);
+
   const rows = await db
     .select()
     .from(intentCategoriesTable)
-    .where(or(eq(intentCategoriesTable.userId, req.userId), isNull(intentCategoriesTable.userId)))
+    .where(where)
     .orderBy(intentCategoriesTable.sortOrder, intentCategoriesTable.name);
   res.json(rows.map(toCategory));
 });
@@ -29,12 +51,22 @@ router.post("/categories", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  let agentId = parsed.data.agentId ?? null;
+  if (agentId) {
+    const agent = await getOwnedAgent(req.userId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+  }
+
   const [row] = await db
     .insert(intentCategoriesTable)
     .values({
       userId: req.userId,
+      agentId,
       name: parsed.data.name,
-      parentId: (parsed.data as Record<string, unknown>).parentId as string | null ?? null,
+      parentId: parsed.data.parentId ?? null,
       description: parsed.data.description ?? "",
       examples: parsed.data.examples ?? [],
       confidenceThreshold: String(parsed.data.confidenceThreshold ?? 0.7),
@@ -140,6 +172,7 @@ function toCategory(row: typeof intentCategoriesTable.$inferSelect) {
     keywords: (row.keywords as string[]) ?? [],
     isEnabled: row.isEnabled,
     sortOrder: row.sortOrder,
+    agentId: row.agentId ?? null,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };

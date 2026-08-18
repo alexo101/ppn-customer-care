@@ -24,6 +24,7 @@ import {
   SubmitFeedbackBody,
   ListConversationLogsParams,
 } from "@workspace/api-zod";
+import { getOwnedAgent } from "../lib/agents";
 
 const router: IRouter = Router();
 
@@ -36,12 +37,21 @@ router.get("/conversations", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { status, limit = 50 } = parsed.data;
+  const { status, limit = 50, agentId } = parsed.data;
   const userId = req.userId;
+
+  if (agentId) {
+    const agent = await getOwnedAgent(userId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+  }
 
   const ownerFilter = eq(conversationsTable.userId, userId);
   const statusFilter = status ? eq(conversationsTable.status, status) : undefined;
-  const where = statusFilter ? and(ownerFilter, statusFilter) : ownerFilter;
+  const agentFilter = agentId ? eq(conversationsTable.agentId, agentId) : undefined;
+  const where = and(ownerFilter, statusFilter, agentFilter);
 
   const rows = await db
     .select()
@@ -61,9 +71,18 @@ router.post("/conversations", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  let agentId = parsed.data.agentId ?? null;
+  if (agentId) {
+    const agent = await getOwnedAgent(req.userId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+  }
+
   const [row] = await db
     .insert(conversationsTable)
-    .values({ userId: req.userId, metadata: parsed.data.metadata ?? {} })
+    .values({ userId: req.userId, agentId, metadata: parsed.data.metadata ?? {} })
     .returning();
 
   res.status(201).json(toConversation(row));
@@ -191,7 +210,15 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
 
   // Stage 1: load categories
   stages[0].status = "running";
-  const categories = await db.select().from(intentCategoriesTable).where(eq(intentCategoriesTable.isEnabled, true));
+  const categories = await db
+    .select()
+    .from(intentCategoriesTable)
+    .where(
+      and(
+        eq(intentCategoriesTable.isEnabled, true),
+        conv.agentId ? eq(intentCategoriesTable.agentId, conv.agentId) : undefined,
+      ),
+    );
   stages[0].status = "completed";
   stages[0].details = { categories_loaded: categories.length };
 
@@ -503,6 +530,7 @@ function toConversation(row: typeof conversationsTable.$inferSelect) {
     lastActivityAt: row.lastActivityAt?.toISOString() ?? new Date().toISOString(),
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+    agentId: row.agentId ?? null,
   };
 }
 

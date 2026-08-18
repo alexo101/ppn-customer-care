@@ -19,4 +19,6 @@ export interface IntentCategory {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  agentId?: string | null;
 }

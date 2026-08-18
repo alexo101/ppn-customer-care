@@ -7,10 +7,12 @@ import sourcesRouter from "./sources";
 import analyticsRouter from "./analytics";
 import appearanceRouter from "./appearance";
 import authRouter from "./auth";
+import agentsRouter from "./agents";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(agentsRouter);
 router.use(conversationsRouter);
 router.use(categoriesRouter);
 router.use(rulesRouter);

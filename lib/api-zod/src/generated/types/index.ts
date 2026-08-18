@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './agent';
+export * from './agentInput';
+export * from './agentUpdate';
 export * from './analyticsSummary';
 export * from './apiConnector';
 export * from './appearance';
@@ -31,7 +34,11 @@ export * from './intentCategory';
 export * from './knowledgeSource';
 export * from './knowledgeSourceConnectionConfig';
 export * from './listAnalyticsLogsParams';
+export * from './listCategoriesParams';
+export * from './listConnectorsParams';
 export * from './listConversationsParams';
+export * from './listRulesParams';
+export * from './listSourcesParams';
 export * from './message';
 export * from './orchestratorLog';
 export * from './orchestratorLogDetectedEntities';
