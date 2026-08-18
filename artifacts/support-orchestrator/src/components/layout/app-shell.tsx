@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'wouter';
+import { Link, useLocation, useSearch } from 'wouter';
 import { useClerk, useUser } from '@clerk/react';
 import {
   LayoutDashboard,
@@ -16,10 +16,12 @@ import { useAppearance } from '@/components/appearance-provider';
 
 export function AppShell({ children, activeTab = 'chat' }: { children: React.ReactNode; activeTab?: string }) {
   const [location] = useLocation();
+  const search = useSearch();
   const { signOut } = useClerk();
   const { user } = useUser();
   
   const { appearance } = useAppearance();
+  const currentTab = new URLSearchParams(search).get('tab') || 'dashboard';
 
   const navItems = [
     { icon: MessageSquare, label: 'Orchestrator', href: '/chat', match: '/chat' },
@@ -64,27 +66,22 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
             </Link>
           ))}
 
-          {isAdmin && (
-            <>
-              <div className="text-[10px] uppercase font-mono tracking-wider text-sidebar-foreground/50 mt-6 mb-2 px-2">Configuration</div>
-              {adminTabs.map((item) => {
-                const currentTab = new URLSearchParams(window.location.search).get('tab') || 'dashboard';
-                const isActive = currentTab === item.match;
-                
-                return (
-                  <Link key={item.match} href={item.href} className={cn(
-                    "flex items-center gap-3 px-2 py-1.5 rounded-md transition-colors text-[13px]",
-                    isActive
-                      ? "bg-sidebar-primary/20 text-sidebar-primary font-medium" 
-                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  )}>
-                    <item.icon className="w-3.5 h-3.5" />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </>
-          )}
+          <div className="text-[10px] uppercase font-mono tracking-wider text-sidebar-foreground/50 mt-6 mb-2 px-2">Configuration</div>
+          {adminTabs.map((item) => {
+            const isActive = isAdmin && currentTab === item.match;
+
+            return (
+              <Link key={item.match} href={item.href} className={cn(
+                "flex items-center gap-3 px-2 py-1.5 rounded-md transition-colors text-[13px]",
+                isActive
+                  ? "bg-sidebar-primary/20 text-sidebar-primary font-medium" 
+                  : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              )}>
+                <item.icon className="w-3.5 h-3.5" />
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
         
         <div className="p-4 border-t border-sidebar-border flex items-center justify-between">

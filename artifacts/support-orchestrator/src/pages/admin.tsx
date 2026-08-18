@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useLocation } from 'wouter';
+import { useSearch } from 'wouter';
 import { 
   useGetAnalyticsSummary,
   useListAnalyticsLogs,
@@ -15,15 +15,19 @@ import {
   useListSources,
   useListConnectors,
   getListCategoriesQueryKey,
-  getListRulesQueryKey
+  getListRulesQueryKey,
+  type IntentCategory
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
   Activity, Users, MessageSquare, AlertTriangle, CheckCircle, 
   Search, Plus, Filter, MoreVertical, Edit2, Trash, ExternalLink,
-  Book, Database, Network
+  Book, Database, Network, Layers, FolderTree, Check, X, FolderInput,
+  ChevronRight, ArrowRightLeft, Folder
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -34,13 +38,31 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter 
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 
 export default function Admin() {
-  const params = new URLSearchParams(window.location.search);
-  const tab = params.get('tab') || 'dashboard';
+  const search = useSearch();
+  const tab = new URLSearchParams(search).get('tab') || 'dashboard';
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
@@ -201,107 +223,698 @@ function ConversationsTab() {
 
 function CategoriesTab() {
   const { data: categories = [] } = useListCategories();
-  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const createCategory = useCreateCategory();
+  const updateCategory = useUpdateCategory();
+  const deleteCategory = useDeleteCategory();
 
-  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    createCategory.mutate({
-      data: {
-        name: formData.get('name') as string,
-        description: formData.get('description') as string,
-        examples: (formData.get('examples') as string).split(',').map(s => s.trim()),
-        keywords: (formData.get('keywords') as string).split(',').map(s => s.trim()),
-        confidenceThreshold: Number(formData.get('threshold')) / 100,
-        isEnabled: true,
-        sortOrder: 0
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  // Category inline states
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [categoryToDelete, setCategoryToDelete] = useState<IntentCategory | null>(null);
+
+  // Subcategory inline states
+  const [isAddingSubcategory, setIsAddingSubcategory] = useState(false);
+  const [newSubcategoryName, setNewSubcategoryName] = useState('');
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editingSubName, setEditingSubName] = useState('');
+
+  // Parent categories (items with no parentId)
+  const parentCategories = categories.filter((c) => !c.parentId);
+  const filteredParents = parentCategories.filter((c) =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Active selected parent category
+  const activeSelectedCategory =
+    parentCategories.find((c) => c.id === selectedCategoryId) ||
+    parentCategories[0] ||
+    null;
+
+  // Subcategories for active selected category
+  const currentSubcategories = activeSelectedCategory
+    ? categories.filter((c) => c.parentId === activeSelectedCategory.id)
+    : [];
+
+  // Other parent categories available for moving subcategories
+  const otherParentCategories = activeSelectedCategory
+    ? parentCategories.filter((c) => c.id !== activeSelectedCategory.id)
+    : [];
+
+  const handleToggleCategory = (cat: IntentCategory, checked: boolean) => {
+    updateCategory.mutate(
+      { id: cat.id, data: { isEnabled: checked } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+        },
       }
-    }, {
-      onSuccess: () => {
-        setOpen(false);
-        queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+    );
+  };
+
+  const handleToggleSub = (sub: IntentCategory, checked: boolean) => {
+    updateCategory.mutate(
+      { id: sub.id, data: { isEnabled: checked } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+        },
       }
-    });
+    );
+  };
+
+  const handleSaveNewCategory = () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+
+    createCategory.mutate(
+      {
+        data: {
+          name: trimmed,
+          parentId: null,
+          description: '',
+          examples: [],
+          keywords: [],
+          confidenceThreshold: 0.7,
+          isEnabled: true,
+          sortOrder: 0,
+        },
+      },
+      {
+        onSuccess: (created) => {
+          setIsAddingCategory(false);
+          setNewCategoryName('');
+          setSelectedCategoryId(created.id);
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          toast({
+            title: 'Category created',
+            description: `Created "${created.name}"`,
+          });
+        },
+      }
+    );
+  };
+
+  const handleSaveEditCategory = (catId: string) => {
+    const trimmed = editingCategoryName.trim();
+    if (!trimmed) return;
+
+    updateCategory.mutate(
+      { id: catId, data: { name: trimmed } },
+      {
+        onSuccess: () => {
+          setEditingCategoryId(null);
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          toast({
+            title: 'Category updated',
+            description: 'Name updated successfully',
+          });
+        },
+      }
+    );
+  };
+
+  const handleConfirmDeleteCategory = () => {
+    if (!categoryToDelete) return;
+    const cat = categoryToDelete;
+
+    deleteCategory.mutate(
+      { id: cat.id },
+      {
+        onSuccess: () => {
+          setCategoryToDelete(null);
+          if (selectedCategoryId === cat.id) {
+            setSelectedCategoryId(null);
+          }
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          toast({
+            title: 'Category deleted',
+            description: `Deleted "${cat.name}" and all its subcategories`,
+          });
+        },
+      }
+    );
+  };
+
+  const handleSaveNewSub = () => {
+    const trimmed = newSubcategoryName.trim();
+    if (!trimmed || !activeSelectedCategory) return;
+
+    createCategory.mutate(
+      {
+        data: {
+          name: trimmed,
+          parentId: activeSelectedCategory.id,
+          description: '',
+          examples: [],
+          keywords: [],
+          confidenceThreshold: 0.7,
+          isEnabled: true,
+          sortOrder: 0,
+        },
+      },
+      {
+        onSuccess: (created) => {
+          setIsAddingSubcategory(false);
+          setNewSubcategoryName('');
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          toast({
+            title: 'Subcategory created',
+            description: `Added "${created.name}" to ${activeSelectedCategory.name}`,
+          });
+        },
+      }
+    );
+  };
+
+  const handleSaveEditSub = (subId: string) => {
+    const trimmed = editingSubName.trim();
+    if (!trimmed) return;
+
+    updateCategory.mutate(
+      { id: subId, data: { name: trimmed } },
+      {
+        onSuccess: () => {
+          setEditingSubId(null);
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          toast({
+            title: 'Subcategory updated',
+            description: 'Name updated successfully',
+          });
+        },
+      }
+    );
+  };
+
+  const handleMoveSub = (sub: IntentCategory, targetCat: IntentCategory) => {
+    updateCategory.mutate(
+      { id: sub.id, data: { parentId: targetCat.id } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          toast({
+            title: 'Subcategory moved',
+            description: `Moved "${sub.name}" to "${targetCat.name}"`,
+          });
+        },
+      }
+    );
+  };
+
+  const handleDeleteSub = (sub: IntentCategory) => {
+    deleteCategory.mutate(
+      { id: sub.id },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+          toast({
+            title: 'Subcategory deleted',
+            description: `Deleted "${sub.name}"`,
+          });
+        },
+      }
+    );
   };
 
   return (
-    <Card className="shadow-none border-border">
-      <CardHeader className="flex flex-row items-center justify-between py-4">
-        <div>
-          <CardTitle className="text-sm font-medium">Intent Categories</CardTitle>
-          <CardDescription className="text-xs">Classification taxonomy for the orchestrator</CardDescription>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left Column: Categories */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="text-blue-600 dark:text-blue-400">
+                <Layers className="w-5 h-5" />
+              </div>
+              <h2 className="font-semibold text-base tracking-tight text-foreground">Categories</h2>
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground">
+                {parentCategories.length}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                setIsAddingCategory(true);
+                setNewCategoryName('');
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium h-8 px-3.5 rounded-md flex items-center gap-1.5 shadow-sm transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Category
+            </Button>
+          </div>
+
+          <div className="relative">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search categories..."
+              className="pl-9 h-9 text-xs bg-background/50 border-border/80 rounded-md focus-visible:ring-1 focus-visible:ring-blue-500"
+            />
+          </div>
+
+          <div className="space-y-2.5">
+            {isAddingCategory && (
+              <div className="border border-blue-400/80 dark:border-blue-500/80 bg-blue-50/40 dark:bg-blue-950/20 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-blue-300 dark:ring-blue-800">
+                <div className="w-8 h-8 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground font-mono text-[11px] font-bold shrink-0 border border-border/40">
+                  tg
+                </div>
+                <Input
+                  autoFocus
+                  placeholder="New Category"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveNewCategory();
+                    if (e.key === 'Escape') setIsAddingCategory(false);
+                  }}
+                  className="h-8 text-xs font-medium bg-background border-blue-400 focus-visible:ring-1 focus-visible:ring-blue-400"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
+                  onClick={handleSaveNewCategory}
+                  disabled={!newCategoryName.trim() || createCategory.isPending}
+                >
+                  <Check className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  onClick={() => setIsAddingCategory(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+
+            {filteredParents.map((cat) => {
+              const isSelected = activeSelectedCategory?.id === cat.id;
+              const subs = categories.filter((c) => c.parentId === cat.id);
+              const isEditing = editingCategoryId === cat.id;
+
+              if (isEditing) {
+                return (
+                  <div
+                    key={cat.id}
+                    className="border border-blue-400/80 dark:border-blue-500/80 bg-blue-50/40 dark:bg-blue-950/20 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-blue-300 dark:ring-blue-800"
+                  >
+                    <div className="w-8 h-8 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground font-mono text-[11px] font-bold shrink-0 border border-border/40">
+                      tg
+                    </div>
+                    <Input
+                      autoFocus
+                      value={editingCategoryName}
+                      onChange={(e) => setEditingCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveEditCategory(cat.id);
+                        if (e.key === 'Escape') setEditingCategoryId(null);
+                      }}
+                      className="h-8 text-xs font-medium bg-background border-blue-400 focus-visible:ring-1 focus-visible:ring-blue-400"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
+                      onClick={() => handleSaveEditCategory(cat.id)}
+                      disabled={!editingCategoryName.trim() || updateCategory.isPending}
+                    >
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                      onClick={() => setEditingCategoryId(null)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={cat.id}
+                  onClick={() => setSelectedCategoryId(cat.id)}
+                  className={cn(
+                    "group rounded-lg p-3 flex items-center justify-between cursor-pointer transition-all border shadow-sm select-none",
+                    isSelected
+                      ? "border-blue-400/90 dark:border-blue-500/90 bg-blue-50/40 dark:bg-blue-950/20 ring-1 ring-blue-300 dark:ring-blue-800"
+                      : "border-border/80 bg-card hover:border-blue-200 dark:hover:border-blue-900/50 hover:bg-accent/20"
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <div className="w-8 h-8 rounded-md bg-muted/60 dark:bg-muted/40 flex items-center justify-center text-muted-foreground font-mono text-[11px] font-bold shrink-0 border border-border/40">
+                      tg
+                    </div>
+                    <span className="font-medium text-sm text-foreground truncate">{cat.name}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-muted-foreground font-normal">
+                      {subs.length} {subs.length === 1 ? 'sub' : 'subs'}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[11px] font-semibold tracking-wider uppercase",
+                        cat.isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60"
+                      )}
+                    >
+                      {cat.isEnabled ? 'ON' : 'OFF'}
+                    </span>
+                    <Switch
+                      checked={cat.isEnabled}
+                      onCheckedChange={(checked) => handleToggleCategory(cat, checked)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground opacity-60 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="text-xs">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingCategoryId(cat.id);
+                            setEditingCategoryName(cat.name);
+                          }}
+                          className="gap-2 cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" /> Edit Name
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCategoryToDelete(cat);
+                          }}
+                          className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                        >
+                          <Trash className="w-3.5 h-3.5" /> Delete Category
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              );
+            })}
+
+            {filteredParents.length === 0 && !isAddingCategory && (
+              <div className="border border-dashed border-border rounded-lg p-6 text-center text-xs text-muted-foreground">
+                {searchQuery
+                  ? 'No categories matching search.'
+                  : 'No categories yet. Click "+ Add Category" to create one.'}
+              </div>
+            )}
+          </div>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="h-8 text-xs font-mono"><Plus className="w-3.5 h-3.5 mr-1"/> NEW_INTENT</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create Intent Category</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs">Name</Label>
-                  <Input name="name" placeholder="e.g. billing_refund" required className="h-8 text-xs font-mono" />
+
+        {/* Right Column: Subcategories */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
+          {!activeSelectedCategory ? (
+            <div className="border border-dashed border-border rounded-xl p-12 text-center text-xs text-muted-foreground space-y-2">
+              <FolderTree className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+              <p>Select or create a category on the left to manage its subcategories.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                  <div className="text-emerald-600 dark:text-emerald-400 shrink-0">
+                    <FolderTree className="w-5 h-5" />
+                  </div>
+                  <div className="truncate text-base">
+                    <span className="font-semibold text-foreground">{activeSelectedCategory.name}</span>
+                    <span className="text-muted-foreground font-normal ml-1.5">— Subcategories</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground shrink-0">
+                    {currentSubcategories.length}
+                  </span>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Threshold (%)</Label>
-                  <Input name="threshold" type="number" defaultValue="75" required className="h-8 text-xs font-mono" />
-                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setIsAddingSubcategory(true);
+                    setNewSubcategoryName('');
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium h-8 px-3.5 rounded-md flex items-center gap-1.5 shadow-sm transition-colors shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Subcategory
+                </Button>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Description</Label>
-                <Input name="description" placeholder="Short description" required className="h-8 text-xs" />
+
+              <div className="space-y-2.5">
+                {currentSubcategories.map((sub) => {
+                  const isEditing = editingSubId === sub.id;
+
+                  if (isEditing) {
+                    return (
+                      <div
+                        key={sub.id}
+                        className="border border-emerald-400/80 dark:border-emerald-500/80 bg-emerald-50/30 dark:bg-emerald-950/15 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-800"
+                      >
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 ml-1 mr-2 shrink-0" />
+                        <Input
+                          autoFocus
+                          value={editingSubName}
+                          onChange={(e) => setEditingSubName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEditSub(sub.id);
+                            if (e.key === 'Escape') setEditingSubId(null);
+                          }}
+                          className="h-8 text-xs font-medium bg-background border-emerald-400 focus-visible:ring-1 focus-visible:ring-emerald-400"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
+                          onClick={() => handleSaveEditSub(sub.id)}
+                          disabled={!editingSubName.trim() || updateCategory.isPending}
+                        >
+                          <Check className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                          onClick={() => setEditingSubId(null)}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={sub.id}
+                      className="group rounded-lg p-3 flex items-center justify-between border border-border/80 bg-card hover:border-border transition-all shadow-sm select-none"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <div
+                          className={cn(
+                            "w-2 h-2 rounded-full shrink-0 ml-1 mr-1",
+                            sub.isEnabled ? "bg-emerald-500" : "bg-muted-foreground/30"
+                          )}
+                        />
+                        <span className="font-medium text-sm text-foreground truncate">{sub.name}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span
+                          className={cn(
+                            "text-[11px] font-semibold tracking-wider uppercase",
+                            sub.isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60"
+                          )}
+                        >
+                          {sub.isEnabled ? 'ON' : 'OFF'}
+                        </span>
+                        <Switch
+                          checked={sub.isEnabled}
+                          onCheckedChange={(checked) => handleToggleSub(sub, checked)}
+                        />
+
+                        {/* Move subcategory dropdown */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground gap-1 border border-transparent hover:border-border"
+                            >
+                              <FolderInput className="w-3.5 h-3.5 text-muted-foreground" />
+                              Move
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="text-xs min-w-[180px]">
+                            <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground">
+                              Move to category:
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {otherParentCategories.length === 0 ? (
+                              <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
+                                No other categories
+                              </div>
+                            ) : (
+                              otherParentCategories.map((targetCat) => (
+                                <DropdownMenuItem
+                                  key={targetCat.id}
+                                  onClick={() => handleMoveSub(sub, targetCat)}
+                                  className="gap-2 cursor-pointer text-xs"
+                                >
+                                  <Layers className="w-3.5 h-3.5 text-blue-500" />
+                                  <span className="truncate">{targetCat.name}</span>
+                                </DropdownMenuItem>
+                              ))
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground opacity-60 group-hover:opacity-100 transition-opacity"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="text-xs">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditingSubId(sub.id);
+                                setEditingSubName(sub.name);
+                              }}
+                              className="gap-2 cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" /> Edit Name
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteSub(sub)}
+                              className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                            >
+                              <Trash className="w-3.5 h-3.5" /> Delete Subcategory
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {isAddingSubcategory && (
+                  <div className="border border-emerald-400/80 dark:border-emerald-500/80 bg-emerald-50/30 dark:bg-emerald-950/15 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-800">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 ml-1 mr-2 shrink-0" />
+                    <Input
+                      autoFocus
+                      placeholder="New Subcategory"
+                      value={newSubcategoryName}
+                      onChange={(e) => setNewSubcategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveNewSub();
+                        if (e.key === 'Escape') setIsAddingSubcategory(false);
+                      }}
+                      className="h-8 text-xs font-medium bg-background border-emerald-400 focus-visible:ring-1 focus-visible:ring-emerald-400"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
+                      onClick={handleSaveNewSub}
+                      disabled={!newSubcategoryName.trim() || createCategory.isPending}
+                    >
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                      onClick={() => setIsAddingSubcategory(false)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {currentSubcategories.length === 0 && !isAddingSubcategory && (
+                  <div className="border border-dashed border-border rounded-lg p-8 text-center text-xs text-muted-foreground space-y-1">
+                    <p>
+                      No subcategories in{' '}
+                      <span className="font-semibold text-foreground">
+                        {activeSelectedCategory.name}
+                      </span>{' '}
+                      yet.
+                    </p>
+                    <p>
+                      Click{' '}
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        + Add Subcategory
+                      </span>{' '}
+                      to create one.
+                    </p>
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Examples (comma separated)</Label>
-                <Textarea name="examples" placeholder="I want my money back, refund me" required className="h-16 text-xs" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Keywords (comma separated)</Label>
-                <Input name="keywords" placeholder="refund, money, return" required className="h-8 text-xs font-mono" />
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={createCategory.isPending}>Save Category</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <div className="border-t border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">Intent</TableHead>
-              <TableHead className="text-xs">Description</TableHead>
-              <TableHead className="text-xs">Threshold</TableHead>
-              <TableHead className="text-xs">Status</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {categories.map((cat) => (
-              <TableRow key={cat.id} className="text-xs">
-                <TableCell className="font-mono text-primary font-medium">{cat.name}</TableCell>
-                <TableCell className="text-muted-foreground">{cat.description}</TableCell>
-                <TableCell className="font-mono">{Math.round(cat.confidenceThreshold * 100)}%</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={`text-[9px] uppercase font-mono tracking-wider h-5 ${cat.isEnabled ? 'text-emerald-500 border-emerald-500/20' : 'text-muted-foreground'}`}>
-                    {cat.isEnabled ? 'Enabled' : 'Disabled'}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="w-3.5 h-3.5" /></Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </>
+          )}
+        </div>
       </div>
-    </Card>
+
+      {/* Delete Category Confirmation Modal */}
+      <AlertDialog
+        open={!!categoryToDelete}
+        onOpenChange={(open) => !open && setCategoryToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{' '}
+              <span className="font-semibold text-foreground">
+                "{categoryToDelete?.name}"
+              </span>
+              ?
+              {categoryToDelete &&
+                categories.filter((c) => c.parentId === categoryToDelete.id).length > 0 && (
+                  <span className="block mt-2 text-destructive font-medium">
+                    This category contains{' '}
+                    {categories.filter((c) => c.parentId === categoryToDelete.id).length} nested
+                    subcategory(ies) which will also be permanently deleted.
+                  </span>
+                )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteCategory}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Category
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
 

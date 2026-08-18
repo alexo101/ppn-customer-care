@@ -7,9 +7,6 @@ const router: IRouter = Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 router.post("/auth/register", async (req, res): Promise<void> => {
-  // #region agent log
-  fetch('http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0657f2'},body:JSON.stringify({sessionId:'0657f2',hypothesisId:'C',location:'routes/auth.ts:handler',message:'Register handler entered',data:{hasBody:Boolean(req.body),emailLen:typeof req.body?.email==='string'?req.body.email.length:0,passwordLen:typeof req.body?.password==='string'?req.body.password.length:0},timestamp:Date.now(),runId:'pre-fix'})}).catch(()=>{});
-  // #endregion
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

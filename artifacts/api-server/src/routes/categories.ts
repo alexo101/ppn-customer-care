@@ -73,11 +73,16 @@ router.patch("/categories/:id", requireAuth, async (req, res): Promise<void> => 
   if (parsed.data.sortOrder !== undefined) updates.sortOrder = parsed.data.sortOrder;
   updates.updatedAt = new Date();
 
-  // Only allow editing categories the user owns (not system defaults with null userId)
+  // Only allow editing categories the user owns or system defaults
   const [row] = await db
     .update(intentCategoriesTable)
     .set(updates)
-    .where(and(eq(intentCategoriesTable.id, params.data.id), eq(intentCategoriesTable.userId, req.userId)))
+    .where(
+      and(
+        eq(intentCategoriesTable.id, params.data.id),
+        or(eq(intentCategoriesTable.userId, req.userId), isNull(intentCategoriesTable.userId))
+      )
+    )
     .returning();
 
   if (!row) {
@@ -95,10 +100,25 @@ router.delete("/categories/:id", requireAuth, async (req, res): Promise<void> =>
     return;
   }
 
-  // Only allow deleting categories the user owns
+  // Delete all nested subcategories of this category first
+  await db
+    .delete(intentCategoriesTable)
+    .where(
+      and(
+        eq(intentCategoriesTable.parentId, params.data.id),
+        or(eq(intentCategoriesTable.userId, req.userId), isNull(intentCategoriesTable.userId))
+      )
+    );
+
+  // Only allow deleting categories the user owns or system defaults
   const deleted = await db
     .delete(intentCategoriesTable)
-    .where(and(eq(intentCategoriesTable.id, params.data.id), eq(intentCategoriesTable.userId, req.userId)))
+    .where(
+      and(
+        eq(intentCategoriesTable.id, params.data.id),
+        or(eq(intentCategoriesTable.userId, req.userId), isNull(intentCategoriesTable.userId))
+      )
+    )
     .returning({ id: intentCategoriesTable.id });
 
   if (deleted.length === 0) {

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Show } from '@clerk/react';
+import { useAuth } from '@clerk/react';
 import { useSignIn } from '@clerk/react/legacy';
-import { Link, useLocation } from 'wouter';
+import { Link, Redirect, useLocation } from 'wouter';
 import { Loader2 } from 'lucide-react';
 import { AuthLayout } from '@/components/auth-layout';
 import { Button } from '@/components/ui/button';
@@ -9,14 +10,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useRegister } from '@workspace/api-client-react';
 
+function SignedInRedirect() {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return null;
+  if (isSignedIn) return <Redirect to="/chat" />;
+  return null;
+}
+
 export default function Signup() {
   return (
     <AuthLayout>
+      <SignedInRedirect />
       <Show when="signed-out">
         <SignupForm />
-      </Show>
-      <Show when="signed-in">
-        <div className="text-sm text-muted-foreground font-mono">Redirecting to console…</div>
       </Show>
     </AuthLayout>
   );
@@ -38,9 +44,6 @@ function SignupForm() {
     setError(null);
 
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0657f2'},body:JSON.stringify({sessionId:'0657f2',hypothesisId:'D',location:'signup.tsx:submit',message:'Client posting register',data:{url:'/api/auth/register',href:typeof window!=='undefined'?window.location.href:''},timestamp:Date.now(),runId:'pre-fix'})}).catch(()=>{});
-      // #endregion
       const result = await register.mutateAsync({ data: { email, password } });
       const attempt = await signIn.create({
         strategy: 'ticket',
@@ -53,12 +56,6 @@ function SignupForm() {
       }
       setError('Account created, but sign-in could not be completed. Try logging in.');
     } catch (err) {
-      const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
-      const url = err && typeof err === 'object' && 'url' in err ? String((err as { url?: string }).url ?? '') : '';
-      const raw = err instanceof Error ? err.message : String(err);
-      // #region agent log
-      fetch('http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0657f2'},body:JSON.stringify({sessionId:'0657f2',hypothesisId:'B',location:'signup.tsx:catch',message:'Register client error',data:{status,url,messagePreview:raw.slice(0,180),isHtml:raw.includes('<!DOCTYPE html>')||raw.includes('Cannot POST')},timestamp:Date.now(),runId:'pre-fix'})}).catch(()=>{});
-      // #endregion
       setError(err instanceof Error ? err.message.replace(/^HTTP \d+ [^:]+:\s*/, '') : 'Could not create your account.');
     }
   };
