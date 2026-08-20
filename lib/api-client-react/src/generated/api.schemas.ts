@@ -242,6 +242,7 @@ export interface OrchestratorRule {
   action: string;
   categoryIds: string[];
   sourceIds: string[];
+  audienceTargetIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -259,6 +260,7 @@ export interface RuleInput {
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  audienceTargetIds?: string[];
 }
 
 export interface RuleUpdate {
@@ -273,6 +275,7 @@ export interface RuleUpdate {
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  audienceTargetIds?: string[];
 }
 
 export type RuleAuthoringMessageRole = typeof RuleAuthoringMessageRole[keyof typeof RuleAuthoringMessageRole];
@@ -308,6 +311,7 @@ export interface RuleAuthoringDraft {
   action: string;
   categoryIds: string[];
   sourceIds: string[];
+  audienceTargetIds: string[];
 }
 
 export interface RuleAuthoringRequest {

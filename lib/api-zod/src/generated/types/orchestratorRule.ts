@@ -19,6 +19,7 @@ export interface OrchestratorRule {
   action: string;
   categoryIds: string[];
   sourceIds: string[];
+  audienceTargetIds: string[];
   createdAt: string;
   updatedAt: string;
 }

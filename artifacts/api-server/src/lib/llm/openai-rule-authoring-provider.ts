@@ -31,6 +31,7 @@ const RESPONSE_SCHEMA = {
             "action",
             "categoryIds",
             "sourceIds",
+            "audienceTargetIds",
           ],
           properties: {
             name: { type: "string" },
@@ -44,6 +45,7 @@ const RESPONSE_SCHEMA = {
             action: { type: "string" },
             categoryIds: { type: "array", items: { type: "string" } },
             sourceIds: { type: "array", items: { type: "string" } },
+            audienceTargetIds: { type: "array", items: { type: "string" } },
           },
         },
         { type: "null" },
@@ -77,10 +79,11 @@ export class OpenAIRuleAuthoringProvider implements RuleAuthoringProvider {
     const systemPrompt = [
       "You are a rule-authoring assistant for a support orchestration product.",
       "Turn the user's natural-language request into one structured rule.",
-      "Ask one focused clarification question whenever a required value is missing,",
+      "Ask one concise clarification question, grouping related missing values when safe,",
       "a name could match multiple available entities, or the user's intent is ambiguous.",
       "Never invent IDs, categories, sources, operators, or actions.",
       "Use only exact IDs and labels from the provided context.",
+      "Attach audienceTargetIds only when the user explicitly asks to target an available audience target.",
       "A rule needs at least one category. Actions marked requiresSource need at least one source.",
       "Use priority 10 and isEnabled true unless the user explicitly asks otherwise.",
       "Set escalationTrigger true only for the escalate action.",

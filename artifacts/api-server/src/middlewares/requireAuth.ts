@@ -6,6 +6,7 @@ declare global {
   namespace Express {
     interface Request {
       userId: string;
+      userEmail?: string;
       file?: Express.Multer.File;
     }
   }
@@ -19,5 +20,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   req.userId = userId;
+  const claims = (auth as unknown as { sessionClaims?: Record<string, unknown> })?.sessionClaims;
+  if (typeof claims?.email === "string") {
+    req.userEmail = claims.email;
+  }
   next();
 }

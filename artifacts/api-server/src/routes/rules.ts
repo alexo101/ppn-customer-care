@@ -5,9 +5,11 @@ import {
   orchestratorRulesTable,
   ruleCategoryLinksTable,
   ruleSourceLinksTable,
+  ruleAudienceTargetLinksTable,
   ruleVocabulariesTable,
   intentCategoriesTable,
   knowledgeSourcesTable,
+  audienceTargetsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -34,7 +36,7 @@ import {
   createRuleAuthoringProvider,
   RuleAuthoringProviderError,
 } from "../lib/llm";
-import { authorRule } from "../lib/rule-authoring";
+import { authorRule, isApproval, isBareRejection } from "../lib/rule-authoring";
 import {
   DEFAULT_ACTIONS,
   DEFAULT_OPERATORS,
@@ -43,6 +45,7 @@ import {
 } from "../lib/rule-engine";
 
 const router: IRouter = Router();
+let builtinVocabulariesReady = false;
 
 const ownerFilter = (userId: string) =>
   or(
@@ -99,6 +102,7 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
     agentId,
     parsed.data.categoryIds,
     parsed.data.sourceIds,
+    parsed.data.audienceTargetIds,
     res,
   );
   if (!allowed) return;
@@ -127,6 +131,7 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
     row.id,
     parsed.data.categoryIds ?? [],
     parsed.data.sourceIds ?? [],
+    parsed.data.audienceTargetIds ?? [],
   );
   const [created] = await toRules([row]);
   res.status(201).json(created);
@@ -154,8 +159,24 @@ router.post(
       return;
     }
 
+    if (
+      parsed.data.awaitingConfirmation &&
+      parsed.data.draft &&
+      (isApproval(parsed.data.message) || isBareRejection(parsed.data.message))
+    ) {
+      res.json({
+        status: isApproval(parsed.data.message) ? "approved" : "needs_changes",
+        assistantMessage: isApproval(parsed.data.message)
+          ? "Approved. I’ll save this rule now."
+          : "What would you like me to change in the proposed rule?",
+        draft: parsed.data.draft,
+        unresolvedFields: [],
+      });
+      return;
+    }
+
     await ensureBuiltinVocabularies();
-    const [categories, sources, vocabularies] = await Promise.all([
+    const [categories, sources, vocabularies, audienceTargets] = await Promise.all([
       db
         .select({
           id: intentCategoriesTable.id,
@@ -205,6 +226,23 @@ router.post(
             ),
           ),
         ),
+      db
+        .select({
+          id: audienceTargetsTable.id,
+          name: audienceTargetsTable.name,
+          description: audienceTargetsTable.description,
+        })
+        .from(audienceTargetsTable)
+        .where(
+          and(
+            eq(audienceTargetsTable.agentId, params.data.agentId),
+            eq(audienceTargetsTable.isEnabled, true),
+            or(
+              eq(audienceTargetsTable.userId, req.userId),
+              isNull(audienceTargetsTable.userId),
+            ),
+          ),
+        ),
     ]);
 
     try {
@@ -226,6 +264,7 @@ router.post(
                 label: item.label,
                 requiresSource: item.requiresSource,
               })),
+            audienceTargets,
           },
         },
         createRuleAuthoringProvider(),
@@ -275,6 +314,7 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
     existing.agentId,
     parsed.data.categoryIds,
     parsed.data.sourceIds,
+    parsed.data.audienceTargetIds,
     res,
   );
   if (!allowed) return;
@@ -323,13 +363,15 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
 
   if (
     parsed.data.categoryIds !== undefined ||
-    parsed.data.sourceIds !== undefined
+    parsed.data.sourceIds !== undefined ||
+    parsed.data.audienceTargetIds !== undefined
   ) {
     const current = (await toRules([row]))[0];
     await replaceRuleLinks(
       row.id,
       parsed.data.categoryIds ?? current.categoryIds,
       parsed.data.sourceIds ?? current.sourceIds,
+      parsed.data.audienceTargetIds ?? current.audienceTargetIds,
     );
   }
 
@@ -451,6 +493,7 @@ router.post(
       req.userId,
       rule.agentId,
       [parsed.data.categoryId],
+      undefined,
       undefined,
       res,
     );
@@ -723,6 +766,7 @@ async function validateRuleTargets(
   agentId: string | null,
   categoryIds: string[] | undefined,
   sourceIds: string[] | undefined,
+  audienceTargetIds: string[] | undefined,
   res: { status: (n: number) => { json: (b: unknown) => void } },
 ) {
   if (categoryIds?.length) {
@@ -775,6 +819,31 @@ async function validateRuleTargets(
     }
   }
 
+  if (audienceTargetIds?.length) {
+    const uniqueIds = [...new Set(audienceTargetIds)];
+    const targets = await db
+      .select({
+        id: audienceTargetsTable.id,
+        agentId: audienceTargetsTable.agentId,
+        userId: audienceTargetsTable.userId,
+      })
+      .from(audienceTargetsTable)
+      .where(inArray(audienceTargetsTable.id, uniqueIds));
+    if (targets.length !== uniqueIds.length) {
+      res.status(400).json({ error: "One or more audience targets were not found." });
+      return false;
+    }
+    const invalid = targets.some((target) => {
+      const owned = target.userId === userId || target.userId == null;
+      const sameAgent = !agentId || target.agentId === agentId;
+      return !owned || !sameAgent;
+    });
+    if (invalid) {
+      res.status(400).json({ error: "Audience targets must belong to this agent." });
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -782,33 +851,47 @@ async function replaceRuleLinks(
   ruleId: string,
   categoryIds: string[],
   sourceIds: string[],
+  audienceTargetIds: string[],
 ) {
-  await db
-    .delete(ruleCategoryLinksTable)
-    .where(eq(ruleCategoryLinksTable.ruleId, ruleId));
-  await db
-    .delete(ruleSourceLinksTable)
-    .where(eq(ruleSourceLinksTable.ruleId, ruleId));
+  await Promise.all([
+    db
+      .delete(ruleCategoryLinksTable)
+      .where(eq(ruleCategoryLinksTable.ruleId, ruleId)),
+    db
+      .delete(ruleSourceLinksTable)
+      .where(eq(ruleSourceLinksTable.ruleId, ruleId)),
+    db
+      .delete(ruleAudienceTargetLinksTable)
+      .where(eq(ruleAudienceTargetLinksTable.ruleId, ruleId)),
+  ]);
 
   const uniqueCategories = [...new Set(categoryIds)];
   const uniqueSources = [...new Set(sourceIds)];
+  const uniqueAudienceTargets = [...new Set(audienceTargetIds)];
 
-  if (uniqueCategories.length > 0) {
-    await db
-      .insert(ruleCategoryLinksTable)
-      .values(uniqueCategories.map((categoryId) => ({ ruleId, categoryId })));
-  }
-  if (uniqueSources.length > 0) {
-    await db
-      .insert(ruleSourceLinksTable)
-      .values(uniqueSources.map((sourceId) => ({ ruleId, sourceId })));
-  }
+  await Promise.all([
+    uniqueCategories.length > 0
+      ? db
+          .insert(ruleCategoryLinksTable)
+          .values(uniqueCategories.map((categoryId) => ({ ruleId, categoryId })))
+      : Promise.resolve(),
+    uniqueSources.length > 0
+      ? db
+          .insert(ruleSourceLinksTable)
+          .values(uniqueSources.map((sourceId) => ({ ruleId, sourceId })))
+      : Promise.resolve(),
+    uniqueAudienceTargets.length > 0
+      ? db
+          .insert(ruleAudienceTargetLinksTable)
+          .values(uniqueAudienceTargets.map((targetId) => ({ ruleId, targetId })))
+      : Promise.resolve(),
+  ]);
 }
 
 async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
-  const [categoryLinks, sourceLinks] = await Promise.all([
+  const [categoryLinks, sourceLinks, audienceTargetLinks] = await Promise.all([
     db
       .select()
       .from(ruleCategoryLinksTable)
@@ -817,6 +900,10 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
       .select()
       .from(ruleSourceLinksTable)
       .where(inArray(ruleSourceLinksTable.ruleId, ids)),
+    db
+      .select()
+      .from(ruleAudienceTargetLinksTable)
+      .where(inArray(ruleAudienceTargetLinksTable.ruleId, ids)),
   ]);
 
   const categoriesByRule = new Map<string, string[]>();
@@ -830,6 +917,12 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
     const list = sourcesByRule.get(link.ruleId) ?? [];
     list.push(link.sourceId);
     sourcesByRule.set(link.ruleId, list);
+  }
+  const audienceTargetsByRule = new Map<string, string[]>();
+  for (const link of audienceTargetLinks) {
+    const list = audienceTargetsByRule.get(link.ruleId) ?? [];
+    list.push(link.targetId);
+    audienceTargetsByRule.set(link.ruleId, list);
   }
 
   return rows.map((row) => ({
@@ -846,6 +939,7 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
     agentId: row.agentId ?? null,
     categoryIds: categoriesByRule.get(row.id) ?? [],
     sourceIds: sourcesByRule.get(row.id) ?? [],
+    audienceTargetIds: audienceTargetsByRule.get(row.id) ?? [],
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   }));
@@ -883,6 +977,7 @@ function toVocabulary(row: typeof ruleVocabulariesTable.$inferSelect) {
 }
 
 async function ensureBuiltinVocabularies() {
+  if (builtinVocabulariesReady) return;
   const existing = await db
     .select({ id: ruleVocabulariesTable.id })
     .from(ruleVocabulariesTable)
@@ -893,7 +988,10 @@ async function ensureBuiltinVocabularies() {
       ),
     )
     .limit(1);
-  if (existing.length > 0) return;
+  if (existing.length > 0) {
+    builtinVocabulariesReady = true;
+    return;
+  }
 
   const values = [
     ...DEFAULT_OPERATORS.map((item) => ({
@@ -919,6 +1017,7 @@ async function ensureBuiltinVocabularies() {
   ];
 
   await db.insert(ruleVocabulariesTable).values(values);
+  builtinVocabulariesReady = true;
 }
 
 export default router;

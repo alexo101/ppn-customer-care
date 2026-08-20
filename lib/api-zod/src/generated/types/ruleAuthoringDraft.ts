@@ -22,4 +22,5 @@ export interface RuleAuthoringDraft {
   action: string;
   categoryIds: string[];
   sourceIds: string[];
+  audienceTargetIds: string[];
 }

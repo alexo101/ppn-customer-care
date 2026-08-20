@@ -8,6 +8,7 @@ import {
   type OrchestratorRule,
   type RuleAuthoringDraft,
   type RuleAuthoringResponseStatus,
+  type Target,
 } from "@workspace/api-client-react";
 import { Bot, Check, Loader2, Send, Sparkles, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ type RuleAuthoringChatProps = {
   rule: OrchestratorRule | null;
   categories: IntentCategory[];
   sources: KnowledgeSource[];
+  audienceTargets: Target[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
@@ -44,6 +46,7 @@ export function RuleAuthoringChat({
   rule,
   categories,
   sources,
+  audienceTargets,
   open,
   onOpenChange,
   onSaved,
@@ -226,7 +229,8 @@ export function RuleAuthoringChat({
                 draft={draft}
                 categoryNames={categoryNames}
                 sourceNames={sourceNames}
-                onConfirm={() => sendMessage("OK")}
+                audienceTargets={audienceTargets}
+                onConfirm={() => saveApprovedDraft(draft)}
                 disabled={busy}
               />
             )}
@@ -284,12 +288,14 @@ function RulePreview({
   draft,
   categoryNames,
   sourceNames,
+  audienceTargets,
   onConfirm,
   disabled,
 }: {
   draft: RuleAuthoringDraft;
   categoryNames: Record<string, string>;
   sourceNames: Record<string, string>;
+  audienceTargets: Target[];
   onConfirm: () => void;
   disabled: boolean;
 }) {
@@ -324,6 +330,14 @@ function RulePreview({
           />
         )}
         <PreviewValue label="Operator" value={draft.conditionOperator} />
+        {draft.audienceTargetIds.length > 0 && (
+          <PreviewValue
+            label="Audience targets"
+            value={draft.audienceTargetIds
+              .map((id) => audienceTargets.find((target) => target.id === id)?.name ?? id)
+              .join(", ")}
+          />
+        )}
         {draft.promptTemplate && (
           <PreviewValue label="Prompt template" value={draft.promptTemplate} />
         )}
@@ -369,6 +383,7 @@ function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
     action: rule.action,
     categoryIds: rule.categoryIds,
     sourceIds: rule.sourceIds,
+    audienceTargetIds: rule.audienceTargetIds,
   };
 }
 

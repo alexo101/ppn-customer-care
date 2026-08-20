@@ -10,6 +10,7 @@ export type RuleAuthoringDraft = {
   action: string;
   categoryIds: string[];
   sourceIds: string[];
+  audienceTargetIds: string[];
 };
 
 export type RuleAuthoringMessage = {
@@ -22,6 +23,7 @@ export type RuleAuthoringContext = {
   sources: Array<{ id: string; name: string }>;
   operators: Array<{ label: string }>;
   actions: Array<{ label: string; requiresSource: boolean }>;
+  audienceTargets: Array<{ id: string; name: string; description: string }>;
 };
 
 export type RuleAuthoringModelResult = {

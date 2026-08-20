@@ -18,4 +18,5 @@ export interface RuleUpdate {
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  audienceTargetIds?: string[];
 }

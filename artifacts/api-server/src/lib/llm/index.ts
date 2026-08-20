@@ -12,10 +12,17 @@ export function createRuleAuthoringProvider(): RuleAuthoringProvider {
     .toLowerCase();
 
   if (provider === "openai") {
-    return new OpenAIRuleAuthoringProvider();
+    return getOpenAIProvider();
   }
 
   throw new RuleAuthoringProviderError(
     `Unsupported rule-authoring provider "${provider}".`,
   );
+}
+
+let openAIProvider: RuleAuthoringProvider | undefined;
+
+function getOpenAIProvider(): RuleAuthoringProvider {
+  openAIProvider ??= new OpenAIRuleAuthoringProvider();
+  return openAIProvider;
 }

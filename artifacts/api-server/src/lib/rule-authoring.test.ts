@@ -21,6 +21,9 @@ const context: RuleAuthoringContext = {
     { label: "ask clarification", requiresSource: false },
     { label: "escalate", requiresSource: false },
   ],
+  audienceTargets: [
+    { id: "acme-users", name: "Acme users", description: "Users at Acme" },
+  ],
 };
 
 const validDraft: RuleAuthoringDraft = {
@@ -35,6 +38,7 @@ const validDraft: RuleAuthoringDraft = {
   action: "search answer",
   categoryIds: ["billing"],
   sourceIds: ["help-center"],
+  audienceTargetIds: [],
 };
 
 describe("authorRule", () => {
@@ -118,6 +122,50 @@ describe("authorRule", () => {
 
     expect(result.status).toBe("clarifying");
     expect(result.unresolvedFields).toContain("sourceIds");
+  });
+
+  it("rejects invented audience target IDs", async () => {
+    const provider: RuleAuthoringProvider = {
+      generate: vi.fn().mockResolvedValue({
+        status: "ready",
+        assistantMessage: "Please confirm.",
+        draft: {
+          ...validDraft,
+          audienceTargetIds: ["invented-target"],
+        },
+        unresolvedFields: [],
+      }),
+    };
+
+    const result = await authorRule(
+      { message: "Target Acme users", context },
+      provider,
+    );
+
+    expect(result.status).toBe("clarifying");
+    expect(result.unresolvedFields).toContain("audienceTargetIds");
+  });
+
+  it("preserves a valid audience target ID", async () => {
+    const provider: RuleAuthoringProvider = {
+      generate: vi.fn().mockResolvedValue({
+        status: "ready",
+        assistantMessage: "Please confirm.",
+        draft: {
+          ...validDraft,
+          audienceTargetIds: ["acme-users"],
+        },
+        unresolvedFields: [],
+      }),
+    };
+
+    const result = await authorRule(
+      { message: "Target Acme users", context },
+      provider,
+    );
+
+    expect(result.status).toBe("ready_for_confirmation");
+    expect(result.draft?.audienceTargetIds).toEqual(["acme-users"]);
   });
 
   it("preserves a model clarification instead of guessing an ambiguous value", async () => {

@@ -603,6 +603,7 @@ export const ListRulesResponseItem = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
+  "audienceTargetIds": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -624,7 +625,8 @@ export const CreateRuleBody = zod.object({
   "conditionOperator": zod.string().optional(),
   "action": zod.string().optional(),
   "categoryIds": zod.array(zod.string()).optional(),
-  "sourceIds": zod.array(zod.string()).optional()
+  "sourceIds": zod.array(zod.string()).optional(),
+  "audienceTargetIds": zod.array(zod.string()).optional()
 })
 
 export const CreateRuleResponse = zod.object({
@@ -640,6 +642,7 @@ export const CreateRuleResponse = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
+  "audienceTargetIds": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -680,7 +683,8 @@ export const SendRuleAuthoringMessageBody = zod.object({
   "conditionOperator": zod.string(),
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
-  "sourceIds": zod.array(zod.string())
+  "sourceIds": zod.array(zod.string()),
+  "audienceTargetIds": zod.array(zod.string())
 }).optional(),
   "awaitingConfirmation": zod.boolean().default(sendRuleAuthoringMessageBodyAwaitingConfirmationDefault)
 })
@@ -704,7 +708,8 @@ export const SendRuleAuthoringMessageResponse = zod.object({
   "conditionOperator": zod.string(),
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
-  "sourceIds": zod.array(zod.string())
+  "sourceIds": zod.array(zod.string()),
+  "audienceTargetIds": zod.array(zod.string())
 }).optional(),
   "unresolvedFields": zod.array(zod.string())
 })
@@ -728,7 +733,8 @@ export const UpdateRuleBody = zod.object({
   "conditionOperator": zod.string().optional(),
   "action": zod.string().optional(),
   "categoryIds": zod.array(zod.string()).optional(),
-  "sourceIds": zod.array(zod.string()).optional()
+  "sourceIds": zod.array(zod.string()).optional(),
+  "audienceTargetIds": zod.array(zod.string()).optional()
 })
 
 export const UpdateRuleResponse = zod.object({
@@ -744,6 +750,7 @@ export const UpdateRuleResponse = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
+  "audienceTargetIds": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

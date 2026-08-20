@@ -19,4 +19,5 @@ export interface RuleInput {
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  audienceTargetIds?: string[];
 }

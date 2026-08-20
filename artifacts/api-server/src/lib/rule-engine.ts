@@ -167,6 +167,7 @@ export function formatRuleSentence(input: {
   action: string;
   sourceNames: string[];
   requiresSource?: boolean;
+  audienceTargetNames?: string[];
 }): string {
   const operator = input.operator.trim() || "is";
   const action = input.action.trim() || "search answer";
@@ -175,7 +176,10 @@ export function formatRuleSentence(input: {
   const thenClause = includeSource
     ? `then ${action} in ${joinNames(input.sourceNames, "a source")}`
     : `then ${action}`;
-  return `If Category ${operator} ${categories} ${thenClause}`;
+  const audienceClause = input.audienceTargetNames?.length
+    ? ` for ${joinNames(input.audienceTargetNames, "an audience")}`
+    : "";
+  return `If Category ${operator} ${categories} ${thenClause}${audienceClause}`;
 }
 
 function joinNames(names: string[], fallback: string): string {

@@ -5,6 +5,7 @@ import {
   useListCategories,
   useListRules,
   useListSources,
+  useListTargets,
   type OrchestratorRule,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,6 +34,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
   const { data: rules = [] } = useListRules({ agentId });
   const { data: categories = [] } = useListCategories({ agentId });
   const { data: sources = [] } = useListSources({ agentId });
+  const { data: audienceTargets = [] } = useListTargets({ agentId });
   const deleteRule = useDeleteRule();
   const [search, setSearch] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
@@ -51,6 +53,10 @@ export function RulesTab({ agentId }: { agentId: string }) {
   const sourceNames = useMemo(
     () => Object.fromEntries(sources.map((source) => [source.id, source.name])),
     [sources],
+  );
+  const audienceTargetNames = useMemo(
+    () => Object.fromEntries(audienceTargets.map((target) => [target.id, target.name])),
+    [audienceTargets],
   );
 
   const filteredRules = useMemo(() => {
@@ -154,6 +160,9 @@ export function RulesTab({ agentId }: { agentId: string }) {
                 .map((id) => sourceNames[id])
                 .filter((name): name is string => Boolean(name)),
               requiresSource: rule.sourceIds.length > 0,
+              audienceTargetNames: rule.audienceTargetIds
+                .map((id) => audienceTargetNames[id])
+                .filter((name): name is string => Boolean(name)),
             });
 
             return (
@@ -222,6 +231,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
         rule={editingRule}
         categories={categories}
         sources={sources}
+        audienceTargets={audienceTargets}
         open={chatOpen}
         onOpenChange={(next) => {
           setChatOpen(next);

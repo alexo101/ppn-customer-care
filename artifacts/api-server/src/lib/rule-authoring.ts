@@ -64,7 +64,7 @@ export async function authorRule(
   }
 
   const messages = [
-    ...(input.history ?? []).slice(-29),
+    ...(input.history ?? []).slice(-9),
     { role: "user" as const, content: message },
   ];
   const modelResult = await provider.generate({
@@ -158,6 +158,14 @@ export function validateDraft(
   ) {
     unresolvedFields.push("sourceIds");
   }
+  const audienceTargetIds = unique(draft.audienceTargetIds).filter((id) =>
+    context.audienceTargets.some((target) => target.id === id),
+  );
+  if (
+    audienceTargetIds.length !== unique(draft.audienceTargetIds).length
+  ) {
+    unresolvedFields.push("audienceTargetIds");
+  }
 
   if (
     !Number.isFinite(draft.priority) ||
@@ -195,12 +203,19 @@ export function validateDraft(
   const sourceNames = sourceIds
     .map((id) => context.sources.find((source) => source.id === id)?.name)
     .filter((name): name is string => Boolean(name));
+  const audienceTargetNames = audienceTargetIds
+    .map(
+      (id) =>
+        context.audienceTargets.find((target) => target.id === id)?.name,
+    )
+    .filter((name): name is string => Boolean(name));
   const sentence = formatRuleSentence({
     operator: operator.label,
     categoryNames,
     action: action.label,
     sourceNames,
     requiresSource,
+    audienceTargetNames,
   });
 
   return {
@@ -216,6 +231,7 @@ export function validateDraft(
       action: action.label,
       categoryIds,
       sourceIds: requiresSource ? sourceIds : [],
+      audienceTargetIds,
     },
     unresolvedFields: unique(unresolvedFields),
   };
@@ -227,7 +243,7 @@ export function isApproval(message: string): boolean {
   );
 }
 
-function isBareRejection(message: string): boolean {
+export function isBareRejection(message: string): boolean {
   return /^(no|nope|not yet|not quite|reject|change it)[.!]?$/i.test(
     message.trim(),
   );
@@ -266,7 +282,9 @@ function isDraft(value: unknown): value is RuleAuthoringDraft {
     Array.isArray(draft.categoryIds) &&
     draft.categoryIds.every((id) => typeof id === "string") &&
     Array.isArray(draft.sourceIds) &&
-    draft.sourceIds.every((id) => typeof id === "string")
+    draft.sourceIds.every((id) => typeof id === "string") &&
+    Array.isArray(draft.audienceTargetIds) &&
+    draft.audienceTargetIds.every((id) => typeof id === "string")
   );
 }
 
@@ -286,6 +304,7 @@ function clarificationMessage(fields: string[]): string {
     conditionOperator: "which condition operator to use",
     action: "which action the rule should take",
     sourceIds: "which existing source the action should use",
+    audienceTargetIds: "which existing audience target this rule should use",
     priority: "a priority from 0 to 100",
     requiresClarificationPrompt:
       "the clarification question the agent should ask",

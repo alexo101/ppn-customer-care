@@ -1797,7 +1797,7 @@ components:
     # ── Orchestrator Rule ─────────────────────────────────────────────────
     OrchestratorRule:
       type: object
-      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, createdAt, updatedAt]
+      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, audienceTargetIds, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1824,6 +1824,10 @@ components:
           items:
             type: string
         sourceIds:
+          type: array
+          items:
+            type: string
+        audienceTargetIds:
           type: array
           items:
             type: string
@@ -1864,6 +1868,10 @@ components:
           type: array
           items:
             type: string
+        audienceTargetIds:
+          type: array
+          items:
+            type: string
 
     RuleUpdate:
       type: object
@@ -1894,6 +1902,10 @@ components:
           type: array
           items:
             type: string
+        audienceTargetIds:
+          type: array
+          items:
+            type: string
 
     RuleAuthoringMessage:
       type: object
@@ -1909,7 +1921,7 @@ components:
 
     RuleAuthoringDraft:
       type: object
-      required: [name, description, promptTemplate, priority, requiresClarificationPrompt, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds]
+      required: [name, description, promptTemplate, priority, requiresClarificationPrompt, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, audienceTargetIds]
       properties:
         name:
           type: string
@@ -1936,6 +1948,10 @@ components:
           items:
             type: string
         sourceIds:
+          type: array
+          items:
+            type: string
+        audienceTargetIds:
           type: array
           items:
             type: string

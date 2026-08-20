@@ -11,6 +11,9 @@ import {
   orchestratorRulesTable,
   ruleCategoryLinksTable,
   ruleSourceLinksTable,
+  ruleAudienceTargetLinksTable,
+  audienceTargetsTable,
+  targetConditionsTable,
   knowledgeSourcesTable,
 } from "@workspace/db";
 import {
@@ -29,6 +32,12 @@ import {
 } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
 import { actionUsesSources, categoryMatchesOperator, normalizeAction } from "../lib/rule-engine";
+import { resolveUserEmail } from "../lib/identity";
+import {
+  matchesAudienceTarget,
+  type AudienceTargetForMatching,
+  type PersonAttributes,
+} from "../lib/targets";
 
 const router: IRouter = Router();
 
@@ -86,9 +95,27 @@ router.post("/conversations", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  const email = await resolveUserEmail(req.userId, req.userEmail);
+  const metadata = isPlainObject(parsed.data.metadata)
+    ? {
+        ...parsed.data.metadata,
+        person: {
+          personType: "user",
+          user_id: req.userId,
+          ...(email ? { email } : {}),
+        },
+      }
+    : {
+        person: {
+          personType: "user",
+          user_id: req.userId,
+          ...(email ? { email } : {}),
+        },
+      };
+
   const [row] = await db
     .insert(conversationsTable)
-    .values({ userId: req.userId, agentId, metadata: parsed.data.metadata ?? {} })
+    .values({ userId: req.userId, agentId, metadata })
     .returning();
 
   res.status(201).json(toConversation(row));
@@ -214,8 +241,27 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
   const startTs = Date.now();
   const stages = buildStages();
 
-  // Stage 1: load categories
+  // Stage 1: capture authenticated user identity
   stages[0].status = "running";
+  const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
+  const existingPerson = isPlainObject(existingMeta.person)
+    ? existingMeta.person
+    : {};
+  const email =
+    (await resolveUserEmail(req.userId, req.userEmail)) ??
+    (typeof existingPerson.email === "string" ? existingPerson.email : null);
+  const person: PersonAttributes = {
+    personType: "user",
+    attributes: {
+      user_id: req.userId,
+      ...(email ? { email } : {}),
+    },
+  };
+  stages[0].status = "completed";
+  stages[0].details = { person_type: person.personType, email_known: Boolean(email) };
+
+  // Stage 2: load categories
+  stages[1].status = "running";
   const categories = await db
     .select()
     .from(intentCategoriesTable)
@@ -225,17 +271,18 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
         conv.agentId ? eq(intentCategoriesTable.agentId, conv.agentId) : undefined,
       ),
     );
-  stages[0].status = "completed";
-  stages[0].details = { categories_loaded: categories.length };
-
-  // Stage 2: classify intent
-  stages[1].status = "running";
-  const classification = classifyIntent(parsed.data.content, categories);
   stages[1].status = "completed";
-  stages[1].details = { category: classification.primaryCategory, confidence: classification.confidence };
+  stages[1].details = { categories_loaded: categories.length };
 
-  // Stage 3: load rules
+  // Stage 3: classify intent
   stages[2].status = "running";
+  const classification = classifyIntent(parsed.data.content, categories);
+  if (email) classification.entities.email = email;
+  stages[2].status = "completed";
+  stages[2].details = { category: classification.primaryCategory, confidence: classification.confidence };
+
+  // Stage 4: load rules
+  stages[3].status = "running";
   const classifiedCategory = classification.primaryCategoryId
     ? categories.find((category) => category.id === classification.primaryCategoryId) ?? {
         id: classification.primaryCategoryId,
@@ -245,12 +292,13 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
       ? { id: "", name: classification.primaryCategory }
       : null;
 
-  const rule = await matchRuleForAgent(conv.agentId, classifiedCategory);
-  stages[2].status = "completed";
-  stages[2].details = {
+  const rule = await matchRuleForAgent(conv.agentId, classifiedCategory, person);
+  stages[3].status = "completed";
+  stages[3].details = {
     rule_used: rule?.name ?? "None",
     operator: rule?.conditionOperator ?? null,
     action: rule?.action ?? null,
+    email_known: Boolean(email),
   };
 
   let dataSourcesQueried: string[] = [];
@@ -263,8 +311,8 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
     dataSourcesQueried = sourceLinks.map((row) => row.name);
   }
 
-  // Stage 4: generate response
-  stages[3].status = "running";
+  // Stage 5: generate response
+  stages[4].status = "running";
   const prevMessages = await db
     .select()
     .from(messagesTable)
@@ -276,9 +324,10 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
     classification,
     rule,
     prevMessages,
+    person.attributes,
   );
-  stages[3].status = "completed";
-  stages[3].details = { resolution_status: resolutionStatus };
+  stages[4].status = "completed";
+  stages[4].details = { resolution_status: resolutionStatus };
 
   const latencyMs = Date.now() - startTs;
 
@@ -289,14 +338,31 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
     .returning();
 
   // Update conversation (and capture a subject from the first user message)
-  const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
   const conversationPatch: Record<string, unknown> = {
     lastActivityAt: new Date(),
     status: rule && (rule.escalationTrigger || normalizeAction(rule.action) === "escalate") ? "escalated" : conv.status,
   };
-  if (typeof existingMeta.subject !== "string" || !existingMeta.subject.trim()) {
+  if (!isPlainObject(existingMeta.person) || existingMeta.person.email !== email) {
     conversationPatch.metadata = {
       ...existingMeta,
+      person: {
+        personType: "user",
+        user_id: req.userId,
+        ...(email ? { email } : {}),
+      },
+    };
+  }
+  if (typeof existingMeta.subject !== "string" || !existingMeta.subject.trim()) {
+    conversationPatch.metadata = {
+      ...(isPlainObject(conversationPatch.metadata)
+        ? conversationPatch.metadata
+        : {}),
+      ...existingMeta,
+      person: {
+        personType: "user",
+        user_id: req.userId,
+        ...(email ? { email } : {}),
+      },
       subject: parsed.data.content.slice(0, 120),
     };
   }
@@ -527,6 +593,7 @@ type QuestionType = "question" | "unanswered" | "escalated";
 async function matchRuleForAgent(
   agentId: string | null,
   classified: { id: string; name: string } | null,
+  person: PersonAttributes,
 ): Promise<Rule | null> {
   const rules = await db
     .select()
@@ -542,9 +609,12 @@ async function matchRuleForAgent(
   if (rules.length === 0) return null;
 
   const ruleIds = rules.map((rule) => rule.id);
-  const [categoryLinks, categoryRows] = await Promise.all([
+  const [categoryLinks, categoryRows, audienceLinks, audienceRows, conditionRows] = await Promise.all([
     db.select().from(ruleCategoryLinksTable).where(inArray(ruleCategoryLinksTable.ruleId, ruleIds)),
     db.select({ id: intentCategoriesTable.id, name: intentCategoriesTable.name }).from(intentCategoriesTable),
+    db.select().from(ruleAudienceTargetLinksTable).where(inArray(ruleAudienceTargetLinksTable.ruleId, ruleIds)),
+    db.select().from(audienceTargetsTable),
+    db.select().from(targetConditionsTable),
   ]);
 
   const categoriesById = new Map(categoryRows.map((category) => [category.id, category]));
@@ -557,7 +627,47 @@ async function matchRuleForAgent(
     targetsByRule.set(link.ruleId, list);
   }
 
-  return rules.find((rule) => categoryMatchesOperator(rule.conditionOperator, classified, targetsByRule.get(rule.id) ?? [])) ?? null;
+  const targetRowsById = new Map(audienceRows.map((target) => [target.id, target]));
+  const conditionsByTarget = new Map<string, typeof conditionRows>();
+  for (const condition of conditionRows) {
+    const list = conditionsByTarget.get(condition.targetId) ?? [];
+    list.push(condition);
+    conditionsByTarget.set(condition.targetId, list);
+  }
+
+  const audienceTargetsByRule = new Map<string, AudienceTargetForMatching[]>();
+  for (const link of audienceLinks) {
+    const target = targetRowsById.get(link.targetId);
+    if (!target) continue;
+    const list = audienceTargetsByRule.get(link.ruleId) ?? [];
+    list.push({
+      isEnabled: target.isEnabled,
+      matchMode: target.matchMode === "any" ? "any" : "all",
+      conditions: (conditionsByTarget.get(target.id) ?? []).map((condition) => ({
+        personType: condition.personType,
+        attribute: condition.attribute,
+        operator: condition.operator,
+        value: condition.value,
+      })),
+    });
+    audienceTargetsByRule.set(link.ruleId, list);
+  }
+
+  return rules.find((rule) => {
+    if (!categoryMatchesOperator(
+      rule.conditionOperator,
+      classified,
+      targetsByRule.get(rule.id) ?? [],
+    )) {
+      return false;
+    }
+
+    const audienceTargets = audienceTargetsByRule.get(rule.id) ?? [];
+    return (
+      audienceTargets.length === 0 ||
+      audienceTargets.some((target) => matchesAudienceTarget(target, person))
+    );
+  }) ?? null;
 }
 
 function classifyQuestionType(
@@ -593,10 +703,11 @@ function toQuestion(row: {
 
 function buildStages() {
   return [
-    { stage: 1, name: "Load Categories", status: "pending" as string, details: {} as Record<string, unknown> },
-    { stage: 2, name: "Classify Intent", status: "pending" as string, details: {} as Record<string, unknown> },
-    { stage: 3, name: "Match Rules", status: "pending" as string, details: {} as Record<string, unknown> },
-    { stage: 4, name: "Generate Response", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 1, name: "Capture User Identity", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 2, name: "Load Categories", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 3, name: "Classify Intent", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 4, name: "Match Rules", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 5, name: "Generate Response", status: "pending" as string, details: {} as Record<string, unknown> },
   ];
 }
 
@@ -680,6 +791,7 @@ function generateResponse(
   classification: ReturnType<typeof classifyIntent>,
   rule: Rule | null,
   history: (typeof messagesTable.$inferSelect)[],
+  attributes: Record<string, unknown>,
 ) {
   const lower = message.toLowerCase().trim();
   const RESOLUTION = ["thanks", "thank you", "solved", "that works", "perfect", "got it", "great", "resolved"];
@@ -706,12 +818,15 @@ function generateResponse(
         "I understand this is an important issue. I'm escalating this to a human support agent who will assist you shortly. Please stay on the line.";
       resolutionStatus = "escalated";
     } else if (actionKind === "ask_clarification") {
-      responseText = rule.requiresClarificationPrompt || `I need a bit more detail about your ${classification.primaryCategory} request before I can continue.`;
+      responseText = rule.requiresClarificationPrompt
+        ? renderTemplate(rule.requiresClarificationPrompt, attributes)
+        : `I need a bit more detail about your ${classification.primaryCategory} request before I can continue.`;
       resolutionStatus = "pending_clarification";
     } else if (actionKind === "search_answer" || actionKind === "query_live_data") {
       const sourceHint = rule.action.trim() || "search answer";
-      responseText = rule.promptTemplate
-        ? `Based on your ${classification.primaryCategory} inquiry, I will ${sourceHint}. ${rule.promptTemplate}`
+      const promptTemplate = renderTemplate(rule.promptTemplate, attributes);
+      responseText = promptTemplate
+        ? `Based on your ${classification.primaryCategory} inquiry, I will ${sourceHint}. ${promptTemplate}`
         : `I'll ${sourceHint} for your ${classification.primaryCategory} inquiry and use the linked source to respond.`;
       const msgCount = history.filter((m) => m.sender === "user").length;
       if (msgCount >= 2 && !resolutionStatus.includes("resolved")) {
@@ -721,7 +836,7 @@ function generateResponse(
         resolutionStatus = "pending_resolution";
       }
     } else if (actionKind === "generate_from_template" && rule.promptTemplate) {
-      responseText = `Based on your ${classification.primaryCategory} inquiry: ${rule.promptTemplate}`;
+      responseText = `Based on your ${classification.primaryCategory} inquiry: ${renderTemplate(rule.promptTemplate, attributes)}`;
       const msgCount = history.filter((m) => m.sender === "user").length;
       if (msgCount >= 2 && !resolutionStatus.includes("resolved")) {
         shouldAskResolution = true;
@@ -730,7 +845,7 @@ function generateResponse(
         resolutionStatus = "pending_resolution";
       }
     } else if (rule.promptTemplate) {
-      responseText = `Based on your ${classification.primaryCategory} inquiry, I will ${rule.action}. ${rule.promptTemplate}`;
+      responseText = `Based on your ${classification.primaryCategory} inquiry, I will ${rule.action}. ${renderTemplate(rule.promptTemplate, attributes)}`;
     } else {
       responseText = `I understand your ${classification.primaryCategory} request. I will ${rule.action}. Could you provide more details so I can assist you better?`;
     }
@@ -750,6 +865,13 @@ function generateResponse(
   }
 
   return { responseText, resolutionStatus, shouldAskResolution };
+}
+
+function renderTemplate(template: string, attributes: Record<string, unknown>): string {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
+    const value = attributes[key];
+    return value == null ? "" : String(value);
+  });
 }
 
 function toConversation(row: typeof conversationsTable.$inferSelect) {

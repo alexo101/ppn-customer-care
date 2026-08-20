@@ -44,6 +44,22 @@ export type TargetConditionDraft = {
   value?: string;
 };
 
+export type PersonAttributes = {
+  personType: PersonType;
+  attributes: Record<string, unknown>;
+};
+
+export type AudienceTargetForMatching = {
+  isEnabled: boolean;
+  matchMode: MatchMode;
+  conditions: Array<{
+    personType: string;
+    attribute: string;
+    operator: string;
+    value: string;
+  }>;
+};
+
 export function isPersonType(value: string): value is PersonType {
   return (PERSON_TYPES as readonly string[]).includes(value);
 }
@@ -70,4 +86,54 @@ export function validateTargetCondition(condition: TargetConditionDraft): string
   if (VALUELESS_OPERATORS.has(condition.operator)) return null;
   if (!condition.value?.trim()) return "Enter a value for this condition.";
   return null;
+}
+
+export function matchesAudienceTarget(
+  target: AudienceTargetForMatching,
+  person: PersonAttributes,
+): boolean {
+  if (!target.isEnabled || target.conditions.length === 0) return false;
+
+  const results = target.conditions.map((condition) => {
+    if (condition.personType !== person.personType) return false;
+    return matchesTargetCondition(condition, person.attributes);
+  });
+
+  return target.matchMode === "any"
+    ? results.some(Boolean)
+    : results.every(Boolean);
+}
+
+function matchesTargetCondition(
+  condition: AudienceTargetForMatching["conditions"][number],
+  attributes: Record<string, unknown>,
+): boolean {
+  const actual = normalizeAttributeValue(attributes[condition.attribute]);
+  const expected = condition.value.trim().toLowerCase();
+
+  if (condition.operator === "is_known") return actual.length > 0;
+  if (condition.operator === "is_unknown") return actual.length === 0;
+  if (actual.length === 0) return false;
+
+  switch (condition.operator) {
+    case "is":
+      return actual === expected;
+    case "is_not":
+      return actual !== expected;
+    case "contains":
+      return actual.includes(expected);
+    case "does_not_contain":
+      return !actual.includes(expected);
+    case "starts_with":
+      return actual.startsWith(expected);
+    case "ends_with":
+      return actual.endsWith(expected);
+    default:
+      return false;
+  }
+}
+
+function normalizeAttributeValue(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().toLowerCase();
 }
