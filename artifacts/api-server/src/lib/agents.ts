@@ -123,6 +123,7 @@ export function toAgent(row: typeof agentsTable.$inferSelect) {
     id: row.id,
     name: row.name,
     description: row.description,
+    isEnabled: row.isEnabled,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };

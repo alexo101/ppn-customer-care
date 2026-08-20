@@ -7,15 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CategoriesTab, RulesTab, SourcesTab } from "@/pages/admin";
+import { CategoriesTab, RulesTab, SourcesTab, TargetsTab } from "@/pages/admin";
 import { AppearanceEditor } from "@/components/appearance-editor";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
   { id: "appearance", label: "Appearance" },
   { id: "categories", label: "Categories" },
-  { id: "rules", label: "Rules" },
   { id: "sources", label: "Sources" },
+  { id: "targets", label: "Target" },
+  { id: "rules", label: "Rules" },
 ] as const;
 
 export default function CreateAgentPage() {
@@ -124,8 +125,9 @@ export default function CreateAgentPage() {
 
           {step === 0 && agentId && <AppearanceEditor agentId={agentId} />}
           {step === 1 && agentId && <CategoriesTab agentId={agentId} />}
-          {step === 2 && agentId && <RulesTab agentId={agentId} />}
-          {step === 3 && agentId && <SourcesTab agentId={agentId} />}
+          {step === 2 && agentId && <SourcesTab agentId={agentId} />}
+          {step === 3 && agentId && <TargetsTab agentId={agentId} />}
+          {step === 4 && agentId && <RulesTab agentId={agentId} />}
         </div>
       </div>
     </div>

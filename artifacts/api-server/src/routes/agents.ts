@@ -36,6 +36,7 @@ router.post("/agents", requireAuth, async (req, res): Promise<void> => {
       userId: req.userId,
       name: parsed.data.name.trim(),
       description: parsed.data.description ?? "",
+      isEnabled: parsed.data.isEnabled ?? false,
     })
     .returning();
 
@@ -74,6 +75,7 @@ router.patch("/agents/:id", requireAuth, async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (parsed.data.name !== undefined) updates.name = parsed.data.name.trim();
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
+  if (parsed.data.isEnabled !== undefined) updates.isEnabled = parsed.data.isEnabled;
 
   const [row] = await db
     .update(agentsTable)

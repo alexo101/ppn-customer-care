@@ -22,10 +22,14 @@ tags:
     description: Orchestration rules
   - name: sources
     description: Knowledge sources and API connectors
+  - name: targets
+    description: Named audience targets for visitors, leads, and users
   - name: analytics
     description: Analytics and dashboard data
   - name: appearance
     description: Chat appearance and website style import
+  - name: training
+    description: Training questions the agent should attempt to answer
   - name: auth
     description: Registration without email verification codes
 paths:
@@ -242,6 +246,21 @@ paths:
           schema:
             type: number
             default: 50
+        - in: query
+          name: source
+          schema:
+            type: string
+          description: Filter by conversation source. Use widget for live deployments, training for console sessions.
+        - in: query
+          name: fromDate
+          schema:
+            type: string
+          description: Inclusive start date (YYYY-MM-DD or ISO 8601)
+        - in: query
+          name: toDate
+          schema:
+            type: string
+          description: Inclusive end date (YYYY-MM-DD or ISO 8601)
       responses:
         "200":
           description: List of conversations
@@ -421,6 +440,179 @@ paths:
                 items:
                   $ref: "#/components/schemas/OrchestratorLog"
 
+  /questions:
+    get:
+      operationId: listQuestions
+      tags: [conversations]
+      summary: List user questions from deployed agent conversations
+      parameters:
+        - in: query
+          name: agentId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [question, unanswered, escalated]
+          description: Filter by question type
+        - in: query
+          name: fromDate
+          schema:
+            type: string
+          description: Inclusive start date (YYYY-MM-DD or ISO 8601)
+        - in: query
+          name: toDate
+          schema:
+            type: string
+          description: Inclusive end date (YYYY-MM-DD or ISO 8601)
+        - in: query
+          name: limit
+          schema:
+            type: number
+            default: 200
+      responses:
+        "200":
+          description: Questions from live widget conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Question"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /training-questions:
+    get:
+      operationId: listTrainingQuestions
+      tags: [training]
+      summary: List training questions for an agent
+      parameters:
+        - in: query
+          name: agentId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Training questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrainingQuestion"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createTrainingQuestion
+      tags: [training]
+      summary: Create a training question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainingQuestionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingQuestion"
+        "409":
+          description: Question limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /training-questions/bulk:
+    post:
+      operationId: bulkCreateTrainingQuestions
+      tags: [training]
+      summary: Import training questions in bulk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainingQuestionBulkInput"
+      responses:
+        "201":
+          description: Imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingQuestionBulkResult"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /training-questions/{id}:
+    patch:
+      operationId: updateTrainingQuestion
+      tags: [training]
+      summary: Update a training question
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrainingQuestionUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrainingQuestion"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTrainingQuestion
+      tags: [training]
+      summary: Delete a training question
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ── Intent Categories ─────────────────────────────────────────────────────
   /categories:
     get:
@@ -541,6 +733,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/OrchestratorRule"
 
+  /agents/{agentId}/rule-authoring/messages:
+    post:
+      operationId: sendRuleAuthoringMessage
+      tags: [rules]
+      summary: Continue a conversational rule-authoring session
+      parameters:
+        - in: path
+          name: agentId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleAuthoringRequest"
+      responses:
+        "200":
+          description: The assistant response and current validated draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleAuthoringResponse"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Rule authoring provider unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /rules/{id}:
     patch:
       operationId: updateRule
@@ -649,6 +878,111 @@ paths:
         "204":
           description: Unlinked
 
+  /rule-vocabularies:
+    get:
+      operationId: listRuleVocabularies
+      tags: [rules]
+      summary: List configurable rule operators and actions
+      parameters:
+        - in: query
+          name: agentId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: kind
+          schema:
+            type: string
+            enum: [operator, action]
+      responses:
+        "200":
+          description: Vocabularies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RuleVocabulary"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createRuleVocabulary
+      tags: [rules]
+      summary: Add a custom operator or action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleVocabularyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleVocabulary"
+        "409":
+          description: Already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rule-vocabularies/{id}:
+    patch:
+      operationId: updateRuleVocabulary
+      tags: [rules]
+      summary: Update a custom operator or action
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RuleVocabularyUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuleVocabulary"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteRuleVocabulary
+      tags: [rules]
+      summary: Delete a custom operator or action
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ── Knowledge Sources ─────────────────────────────────────────────────────
   /sources:
     get:
@@ -724,6 +1058,153 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /sources/integrations:
+    get:
+      operationId: listSourceIntegrations
+      tags: [sources]
+      summary: List Notion and Confluence Replit Integration status
+      responses:
+        "200":
+          description: Integration connection status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SourceIntegration"
+
+  /sources/upload:
+    post:
+      operationId: uploadSourceDocument
+      tags: [sources]
+      summary: Upload a Word document as a knowledge source
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/SourceUploadInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSource"
+
+  # ── Audience Targets ──────────────────────────────────────────────────────
+  /targets:
+    get:
+      operationId: listTargets
+      tags: [targets]
+      summary: List named audience targets
+      parameters:
+        - in: query
+          name: agentId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Targets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Target"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createTarget
+      tags: [targets]
+      summary: Create a named audience target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TargetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Target"
+        "400":
+          description: Invalid target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /targets/{id}:
+    patch:
+      operationId: updateTarget
+      tags: [targets]
+      summary: Update a named audience target
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TargetUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Target"
+        "400":
+          description: Invalid target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTarget
+      tags: [targets]
+      summary: Delete a named audience target
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # ── API Connectors ────────────────────────────────────────────────────────
   /connectors:
@@ -949,7 +1430,7 @@ components:
     # ── Agent ─────────────────────────────────────────────────────────────
     Agent:
       type: object
-      required: [id, name, description, createdAt, updatedAt]
+      required: [id, name, description, isEnabled, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -957,6 +1438,8 @@ components:
           type: string
         description:
           type: string
+        isEnabled:
+          type: boolean
         createdAt:
           type: string
         updatedAt:
@@ -970,6 +1453,8 @@ components:
           type: string
         description:
           type: string
+        isEnabled:
+          type: boolean
 
     AgentUpdate:
       type: object
@@ -978,6 +1463,8 @@ components:
           type: string
         description:
           type: string
+        isEnabled:
+          type: boolean
 
     # ── Conversation ──────────────────────────────────────────────────────
     Conversation:
@@ -1017,6 +1504,82 @@ components:
         metadata:
           type: object
           additionalProperties: true
+
+    Question:
+      type: object
+      required: [id, conversationId, content, type, conversationStatus, createdAt]
+      properties:
+        id:
+          type: string
+        conversationId:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          enum: [question, unanswered, escalated]
+        conversationStatus:
+          type: string
+        createdAt:
+          type: string
+
+    TrainingQuestion:
+      type: object
+      required: [id, agentId, content, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    TrainingQuestionInput:
+      type: object
+      required: [agentId, content]
+      properties:
+        agentId:
+          type: string
+        content:
+          type: string
+          maxLength: 2000
+
+    TrainingQuestionUpdate:
+      type: object
+      properties:
+        content:
+          type: string
+          maxLength: 2000
+
+    TrainingQuestionBulkInput:
+      type: object
+      required: [agentId, questions]
+      properties:
+        agentId:
+          type: string
+        questions:
+          type: array
+          maxItems: 100
+          items:
+            type: string
+            maxLength: 2000
+
+    TrainingQuestionBulkResult:
+      type: object
+      required: [created, skipped, limitReached]
+      properties:
+        created:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainingQuestion"
+        skipped:
+          type: number
+        limitReached:
+          type: boolean
 
     # ── Message ───────────────────────────────────────────────────────────
     Message:
@@ -1234,7 +1797,7 @@ components:
     # ── Orchestrator Rule ─────────────────────────────────────────────────
     OrchestratorRule:
       type: object
-      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, createdAt, updatedAt]
+      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1252,6 +1815,18 @@ components:
           type: boolean
         isEnabled:
           type: boolean
+        conditionOperator:
+          type: string
+        action:
+          type: string
+        categoryIds:
+          type: array
+          items:
+            type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
         updatedAt:
@@ -1277,6 +1852,18 @@ components:
           type: boolean
         isEnabled:
           type: boolean
+        conditionOperator:
+          type: string
+        action:
+          type: string
+        categoryIds:
+          type: array
+          items:
+            type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
 
     RuleUpdate:
       type: object
@@ -1295,6 +1882,153 @@ components:
           type: boolean
         isEnabled:
           type: boolean
+        conditionOperator:
+          type: string
+        action:
+          type: string
+        categoryIds:
+          type: array
+          items:
+            type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
+
+    RuleAuthoringMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+
+    RuleAuthoringDraft:
+      type: object
+      required: [name, description, promptTemplate, priority, requiresClarificationPrompt, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        promptTemplate:
+          type: string
+        priority:
+          type: number
+          minimum: 0
+          maximum: 100
+        requiresClarificationPrompt:
+          type: string
+        escalationTrigger:
+          type: boolean
+        isEnabled:
+          type: boolean
+        conditionOperator:
+          type: string
+        action:
+          type: string
+        categoryIds:
+          type: array
+          items:
+            type: string
+        sourceIds:
+          type: array
+          items:
+            type: string
+
+    RuleAuthoringRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        history:
+          type: array
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/RuleAuthoringMessage"
+        draft:
+          $ref: "#/components/schemas/RuleAuthoringDraft"
+        awaitingConfirmation:
+          type: boolean
+          default: false
+
+    RuleAuthoringResponse:
+      type: object
+      required: [status, assistantMessage, unresolvedFields]
+      properties:
+        status:
+          type: string
+          enum: [clarifying, ready_for_confirmation, needs_changes, approved]
+        assistantMessage:
+          type: string
+        draft:
+          $ref: "#/components/schemas/RuleAuthoringDraft"
+        unresolvedFields:
+          type: array
+          items:
+            type: string
+
+    RuleVocabulary:
+      type: object
+      required: [id, kind, label, slug, requiresSource, isBuiltin, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        agentId:
+          type: string
+          nullable: true
+        kind:
+          type: string
+          enum: [operator, action]
+        label:
+          type: string
+        slug:
+          type: string
+        requiresSource:
+          type: boolean
+        isBuiltin:
+          type: boolean
+        sortOrder:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    RuleVocabularyInput:
+      type: object
+      required: [agentId, kind, label]
+      properties:
+        agentId:
+          type: string
+        kind:
+          type: string
+          enum: [operator, action]
+        label:
+          type: string
+          maxLength: 80
+        requiresSource:
+          type: boolean
+        sortOrder:
+          type: number
+
+    RuleVocabularyUpdate:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 80
+        requiresSource:
+          type: boolean
+        sortOrder:
+          type: number
 
     RuleCategoryLinkInput:
       type: object
@@ -1352,6 +2086,166 @@ components:
           additionalProperties: true
         isEnabled:
           type: boolean
+
+    SourceIntegration:
+      type: object
+      required: [connectorName, displayName, connected]
+      properties:
+        connectorName:
+          type: string
+        displayName:
+          type: string
+        connected:
+          type: boolean
+        connectionId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+
+    SourceUploadInput:
+      type: object
+      required: [file, agentId]
+      properties:
+        agentId:
+          type: string
+        name:
+          type: string
+        file:
+          type: string
+          format: binary
+
+    # ── Audience Target ───────────────────────────────────────────────────
+    TargetPersonType:
+      type: string
+      enum: [visitor, lead, user]
+
+    TargetAttribute:
+      type: string
+      enum:
+        - email
+        - phone_number
+        - phone_number_prefix
+        - name
+        - user_id
+        - company
+        - country
+        - city
+        - current_page_url
+        - referring_url
+        - browser_language
+
+    TargetOperator:
+      type: string
+      enum:
+        - is
+        - is_not
+        - contains
+        - does_not_contain
+        - starts_with
+        - ends_with
+        - is_known
+        - is_unknown
+
+    TargetMatchMode:
+      type: string
+      enum: [all, any]
+
+    TargetCondition:
+      type: object
+      required: [id, personType, attribute, operator, value]
+      properties:
+        id:
+          type: string
+        personType:
+          $ref: "#/components/schemas/TargetPersonType"
+        attribute:
+          $ref: "#/components/schemas/TargetAttribute"
+        operator:
+          $ref: "#/components/schemas/TargetOperator"
+        value:
+          type: string
+
+    TargetConditionInput:
+      type: object
+      required: [personType, attribute, operator]
+      properties:
+        personType:
+          $ref: "#/components/schemas/TargetPersonType"
+        attribute:
+          $ref: "#/components/schemas/TargetAttribute"
+        operator:
+          $ref: "#/components/schemas/TargetOperator"
+        value:
+          type: string
+          maxLength: 200
+
+    Target:
+      type: object
+      required: [id, name, description, matchMode, isEnabled, conditions, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        matchMode:
+          $ref: "#/components/schemas/TargetMatchMode"
+        isEnabled:
+          type: boolean
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TargetCondition"
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    TargetInput:
+      type: object
+      required: [name, agentId, conditions]
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        agentId:
+          type: string
+        description:
+          type: string
+          maxLength: 240
+        matchMode:
+          $ref: "#/components/schemas/TargetMatchMode"
+        isEnabled:
+          type: boolean
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/TargetConditionInput"
+
+    TargetUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 80
+        description:
+          type: string
+          maxLength: 240
+        matchMode:
+          $ref: "#/components/schemas/TargetMatchMode"
+        isEnabled:
+          type: boolean
+        conditions:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/TargetConditionInput"
 
     # ── API Connector ─────────────────────────────────────────────────────
     ApiConnector:

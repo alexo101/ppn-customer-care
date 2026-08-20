@@ -9,14 +9,22 @@ import {
   type AgentConfigStepId,
 } from "@/lib/agent-config";
 
+const GROUPS = [
+  { id: "configuration", label: "Configuration" },
+  { id: "deployment", label: "Deployment" },
+  { id: "monitoring", label: "Monitoring" },
+] as const;
+
 export function AgentConfigSidebar({
   agentName,
   agentId,
   activeStep,
+  isEnabled,
 }: {
   agentName: string;
   agentId: string;
   activeStep: AgentConfigStepId;
+  isEnabled: boolean;
 }) {
   return (
     <aside className="w-56 bg-card text-foreground border-r border-border flex flex-col flex-shrink-0">
@@ -27,36 +35,47 @@ export function AgentConfigSidebar({
           </Link>
         </Button>
         <h2 className="text-sm font-medium tracking-tight truncate flex-1 min-w-0">{agentName}</h2>
-        <Badge className="shrink-0 border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-medium px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full shadow-none">
-          Active
+        <Badge
+          className={cn(
+            "shrink-0 border-transparent font-medium px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full shadow-none",
+            isEnabled
+              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          {isEnabled ? "Active" : "Inactive"}
         </Badge>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-2">
-        <p className="px-2 mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          Configuration
-        </p>
-        <div className="space-y-0.5">
-          {AGENT_CONFIG_STEPS.map((step) => {
-            const Icon = step.icon;
-            const isActive = step.id === activeStep;
-            return (
-              <Link
-                key={step.id}
-                href={agentConfigHref(agentId, step.id)}
-                className={cn(
-                  "flex items-center gap-2.5 px-2 py-2 rounded-md transition-colors text-[13px]",
-                  isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {step.label}
-              </Link>
-            );
-          })}
-        </div>
+      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-4">
+        {GROUPS.map((group) => (
+          <div key={group.id}>
+            <p className="px-2 mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              {group.label}
+            </p>
+            <div className="space-y-0.5">
+              {AGENT_CONFIG_STEPS.filter((step) => step.group === group.id).map((step) => {
+                const Icon = step.icon;
+                const isActive = step.id === activeStep;
+                return (
+                  <Link
+                    key={step.id}
+                    href={agentConfigHref(agentId, step.id)}
+                    className={cn(
+                      "flex items-center gap-2.5 px-2 py-2 rounded-md transition-colors text-[13px]",
+                      isActive
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {step.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
     </aside>
   );

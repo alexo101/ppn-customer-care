@@ -45,7 +45,7 @@ export default function AgentsBoard() {
           ) : agents.length === 0 ? (
             <div className="border border-dashed border-border rounded-xl p-12 text-center space-y-3">
               <Bot className="w-10 h-10 mx-auto text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">No agents yet. Create one to configure conversations, categories, rules, sources, and appearance.</p>
+              <p className="text-sm text-muted-foreground">No agents yet. Create one to configure conversations, categories, sources, targets, rules, and appearance.</p>
               <Button asChild>
                 <Link href="/agents/new">Create agent</Link>
               </Button>
@@ -56,7 +56,12 @@ export default function AgentsBoard() {
                 <Card key={agent.id} className="shadow-none border-border hover:border-primary/40 transition-colors">
                   <CardHeader className="flex flex-row items-start justify-between gap-3">
                     <Link href={`/agents/${agent.id}/appearance`} className="min-w-0 flex-1">
-                      <CardTitle className="text-sm font-medium truncate">{agent.name}</CardTitle>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CardTitle className="text-sm font-medium truncate">{agent.name}</CardTitle>
+                        <span className={`text-[10px] uppercase tracking-wide font-medium shrink-0 ${agent.isEnabled ? "text-emerald-600" : "text-muted-foreground"}`}>
+                          {agent.isEnabled ? "Active" : "Inactive"}
+                        </span>
+                      </div>
                       <CardDescription className="text-xs mt-1 line-clamp-2">
                         {agent.description || "No description"}
                       </CardDescription>
@@ -82,7 +87,7 @@ export default function AgentsBoard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete agent</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete "{toDelete?.name}"? Conversations, categories, rules, sources, and appearance for this agent will be removed.
+              Delete "{toDelete?.name}"? Conversations, categories, rules, sources, targets, and appearance for this agent will be removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

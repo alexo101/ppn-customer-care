@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, or, isNull } from "drizzle-orm";
+import multer from "multer";
+import mammoth from "mammoth";
 import { db, knowledgeSourcesTable, apiConnectorsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -16,6 +18,23 @@ import {
 } from "@workspace/api-zod";
 
 import { getOwnedAgent } from "../lib/agents";
+import { getSourceIntegration, listSourceIntegrations } from "../lib/replit-integrations";
+
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const MAX_DOCX_BYTES = 10 * 1024 * 1024;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_DOCX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const name = file.originalname.toLowerCase();
+    if (file.mimetype === DOCX_MIME || name.endsWith(".docx")) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only .docx files are supported"));
+  },
+});
 
 const router: IRouter = Router();
 
@@ -61,6 +80,24 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
   }
 
+  let connectionConfig: Record<string, unknown> =
+    (parsed.data.connectionConfig as Record<string, unknown> | undefined) ?? {};
+
+  if (parsed.data.sourceType === "notion" || parsed.data.sourceType === "confluence") {
+    const integration = await getSourceIntegration(parsed.data.sourceType);
+    if (!integration?.connected) {
+      res.status(400).json({
+        error: `Connect ${parsed.data.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
+      });
+      return;
+    }
+    connectionConfig = {
+      ...connectionConfig,
+      connectorName: integration.connectorName,
+      connectionId: integration.connectionId,
+    };
+  }
+
   const [row] = await db
     .insert(knowledgeSourcesTable)
     .values({
@@ -68,8 +105,67 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
       agentId: parsed.data.agentId ?? null,
       name: parsed.data.name,
       sourceType: parsed.data.sourceType,
-      connectionConfig: (parsed.data.connectionConfig as Record<string, unknown>) ?? {},
+      connectionConfig,
       isEnabled: parsed.data.isEnabled ?? true,
+    })
+    .returning();
+
+  res.status(201).json(toSource(row));
+});
+
+router.get("/sources/integrations", requireAuth, async (_req, res): Promise<void> => {
+  const integrations = await listSourceIntegrations();
+  res.json(integrations);
+});
+
+router.post("/sources/upload", requireAuth, (req, res, next) => {
+  upload.single("file")(req, res, (err: unknown) => {
+    if (err) {
+      const message = err instanceof Error ? err.message : "Could not upload the document.";
+      const status = message.includes("File too large") ? 413 : 400;
+      res.status(status).json({ error: message });
+      return;
+    }
+    next();
+  });
+}, async (req, res): Promise<void> => {
+  const file = req.file;
+  if (!file?.buffer) {
+    res.status(400).json({ error: "A .docx file is required." });
+    return;
+  }
+
+  const agentId = typeof req.body?.agentId === "string" ? req.body.agentId : undefined;
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!agentId) {
+    res.status(400).json({ error: "agentId is required." });
+    return;
+  }
+  if (!(await requireAgent(req.userId, agentId, res))) return;
+
+  let text = "";
+  try {
+    const extracted = await mammoth.extractRawText({ buffer: file.buffer });
+    text = extracted.value.trim();
+  } catch {
+    res.status(400).json({ error: "Could not read that Word document." });
+    return;
+  }
+
+  const sourceName = name || file.originalname.replace(/\.docx$/i, "") || "Uploaded document";
+  const [row] = await db
+    .insert(knowledgeSourcesTable)
+    .values({
+      userId: req.userId,
+      agentId,
+      name: sourceName,
+      sourceType: "document",
+      connectionConfig: {
+        fileName: file.originalname,
+        mimeType: file.mimetype || DOCX_MIME,
+        text,
+      },
+      isEnabled: true,
     })
     .returning();
 

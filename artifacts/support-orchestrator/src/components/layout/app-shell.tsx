@@ -139,6 +139,7 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
           agentId={agentConfig.agentId}
           agentName={agents.find((agent) => agent.id === agentConfig.agentId)?.name || 'Agent'}
           activeStep={agentConfig.step}
+          isEnabled={agents.find((agent) => agent.id === agentConfig.agentId)?.isEnabled ?? false}
         />
       )}
 

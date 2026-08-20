@@ -21,6 +21,7 @@ export interface Agent {
   id: string;
   name: string;
   description: string;
+  isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,11 +29,13 @@ export interface Agent {
 export interface AgentInput {
   name: string;
   description?: string;
+  isEnabled?: boolean;
 }
 
 export interface AgentUpdate {
   name?: string;
   description?: string;
+  isEnabled?: boolean;
 }
 
 export type ConversationMetadata = { [key: string]: unknown };
@@ -61,6 +64,58 @@ export type ConversationUpdateMetadata = { [key: string]: unknown };
 export interface ConversationUpdate {
   status?: string;
   metadata?: ConversationUpdateMetadata;
+}
+
+export type QuestionType = typeof QuestionType[keyof typeof QuestionType];
+
+
+export const QuestionType = {
+  question: 'question',
+  unanswered: 'unanswered',
+  escalated: 'escalated',
+} as const;
+
+export interface Question {
+  id: string;
+  conversationId: string;
+  content: string;
+  type: QuestionType;
+  conversationStatus: string;
+  createdAt: string;
+}
+
+export interface TrainingQuestion {
+  id: string;
+  agentId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrainingQuestionInput {
+  agentId: string;
+  /** @maxLength 2000 */
+  content: string;
+}
+
+export interface TrainingQuestionUpdate {
+  /** @maxLength 2000 */
+  content?: string;
+}
+
+export interface TrainingQuestionBulkInput {
+  agentId: string;
+  /**
+     * @maxItems 100
+     * @items.maxLength 2000
+     */
+  questions: string[];
+}
+
+export interface TrainingQuestionBulkResult {
+  created: TrainingQuestion[];
+  skipped: number;
+  limitReached: boolean;
 }
 
 export interface Message {
@@ -183,6 +238,10 @@ export interface OrchestratorRule {
   requiresClarificationPrompt?: string;
   escalationTrigger: boolean;
   isEnabled: boolean;
+  conditionOperator: string;
+  action: string;
+  categoryIds: string[];
+  sourceIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -196,6 +255,10 @@ export interface RuleInput {
   requiresClarificationPrompt?: string;
   escalationTrigger?: boolean;
   isEnabled?: boolean;
+  conditionOperator?: string;
+  action?: string;
+  categoryIds?: string[];
+  sourceIds?: string[];
 }
 
 export interface RuleUpdate {
@@ -206,6 +269,119 @@ export interface RuleUpdate {
   requiresClarificationPrompt?: string;
   escalationTrigger?: boolean;
   isEnabled?: boolean;
+  conditionOperator?: string;
+  action?: string;
+  categoryIds?: string[];
+  sourceIds?: string[];
+}
+
+export type RuleAuthoringMessageRole = typeof RuleAuthoringMessageRole[keyof typeof RuleAuthoringMessageRole];
+
+
+export const RuleAuthoringMessageRole = {
+  user: 'user',
+  assistant: 'assistant',
+} as const;
+
+export interface RuleAuthoringMessage {
+  role: RuleAuthoringMessageRole;
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  content: string;
+}
+
+export interface RuleAuthoringDraft {
+  name: string;
+  description: string;
+  promptTemplate: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  priority: number;
+  requiresClarificationPrompt: string;
+  escalationTrigger: boolean;
+  isEnabled: boolean;
+  conditionOperator: string;
+  action: string;
+  categoryIds: string[];
+  sourceIds: string[];
+}
+
+export interface RuleAuthoringRequest {
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  message: string;
+  /** @maxItems 30 */
+  history?: RuleAuthoringMessage[];
+  draft?: RuleAuthoringDraft;
+  awaitingConfirmation?: boolean;
+}
+
+export type RuleAuthoringResponseStatus = typeof RuleAuthoringResponseStatus[keyof typeof RuleAuthoringResponseStatus];
+
+
+export const RuleAuthoringResponseStatus = {
+  clarifying: 'clarifying',
+  ready_for_confirmation: 'ready_for_confirmation',
+  needs_changes: 'needs_changes',
+  approved: 'approved',
+} as const;
+
+export interface RuleAuthoringResponse {
+  status: RuleAuthoringResponseStatus;
+  assistantMessage: string;
+  draft?: RuleAuthoringDraft;
+  unresolvedFields: string[];
+}
+
+export type RuleVocabularyKind = typeof RuleVocabularyKind[keyof typeof RuleVocabularyKind];
+
+
+export const RuleVocabularyKind = {
+  operator: 'operator',
+  action: 'action',
+} as const;
+
+export interface RuleVocabulary {
+  id: string;
+  agentId?: string | null;
+  kind: RuleVocabularyKind;
+  label: string;
+  slug: string;
+  requiresSource: boolean;
+  isBuiltin: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RuleVocabularyInputKind = typeof RuleVocabularyInputKind[keyof typeof RuleVocabularyInputKind];
+
+
+export const RuleVocabularyInputKind = {
+  operator: 'operator',
+  action: 'action',
+} as const;
+
+export interface RuleVocabularyInput {
+  agentId: string;
+  kind: RuleVocabularyInputKind;
+  /** @maxLength 80 */
+  label: string;
+  requiresSource?: boolean;
+  sortOrder?: number;
+}
+
+export interface RuleVocabularyUpdate {
+  /** @maxLength 80 */
+  label?: string;
+  requiresSource?: boolean;
+  sortOrder?: number;
 }
 
 export interface RuleCategoryLinkInput {
@@ -241,6 +417,124 @@ export interface SourceUpdate {
   sourceType?: string;
   connectionConfig?: SourceUpdateConnectionConfig;
   isEnabled?: boolean;
+}
+
+export interface SourceIntegration {
+  connectorName: string;
+  displayName: string;
+  connected: boolean;
+  connectionId?: string | null;
+  status?: string | null;
+}
+
+export interface SourceUploadInput {
+  agentId: string;
+  name?: string;
+  file: Blob;
+}
+
+export type TargetPersonType = typeof TargetPersonType[keyof typeof TargetPersonType];
+
+
+export const TargetPersonType = {
+  visitor: 'visitor',
+  lead: 'lead',
+  user: 'user',
+} as const;
+
+export type TargetAttribute = typeof TargetAttribute[keyof typeof TargetAttribute];
+
+
+export const TargetAttribute = {
+  email: 'email',
+  phone_number: 'phone_number',
+  phone_number_prefix: 'phone_number_prefix',
+  name: 'name',
+  user_id: 'user_id',
+  company: 'company',
+  country: 'country',
+  city: 'city',
+  current_page_url: 'current_page_url',
+  referring_url: 'referring_url',
+  browser_language: 'browser_language',
+} as const;
+
+export type TargetOperator = typeof TargetOperator[keyof typeof TargetOperator];
+
+
+export const TargetOperator = {
+  is: 'is',
+  is_not: 'is_not',
+  contains: 'contains',
+  does_not_contain: 'does_not_contain',
+  starts_with: 'starts_with',
+  ends_with: 'ends_with',
+  is_known: 'is_known',
+  is_unknown: 'is_unknown',
+} as const;
+
+export type TargetMatchMode = typeof TargetMatchMode[keyof typeof TargetMatchMode];
+
+
+export const TargetMatchMode = {
+  all: 'all',
+  any: 'any',
+} as const;
+
+export interface TargetCondition {
+  id: string;
+  personType: TargetPersonType;
+  attribute: TargetAttribute;
+  operator: TargetOperator;
+  value: string;
+}
+
+export interface TargetConditionInput {
+  personType: TargetPersonType;
+  attribute: TargetAttribute;
+  operator: TargetOperator;
+  /** @maxLength 200 */
+  value?: string;
+}
+
+export interface Target {
+  id: string;
+  name: string;
+  description: string;
+  matchMode: TargetMatchMode;
+  isEnabled: boolean;
+  conditions: TargetCondition[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TargetInput {
+  /** @maxLength 80 */
+  name: string;
+  agentId: string;
+  /** @maxLength 240 */
+  description?: string;
+  matchMode?: TargetMatchMode;
+  isEnabled?: boolean;
+  /**
+     * @minItems 1
+     * @maxItems 20
+     */
+  conditions: TargetConditionInput[];
+}
+
+export interface TargetUpdate {
+  /** @maxLength 80 */
+  name?: string;
+  /** @maxLength 240 */
+  description?: string;
+  matchMode?: TargetMatchMode;
+  isEnabled?: boolean;
+  /**
+     * @minItems 1
+     * @maxItems 20
+     */
+  conditions?: TargetConditionInput[];
 }
 
 export interface ApiConnector {
@@ -328,6 +622,48 @@ export type ListConversationsParams = {
 agentId?: string;
 status?: string;
 limit?: number;
+/**
+ * Filter by conversation source. Use widget for live deployments, training for console sessions.
+ */
+source?: string;
+/**
+ * Inclusive start date (YYYY-MM-DD or ISO 8601)
+ */
+fromDate?: string;
+/**
+ * Inclusive end date (YYYY-MM-DD or ISO 8601)
+ */
+toDate?: string;
+};
+
+export type ListQuestionsParams = {
+agentId: string;
+/**
+ * Filter by question type
+ */
+type?: ListQuestionsType;
+/**
+ * Inclusive start date (YYYY-MM-DD or ISO 8601)
+ */
+fromDate?: string;
+/**
+ * Inclusive end date (YYYY-MM-DD or ISO 8601)
+ */
+toDate?: string;
+limit?: number;
+};
+
+export type ListQuestionsType = typeof ListQuestionsType[keyof typeof ListQuestionsType];
+
+
+export const ListQuestionsType = {
+  question: 'question',
+  unanswered: 'unanswered',
+  escalated: 'escalated',
+} as const;
+
+export type ListTrainingQuestionsParams = {
+agentId: string;
 };
 
 export type ListCategoriesParams = {
@@ -338,8 +674,25 @@ export type ListRulesParams = {
 agentId?: string;
 };
 
+export type ListRuleVocabulariesParams = {
+agentId: string;
+kind?: ListRuleVocabulariesKind;
+};
+
+export type ListRuleVocabulariesKind = typeof ListRuleVocabulariesKind[keyof typeof ListRuleVocabulariesKind];
+
+
+export const ListRuleVocabulariesKind = {
+  operator: 'operator',
+  action: 'action',
+} as const;
+
 export type ListSourcesParams = {
 agentId?: string;
+};
+
+export type ListTargetsParams = {
+agentId: string;
 };
 
 export type ListConnectorsParams = {

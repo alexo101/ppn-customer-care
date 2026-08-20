@@ -14,4 +14,8 @@ export interface RuleUpdate {
   requiresClarificationPrompt?: string;
   escalationTrigger?: boolean;
   isEnabled?: boolean;
+  conditionOperator?: string;
+  action?: string;
+  categoryIds?: string[];
+  sourceIds?: string[];
 }

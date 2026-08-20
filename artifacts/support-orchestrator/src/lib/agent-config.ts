@@ -1,17 +1,23 @@
 import {
+  Activity,
   Database,
   MessageSquare,
   Palette,
+  Rocket,
   Shield,
   Tag,
+  Target,
 } from "lucide-react";
 
 export const AGENT_CONFIG_STEPS = [
-  { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "categories", label: "Categories", icon: Tag },
-  { id: "sources", label: "Sources", icon: Database },
-  { id: "rules", label: "Rules", icon: Shield },
-  { id: "training", label: "Training", icon: MessageSquare },
+  { id: "appearance", label: "Appearance", icon: Palette, group: "configuration" },
+  { id: "categories", label: "Categories", icon: Tag, group: "configuration" },
+  { id: "sources", label: "Sources", icon: Database, group: "configuration" },
+  { id: "targets", label: "Target", icon: Target, group: "configuration" },
+  { id: "rules", label: "Rules", icon: Shield, group: "configuration" },
+  { id: "training", label: "Training", icon: MessageSquare, group: "configuration" },
+  { id: "deployment", label: "Deployment", icon: Rocket, group: "deployment" },
+  { id: "monitoring", label: "Monitoring", icon: Activity, group: "monitoring" },
 ] as const;
 
 export type AgentConfigStepId = (typeof AGENT_CONFIG_STEPS)[number]["id"];

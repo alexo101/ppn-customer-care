@@ -10,4 +10,16 @@ export type ListConversationsParams = {
 agentId?: string;
 status?: string;
 limit?: number;
+/**
+ * Filter by conversation source. Use widget for live deployments, training for console sessions.
+ */
+source?: string;
+/**
+ * Inclusive start date (YYYY-MM-DD or ISO 8601)
+ */
+fromDate?: string;
+/**
+ * Inclusive end date (YYYY-MM-DD or ISO 8601)
+ */
+toDate?: string;
 };

@@ -10,6 +10,7 @@ export interface Agent {
   id: string;
   name: string;
   description: string;
+  isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

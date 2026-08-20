@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../middlewares/requireAuth";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, gte, lte, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   conversationsTable,
@@ -10,6 +10,8 @@ import {
   intentCategoriesTable,
   orchestratorRulesTable,
   ruleCategoryLinksTable,
+  ruleSourceLinksTable,
+  knowledgeSourcesTable,
 } from "@workspace/db";
 import {
   ListConversationsQueryParams,
@@ -23,8 +25,10 @@ import {
   SubmitFeedbackParams,
   SubmitFeedbackBody,
   ListConversationLogsParams,
+  ListQuestionsQueryParams,
 } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
+import { actionUsesSources, categoryMatchesOperator, normalizeAction } from "../lib/rule-engine";
 
 const router: IRouter = Router();
 
@@ -37,7 +41,7 @@ router.get("/conversations", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { status, limit = 50, agentId } = parsed.data;
+  const { status, limit = 50, agentId, source, fromDate, toDate } = parsed.data;
   const userId = req.userId;
 
   if (agentId) {
@@ -51,7 +55,9 @@ router.get("/conversations", requireAuth, async (req, res): Promise<void> => {
   const ownerFilter = eq(conversationsTable.userId, userId);
   const statusFilter = status ? eq(conversationsTable.status, status) : undefined;
   const agentFilter = agentId ? eq(conversationsTable.agentId, agentId) : undefined;
-  const where = and(ownerFilter, statusFilter, agentFilter);
+  const sourceFilter = conversationSourceFilter(source);
+  const dateFilters = conversationDateFilters(fromDate, toDate);
+  const where = and(ownerFilter, statusFilter, agentFilter, sourceFilter, ...dateFilters);
 
   const rows = await db
     .select()
@@ -230,25 +236,32 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
 
   // Stage 3: load rules
   stages[2].status = "running";
-  let rule: typeof orchestratorRulesTable.$inferSelect | null = null;
-  if (classification.primaryCategoryId) {
-    const links = await db
-      .select()
-      .from(ruleCategoryLinksTable)
-      .where(eq(ruleCategoryLinksTable.categoryId, classification.primaryCategoryId));
+  const classifiedCategory = classification.primaryCategoryId
+    ? categories.find((category) => category.id === classification.primaryCategoryId) ?? {
+        id: classification.primaryCategoryId,
+        name: classification.primaryCategory,
+      }
+    : classification.primaryCategory
+      ? { id: "", name: classification.primaryCategory }
+      : null;
 
-    if (links.length > 0) {
-      const ruleIds = links.map((l) => l.ruleId);
-      const rules = await db
-        .select()
-        .from(orchestratorRulesTable)
-        .where(eq(orchestratorRulesTable.isEnabled, true))
-        .orderBy(desc(orchestratorRulesTable.priority));
-      rule = rules.find((r) => ruleIds.includes(r.id)) ?? null;
-    }
-  }
+  const rule = await matchRuleForAgent(conv.agentId, classifiedCategory);
   stages[2].status = "completed";
-  stages[2].details = { rule_used: rule?.name ?? "None" };
+  stages[2].details = {
+    rule_used: rule?.name ?? "None",
+    operator: rule?.conditionOperator ?? null,
+    action: rule?.action ?? null,
+  };
+
+  let dataSourcesQueried: string[] = [];
+  if (rule && actionUsesSources(rule.action)) {
+    const sourceLinks = await db
+      .select({ name: knowledgeSourcesTable.name })
+      .from(ruleSourceLinksTable)
+      .innerJoin(knowledgeSourcesTable, eq(ruleSourceLinksTable.sourceId, knowledgeSourcesTable.id))
+      .where(eq(ruleSourceLinksTable.ruleId, rule.id));
+    dataSourcesQueried = sourceLinks.map((row) => row.name);
+  }
 
   // Stage 4: generate response
   stages[3].status = "running";
@@ -275,10 +288,22 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
     .values({ conversationId: conv.id, sender: "assistant", content: responseText })
     .returning();
 
-  // Update conversation
+  // Update conversation (and capture a subject from the first user message)
+  const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
+  const conversationPatch: Record<string, unknown> = {
+    lastActivityAt: new Date(),
+    status: rule && (rule.escalationTrigger || normalizeAction(rule.action) === "escalate") ? "escalated" : conv.status,
+  };
+  if (typeof existingMeta.subject !== "string" || !existingMeta.subject.trim()) {
+    conversationPatch.metadata = {
+      ...existingMeta,
+      subject: parsed.data.content.slice(0, 120),
+    };
+  }
+
   await db
     .update(conversationsTable)
-    .set({ lastActivityAt: new Date(), status: rule?.escalationTrigger ? "escalated" : conv.status })
+    .set(conversationPatch)
     .where(eq(conversationsTable.id, conv.id));
 
   // Save orchestrator log
@@ -291,8 +316,8 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
       confidenceScore: String(classification.confidence),
       secondaryCategories: classification.secondaryCategories,
       detectedEntities: classification.entities,
-      ruleUsed: rule?.name ?? "None",
-      dataSourcesQueried: [],
+      ruleUsed: rule ? `${rule.name} (${rule.conditionOperator} / ${rule.action})` : "None",
+      dataSourcesQueried,
       promptAssembled: rule?.promptTemplate ?? "",
       tokensUsed: String(Math.floor(parsed.data.content.length / 4)),
       latencyMs: String(latencyMs),
@@ -372,9 +397,199 @@ router.get("/conversations/:id/logs", requireAuth, async (req, res): Promise<voi
   res.json(rows.map(toLog));
 });
 
+// ── List questions from deployed (widget) conversations ───────────────────
+router.get("/questions", requireAuth, async (req, res): Promise<void> => {
+  const parsed = ListQuestionsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { agentId, type, fromDate, toDate, limit = 200 } = parsed.data;
+  const agent = await getOwnedAgent(req.userId, agentId);
+  if (!agent) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+
+  const convos = await db
+    .select()
+    .from(conversationsTable)
+    .where(
+      and(
+        eq(conversationsTable.userId, req.userId),
+        eq(conversationsTable.agentId, agentId),
+        conversationSourceFilter("widget"),
+      ),
+    )
+    .orderBy(desc(conversationsTable.lastActivityAt))
+    .limit(500);
+
+  if (convos.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const messages = await db
+    .select()
+    .from(messagesTable)
+    .where(inArray(messagesTable.conversationId, convos.map((c) => c.id)))
+    .orderBy(messagesTable.createdAt);
+
+  const messagesByConv = new Map<string, typeof messages>();
+  for (const message of messages) {
+    const list = messagesByConv.get(message.conversationId) ?? [];
+    list.push(message);
+    messagesByConv.set(message.conversationId, list);
+  }
+
+  const from = parseDayStart(fromDate);
+  const to = parseDayEnd(toDate);
+  const questions: ReturnType<typeof toQuestion>[] = [];
+
+  for (const conv of convos) {
+    const convMessages = messagesByConv.get(conv.id) ?? [];
+    const userMessages = convMessages.filter((m) => m.sender === "user");
+
+    userMessages.forEach((message, index) => {
+      const createdAt = message.createdAt ?? new Date(0);
+      if (from && createdAt < from) return;
+      if (to && createdAt > to) return;
+
+      const hasAssistantAfter = convMessages.some(
+        (other) => other.sender === "assistant" && other.createdAt > createdAt,
+      );
+      const isLastUser = index === userMessages.length - 1;
+      const questionType = classifyQuestionType(conv.status, hasAssistantAfter, isLastUser);
+      if (type && questionType !== type) return;
+
+      questions.push(
+        toQuestion({
+          id: message.id,
+          conversationId: conv.id,
+          content: message.content,
+          type: questionType,
+          conversationStatus: conv.status,
+          createdAt,
+        }),
+      );
+    });
+  }
+
+  questions.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  res.json(questions.slice(0, Math.min(limit as number, 500)));
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseDayStart(value?: string): Date | null {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseDayEnd(value?: string): Date | null {
+  const start = parseDayStart(value);
+  if (!start) return null;
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59, 999);
+}
+
+function conversationSourceFilter(source?: string) {
+  if (source === "widget") {
+    return sql`${conversationsTable.metadata}->>'source' = 'widget'`;
+  }
+  if (source === "training" || source === "console") {
+    return sql`coalesce(${conversationsTable.metadata}->>'source', '') <> 'widget'`;
+  }
+  return undefined;
+}
+
+function conversationDateFilters(fromDate?: string, toDate?: string) {
+  const filters = [];
+  const from = parseDayStart(fromDate);
+  const to = parseDayEnd(toDate);
+  if (from) filters.push(gte(conversationsTable.lastActivityAt, from));
+  if (to) filters.push(lte(conversationsTable.lastActivityAt, to));
+  return filters;
+}
+
 type Category = typeof intentCategoriesTable.$inferSelect;
 type Rule = typeof orchestratorRulesTable.$inferSelect;
+type QuestionType = "question" | "unanswered" | "escalated";
+
+async function matchRuleForAgent(
+  agentId: string | null,
+  classified: { id: string; name: string } | null,
+): Promise<Rule | null> {
+  const rules = await db
+    .select()
+    .from(orchestratorRulesTable)
+    .where(
+      and(
+        eq(orchestratorRulesTable.isEnabled, true),
+        agentId ? eq(orchestratorRulesTable.agentId, agentId) : undefined,
+      ),
+    )
+    .orderBy(desc(orchestratorRulesTable.priority));
+
+  if (rules.length === 0) return null;
+
+  const ruleIds = rules.map((rule) => rule.id);
+  const [categoryLinks, categoryRows] = await Promise.all([
+    db.select().from(ruleCategoryLinksTable).where(inArray(ruleCategoryLinksTable.ruleId, ruleIds)),
+    db.select({ id: intentCategoriesTable.id, name: intentCategoriesTable.name }).from(intentCategoriesTable),
+  ]);
+
+  const categoriesById = new Map(categoryRows.map((category) => [category.id, category]));
+  const targetsByRule = new Map<string, { id: string; name: string }[]>();
+  for (const link of categoryLinks) {
+    const category = categoriesById.get(link.categoryId);
+    if (!category) continue;
+    const list = targetsByRule.get(link.ruleId) ?? [];
+    list.push(category);
+    targetsByRule.set(link.ruleId, list);
+  }
+
+  return rules.find((rule) => categoryMatchesOperator(rule.conditionOperator, classified, targetsByRule.get(rule.id) ?? [])) ?? null;
+}
+
+function classifyQuestionType(
+  conversationStatus: string,
+  hasAssistantAfter: boolean,
+  isLastUser: boolean,
+): QuestionType {
+  if (conversationStatus === "escalated" && isLastUser) return "escalated";
+  if (!hasAssistantAfter) return "unanswered";
+  if (isLastUser && conversationStatus !== "resolved" && conversationStatus !== "closed") {
+    return "unanswered";
+  }
+  return "question";
+}
+
+function toQuestion(row: {
+  id: string;
+  conversationId: string;
+  content: string;
+  type: QuestionType;
+  conversationStatus: string;
+  createdAt: Date;
+}) {
+  return {
+    id: row.id,
+    conversationId: row.conversationId,
+    content: row.content,
+    type: row.type,
+    conversationStatus: row.conversationStatus,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
 
 function buildStages() {
   return [
@@ -485,14 +700,27 @@ function generateResponse(
   } else if (GREETING.some((k) => lower.startsWith(k))) {
     responseText = GREETINGS_RESPONSES[Math.floor(Math.random() * GREETINGS_RESPONSES.length)];
   } else if (rule) {
-    if (rule.escalationTrigger) {
+    const actionKind = normalizeAction(rule.action);
+    if (rule.escalationTrigger || actionKind === "escalate") {
       responseText =
         "I understand this is an important issue. I'm escalating this to a human support agent who will assist you shortly. Please stay on the line.";
       resolutionStatus = "escalated";
-    } else if (rule.requiresClarificationPrompt) {
-      responseText = rule.requiresClarificationPrompt;
+    } else if (actionKind === "ask_clarification") {
+      responseText = rule.requiresClarificationPrompt || `I need a bit more detail about your ${classification.primaryCategory} request before I can continue.`;
       resolutionStatus = "pending_clarification";
-    } else if (rule.promptTemplate) {
+    } else if (actionKind === "search_answer" || actionKind === "query_live_data") {
+      const sourceHint = rule.action.trim() || "search answer";
+      responseText = rule.promptTemplate
+        ? `Based on your ${classification.primaryCategory} inquiry, I will ${sourceHint}. ${rule.promptTemplate}`
+        : `I'll ${sourceHint} for your ${classification.primaryCategory} inquiry and use the linked source to respond.`;
+      const msgCount = history.filter((m) => m.sender === "user").length;
+      if (msgCount >= 2 && !resolutionStatus.includes("resolved")) {
+        shouldAskResolution = true;
+        responseText +=
+          "\n\nDoes this answer your question? Please let me know if you need further assistance.";
+        resolutionStatus = "pending_resolution";
+      }
+    } else if (actionKind === "generate_from_template" && rule.promptTemplate) {
       responseText = `Based on your ${classification.primaryCategory} inquiry: ${rule.promptTemplate}`;
       const msgCount = history.filter((m) => m.sender === "user").length;
       if (msgCount >= 2 && !resolutionStatus.includes("resolved")) {
@@ -501,8 +729,10 @@ function generateResponse(
           "\n\nDoes this answer your question? Please let me know if you need further assistance.";
         resolutionStatus = "pending_resolution";
       }
+    } else if (rule.promptTemplate) {
+      responseText = `Based on your ${classification.primaryCategory} inquiry, I will ${rule.action}. ${rule.promptTemplate}`;
     } else {
-      responseText = `I understand your ${classification.primaryCategory} request. Let me help you with that. Could you provide more details so I can assist you better?`;
+      responseText = `I understand your ${classification.primaryCategory} request. I will ${rule.action}. Could you provide more details so I can assist you better?`;
     }
   } else {
     const fallbacks: Record<string, string> = {

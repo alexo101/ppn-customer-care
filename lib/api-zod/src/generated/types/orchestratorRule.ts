@@ -15,6 +15,10 @@ export interface OrchestratorRule {
   requiresClarificationPrompt?: string;
   escalationTrigger: boolean;
   isEnabled: boolean;
+  conditionOperator: string;
+  action: string;
+  categoryIds: string[];
+  sourceIds: string[];
   createdAt: string;
   updatedAt: string;
 }

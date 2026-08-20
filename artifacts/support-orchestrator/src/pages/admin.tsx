@@ -8,21 +8,14 @@ import {
   useCreateCategory,
   useUpdateCategory,
   useDeleteCategory,
-  useListRules,
-  useCreateRule,
-  useUpdateRule,
-  useDeleteRule,
-  useListSources,
-  useListConnectors,
   getListCategoriesQueryKey,
-  getListRulesQueryKey,
   type IntentCategory
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
   Activity, Users, MessageSquare, AlertTriangle, CheckCircle, 
   Search, Plus, Filter, MoreVertical, Edit2, Trash, ExternalLink,
-  Book, Database, Network, Layers, FolderTree, Check, X, FolderInput,
+  Layers, FolderTree, Check, X, FolderInput,
   ChevronRight, ArrowRightLeft, Folder
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -35,9 +28,6 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter 
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,7 +47,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 
 export default function Admin() {
@@ -141,7 +130,11 @@ function StatCard({ title, value, icon: Icon, variant = "default" }: any) {
 
 export function ConversationsTab({ agentId }: { agentId: string }) {
   const [filter, setFilter] = useState('');
-  const { data: convos = [] } = useListConversations({ agentId, ...(filter ? { status: filter } : {}) });
+  const { data: convos = [] } = useListConversations({
+    agentId,
+    source: "training",
+    ...(filter ? { status: filter } : {}),
+  });
 
   return (
     <Card className="shadow-none border-border">
@@ -892,186 +885,6 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
   );
 }
 
-export function RulesTab({ agentId }: { agentId: string }) {
-  const { data: rules = [] } = useListRules({ agentId });
-  const [open, setOpen] = useState(false);
-  const queryClient = useQueryClient();
-  const createRule = useCreateRule();
-
-  const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    createRule.mutate({
-      data: {
-        name: formData.get('name') as string,
-        agentId,
-        description: formData.get('description') as string,
-        promptTemplate: formData.get('prompt') as string,
-        requiresClarificationPrompt: formData.get('clarification') as string || undefined,
-        escalationTrigger: formData.get('escalate') === 'on',
-        priority: Number(formData.get('priority')),
-        isEnabled: true,
-      }
-    }, {
-      onSuccess: () => {
-        setOpen(false);
-        queryClient.invalidateQueries({ queryKey: getListRulesQueryKey({ agentId }) });
-      }
-    });
-  };
-
-  return (
-    <Card className="shadow-none border-border">
-      <CardHeader className="flex flex-row items-center justify-between py-4">
-        <div>
-          <CardTitle className="text-sm font-medium">Orchestration Rules</CardTitle>
-          <CardDescription className="text-xs">Logic flows for resolution</CardDescription>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="h-8 text-xs font-mono"><Plus className="w-3.5 h-3.5 mr-1"/> ADD_RULE</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Define Rule</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-xs">Rule ID / Name</Label>
-                  <Input name="name" placeholder="e.g. process_refund_flow" required className="h-8 text-xs font-mono" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">Priority</Label>
-                  <Input name="priority" type="number" defaultValue="10" required className="h-8 text-xs font-mono" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Description</Label>
-                <Input name="description" required className="h-8 text-xs" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Prompt Template (LLM instructions)</Label>
-                <Textarea name="prompt" className="h-24 text-xs font-mono bg-muted/50" required placeholder="You are handling a {{intent}}. Use these facts: {{context}}" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Clarification Prompt (Optional)</Label>
-                <Input name="clarification" className="h-8 text-xs" placeholder="What is your order number?" />
-              </div>
-              <div className="flex items-center gap-2 pt-2">
-                <Switch name="escalate" id="escalate" />
-                <Label htmlFor="escalate" className="text-xs">Trigger human escalation if this rule fails</Label>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={createRule.isPending}>Save Rule</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <div className="border-t border-border p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-        {rules.map((rule) => (
-          <div key={rule.id} className="border border-border rounded-md p-4 bg-background space-y-3 relative">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-mono text-sm font-medium text-primary">{rule.name}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">{rule.description}</p>
-              </div>
-              <Badge variant="secondary" className="text-[10px] font-mono h-5">P{rule.priority}</Badge>
-            </div>
-            
-            <div className="bg-muted p-2 rounded text-[10px] font-mono text-muted-foreground line-clamp-2">
-              {rule.promptTemplate}
-            </div>
-            
-            <div className="flex items-center gap-4 text-xs">
-              {rule.escalationTrigger && (
-                <span className="flex items-center gap-1 text-destructive">
-                  <AlertTriangle className="w-3.5 h-3.5" /> Escalates
-                </span>
-              )}
-              {rule.requiresClarificationPrompt && (
-                <span className="flex items-center gap-1 text-amber-500">
-                  <MessageSquare className="w-3.5 h-3.5" /> Clarifies
-                </span>
-              )}
-            </div>
-            
-            <div className="absolute top-4 right-4 flex gap-1">
-              {/* Actions could go here */}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
-export function SourcesTab({ agentId }: { agentId: string }) {
-  const { data: sources = [] } = useListSources({ agentId });
-  const { data: connectors = [] } = useListConnectors({ agentId });
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <Card className="shadow-none border-border">
-        <CardHeader className="py-4 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Book className="w-4 h-4 text-primary" />
-            <CardTitle className="text-sm font-medium">Knowledge Sources</CardTitle>
-          </div>
-          <Button variant="outline" size="sm" className="h-7 text-[10px] font-mono"><Plus className="w-3 h-3 mr-1"/> ADD</Button>
-        </CardHeader>
-        <div className="border-t border-border">
-          <Table>
-            <TableBody>
-              {sources.map(src => (
-                <TableRow key={src.id} className="text-xs hover:bg-transparent">
-                  <TableCell className="font-medium">{src.name}</TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-[10px] uppercase">{src.sourceType}</TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant="outline" className={`text-[9px] uppercase font-mono tracking-wider h-5 ${src.isEnabled ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                      {src.isEnabled ? 'Live' : 'Off'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {sources.length === 0 && (
-                <TableRow><TableCell colSpan={3} className="text-center text-xs text-muted-foreground py-4">No sources configured.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
-
-      <Card className="shadow-none border-border">
-        <CardHeader className="py-4 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Network className="w-4 h-4 text-primary" />
-            <CardTitle className="text-sm font-medium">API Connectors</CardTitle>
-          </div>
-          <Button variant="outline" size="sm" className="h-7 text-[10px] font-mono"><Plus className="w-3 h-3 mr-1"/> ADD</Button>
-        </CardHeader>
-        <div className="border-t border-border">
-          <Table>
-            <TableBody>
-              {connectors.map(conn => (
-                <TableRow key={conn.id} className="text-xs hover:bg-transparent">
-                  <TableCell className="font-medium">{conn.name}</TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-[10px] truncate max-w-[150px]">{conn.endpointPattern}</TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant="outline" className={`text-[9px] uppercase font-mono tracking-wider h-5 ${conn.isEnabled ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                      {conn.isEnabled ? 'Live' : 'Off'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {connectors.length === 0 && (
-                <TableRow><TableCell colSpan={3} className="text-center text-xs text-muted-foreground py-4">No connectors configured.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
-    </div>
-  );
-}
+export { RulesTab } from "@/components/rules-tab";
+export { SourcesTab } from "@/components/sources-tab";
+export { TargetsTab } from "@/components/targets-tab";

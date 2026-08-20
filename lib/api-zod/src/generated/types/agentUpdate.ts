@@ -9,4 +9,5 @@
 export interface AgentUpdate {
   name?: string;
   description?: string;
+  isEnabled?: boolean;
 }

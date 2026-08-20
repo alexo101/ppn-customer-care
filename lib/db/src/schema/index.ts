@@ -5,3 +5,5 @@ export * from "./rules";
 export * from "./sources";
 export * from "./analytics";
 export * from "./appearance";
+export * from "./training-questions";
+export * from "./targets";
