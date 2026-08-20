@@ -1,0 +1,1 @@
+- [OpenAI model access](openai-model-access.md) — public model availability does not guarantee access for the configured API project.

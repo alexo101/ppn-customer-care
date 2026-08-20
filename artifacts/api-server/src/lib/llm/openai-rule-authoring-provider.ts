@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { logger } from "../logger";
 import {
   RuleAuthoringProviderError,
   type RuleAuthoringModelResult,
@@ -91,24 +92,49 @@ export class OpenAIRuleAuthoringProvider implements RuleAuthoringProvider {
     ].join("\n");
 
     try {
-      const completion = await this.client.chat.completions.create({
-        model: this.model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...input.messages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "rule_authoring_result",
-            strict: true,
-            schema: RESPONSE_SCHEMA,
+      const messages = [
+        { role: "system" as const, content: systemPrompt },
+        ...input.messages.map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+      ];
+      const request = (model: string) =>
+        this.client.chat.completions.create({
+          model,
+          messages,
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "rule_authoring_result",
+              strict: true,
+              schema: RESPONSE_SCHEMA,
+            },
           },
-        },
-      });
+        });
+
+      let completion;
+      try {
+        completion = await request(this.model);
+      } catch (error) {
+        const providerError = error as { code?: string; status?: number };
+        if (
+          providerError.code !== "model_not_found" ||
+          this.model === "gpt-5-nano"
+        ) {
+          throw error;
+        }
+
+        logger.warn(
+          {
+            configuredModel: this.model,
+            fallbackModel: "gpt-5-nano",
+            status: providerError.status,
+          },
+          "Configured OpenAI model is unavailable; retrying with fallback model",
+        );
+        completion = await request("gpt-5-nano");
+      }
 
       const content = completion.choices[0]?.message.content;
       if (!content) {
@@ -120,8 +146,42 @@ export class OpenAIRuleAuthoringProvider implements RuleAuthoringProvider {
       return JSON.parse(content) as RuleAuthoringModelResult;
     } catch (error) {
       if (error instanceof RuleAuthoringProviderError) throw error;
+
+      const openAiError = error as {
+        status?: number;
+        code?: string;
+        type?: string;
+        message?: string;
+        request_id?: string;
+        error?: {
+          code?: string;
+          type?: string;
+          message?: string;
+        };
+      };
+      const providerMessage =
+        openAiError.error?.message ??
+        openAiError.message ??
+        "Unknown OpenAI error";
+      const providerCode =
+        openAiError.error?.code ?? openAiError.code ?? "unknown";
+      const providerType =
+        openAiError.error?.type ?? openAiError.type ?? "unknown";
+
+      logger.error(
+        {
+          model: this.model,
+          status: openAiError.status,
+          code: providerCode,
+          type: providerType,
+          requestId: openAiError.request_id,
+          message: providerMessage,
+        },
+        "OpenAI rule-authoring request failed",
+      );
+
       throw new RuleAuthoringProviderError(
-        "The rule-authoring model request failed.",
+        `The rule-authoring model request failed (${providerCode}).`,
         {
           cause: error,
         },
