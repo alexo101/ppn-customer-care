@@ -67,7 +67,7 @@ export class OpenAIRuleAuthoringProvider implements RuleAuthoringProvider {
       );
     }
     this.client = new OpenAI({ apiKey });
-    this.model = options?.model ?? process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+    this.model = options?.model ?? process.env.OPENAI_MODEL ?? "gpt-5.6-luna";
   }
 
   async generate(
