@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Network,
   Bot,
-  ChevronDown,
   LogOutIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,13 +29,10 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
   const { signOut } = useClerk();
   const { user } = useUser();
   const [signOutOpen, setSignOutOpen] = useState(false);
-  const [agentsExpanded, setAgentsExpanded] = useState(true);
   const { data: agents = [] } = useListAgents();
   
   const { appearance } = useAppearance();
   const agentConfig = parseAgentConfigLocation(location);
-  const agentsRouteActive = location === '/agents' || location.startsWith('/agents/');
-
   return (
     <div className="flex h-[100dvh] w-full bg-background overflow-hidden text-sm">
       {/* Sidebar — 20% narrower than the previous w-64 (16rem → 12.8rem) */}
@@ -76,21 +72,8 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
                 <Bot className="w-4 h-4 shrink-0" />
                 Agents
               </Link>
-              {agents.length > 0 && (
-                <button
-                  type="button"
-                  className="p-2 mr-0.5 rounded-md hover:bg-sidebar-accent/80"
-                  aria-label={agentsExpanded || agentsRouteActive ? "Collapse agents" : "Expand agents"}
-                  onClick={() => setAgentsExpanded((open) => !open)}
-                >
-                  <ChevronDown className={cn(
-                    "w-3.5 h-3.5 transition-transform",
-                    !(agentsExpanded || agentsRouteActive) && "-rotate-90"
-                  )} />
-                </button>
-              )}
             </div>
-            {(agentsExpanded || agentsRouteActive) && agents.map((agent) => {
+            {agents.map((agent) => {
               const href = agentConfigHref(agent.id);
               const isActive = location === `/agents/${agent.id}` || location.startsWith(`/agents/${agent.id}/`);
               return (
