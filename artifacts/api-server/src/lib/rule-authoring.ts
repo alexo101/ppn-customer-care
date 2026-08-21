@@ -4,6 +4,7 @@ import {
   normalizeAction,
 } from "./rule-engine";
 import type {
+  NormalizedRuleAuthoringDraft,
   RuleAuthoringContext,
   RuleAuthoringDraft,
   RuleAuthoringMessage,
@@ -17,7 +18,7 @@ export type RuleAuthoringStatus =
 export type RuleAuthoringResult = {
   status: RuleAuthoringStatus;
   assistantMessage: string;
-  draft?: RuleAuthoringDraft;
+  draft?: NormalizedRuleAuthoringDraft;
   unresolvedFields: string[];
 };
 
@@ -58,7 +59,7 @@ export async function authorRule(
       status: "needs_changes",
       assistantMessage:
         "What would you like me to change in the proposed rule?",
-      draft: input.draft,
+      draft: normalizeRuleAuthoringDraft(input.draft),
       unresolvedFields: [],
     };
   }
@@ -79,7 +80,7 @@ export async function authorRule(
       status: "clarifying",
       assistantMessage:
         "I couldn’t turn that into a valid rule yet. Could you restate the rule and include the category and desired action?",
-      draft: input.draft,
+      draft: input.draft ? normalizeRuleAuthoringDraft(input.draft) : undefined,
       unresolvedFields: ["rule"],
     };
   }
@@ -98,6 +99,9 @@ export async function authorRule(
     !validated.draft
   ) {
     const validationFoundIssues = validated.unresolvedFields.length > 0;
+    const fallbackDraft = input.draft
+      ? normalizeRuleAuthoringDraft(input.draft)
+      : undefined;
     return {
       status: "clarifying",
       assistantMessage: validationFoundIssues
@@ -106,7 +110,7 @@ export async function authorRule(
           clarificationMessage(
             unresolvedFields.length ? unresolvedFields : ["rule"],
           ),
-      draft: validated.draft ?? input.draft,
+      draft: validated.draft ?? fallbackDraft,
       unresolvedFields: unresolvedFields.length ? unresolvedFields : ["rule"],
     };
   }
@@ -121,28 +125,40 @@ export async function authorRule(
   };
 }
 
+export function normalizeRuleAuthoringDraft(
+  draft: RuleAuthoringDraft,
+): NormalizedRuleAuthoringDraft {
+  return {
+    ...draft,
+    categoryIds: asStringArray(draft.categoryIds),
+    sourceIds: asStringArray(draft.sourceIds),
+    audienceTargetIds: asStringArray(draft.audienceTargetIds),
+  };
+}
+
 export function validateDraft(
   draft: RuleAuthoringDraft,
   context: RuleAuthoringContext,
-): { draft?: RuleAuthoringDraft; unresolvedFields: string[] } {
+): { draft?: NormalizedRuleAuthoringDraft; unresolvedFields: string[] } {
+  const normalized = normalizeRuleAuthoringDraft(draft);
   const unresolvedFields: string[] = [];
-  const categoryIds = unique(draft.categoryIds).filter((id) =>
+  const categoryIds = unique(normalized.categoryIds).filter((id) =>
     context.categories.some((category) => category.id === id),
   );
   if (
     categoryIds.length === 0 ||
-    categoryIds.length !== unique(draft.categoryIds).length
+    categoryIds.length !== unique(normalized.categoryIds).length
   ) {
     unresolvedFields.push("categoryIds");
   }
 
-  const operator = findLabel(draft.conditionOperator, context.operators);
+  const operator = findLabel(normalized.conditionOperator, context.operators);
   if (!operator) unresolvedFields.push("conditionOperator");
 
-  const action = findLabel(draft.action, context.actions);
+  const action = findLabel(normalized.action, context.actions);
   if (!action) unresolvedFields.push("action");
 
-  const sourceIds = unique(draft.sourceIds).filter((id) =>
+  const sourceIds = unique(normalized.sourceIds).filter((id) =>
     context.sources.some((source) => source.id === id),
   );
   const requiresSource = action
@@ -153,25 +169,25 @@ export function validateDraft(
       )
     : false;
   if (
-    sourceIds.length !== unique(draft.sourceIds).length ||
+    sourceIds.length !== unique(normalized.sourceIds).length ||
     (requiresSource && sourceIds.length === 0)
   ) {
     unresolvedFields.push("sourceIds");
   }
-  const audienceTargetIds = unique(draft.audienceTargetIds).filter((id) =>
+  const audienceTargetIds = unique(normalized.audienceTargetIds).filter((id) =>
     context.audienceTargets.some((target) => target.id === id),
   );
   if (
-    audienceTargetIds.length !== unique(draft.audienceTargetIds).length
+    audienceTargetIds.length !== unique(normalized.audienceTargetIds).length
   ) {
     unresolvedFields.push("audienceTargetIds");
   }
 
   if (
-    !Number.isFinite(draft.priority) ||
-    !Number.isInteger(draft.priority) ||
-    draft.priority < 0 ||
-    draft.priority > 100
+    !Number.isFinite(normalized.priority) ||
+    !Number.isInteger(normalized.priority) ||
+    normalized.priority < 0 ||
+    normalized.priority > 100
   ) {
     unresolvedFields.push("priority");
   }
@@ -179,14 +195,14 @@ export function validateDraft(
   if (
     action &&
     normalizeAction(action.label) === "ask_clarification" &&
-    !draft.requiresClarificationPrompt.trim()
+    !normalized.requiresClarificationPrompt.trim()
   ) {
     unresolvedFields.push("requiresClarificationPrompt");
   }
   if (
     action &&
     normalizeAction(action.label) === "generate_from_template" &&
-    !draft.promptTemplate.trim()
+    !normalized.promptTemplate.trim()
   ) {
     unresolvedFields.push("promptTemplate");
   }
@@ -222,11 +238,11 @@ export function validateDraft(
     draft: {
       name: sentence,
       description: sentence,
-      promptTemplate: draft.promptTemplate.trim(),
-      priority: draft.priority,
-      requiresClarificationPrompt: draft.requiresClarificationPrompt.trim(),
+      promptTemplate: normalized.promptTemplate.trim(),
+      priority: normalized.priority,
+      requiresClarificationPrompt: normalized.requiresClarificationPrompt.trim(),
       escalationTrigger: normalizeAction(action.label) === "escalate",
-      isEnabled: draft.isEnabled,
+      isEnabled: normalized.isEnabled,
       conditionOperator: operator.label,
       action: action.label,
       categoryIds,
@@ -263,7 +279,10 @@ function parseModelResult(
     return null;
   }
   if (value.draft !== null && !isDraft(value.draft)) return null;
-  return value;
+  return {
+    ...value,
+    draft: value.draft ? normalizeRuleAuthoringDraft(value.draft) : null,
+  };
 }
 
 function isDraft(value: unknown): value is RuleAuthoringDraft {
@@ -279,13 +298,23 @@ function isDraft(value: unknown): value is RuleAuthoringDraft {
     typeof draft.isEnabled === "boolean" &&
     typeof draft.conditionOperator === "string" &&
     typeof draft.action === "string" &&
-    Array.isArray(draft.categoryIds) &&
-    draft.categoryIds.every((id) => typeof id === "string") &&
-    Array.isArray(draft.sourceIds) &&
-    draft.sourceIds.every((id) => typeof id === "string") &&
-    Array.isArray(draft.audienceTargetIds) &&
-    draft.audienceTargetIds.every((id) => typeof id === "string")
+    isOptionalStringArray(draft.categoryIds) &&
+    isOptionalStringArray(draft.sourceIds) &&
+    isOptionalStringArray(draft.audienceTargetIds)
   );
+}
+
+function isOptionalStringArray(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.every((id) => typeof id === "string"))
+  );
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((id): id is string => typeof id === "string")
+    : [];
 }
 
 function findLabel<T extends { label: string }>(

@@ -1921,7 +1921,7 @@ components:
 
     RuleAuthoringDraft:
       type: object
-      required: [name, description, promptTemplate, priority, requiresClarificationPrompt, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, audienceTargetIds]
+      required: [name, description, promptTemplate, priority, requiresClarificationPrompt, escalationTrigger, isEnabled, conditionOperator, action]
       properties:
         name:
           type: string
@@ -1947,14 +1947,17 @@ components:
           type: array
           items:
             type: string
+          default: []
         sourceIds:
           type: array
           items:
             type: string
+          default: []
         audienceTargetIds:
           type: array
           items:
             type: string
+          default: []
 
     RuleAuthoringRequest:
       type: object

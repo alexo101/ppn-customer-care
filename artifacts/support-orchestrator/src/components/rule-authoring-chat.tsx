@@ -98,7 +98,7 @@ export function RuleAuthoringChat({
     authorRule.isPending || createRule.isPending || updateRule.isPending;
 
   const saveApprovedDraft = (approvedDraft: RuleAuthoringDraft) => {
-    const payload = approvedDraft;
+    const payload = normalizeDraft(approvedDraft);
     const onSuccess = () => {
       toast({ title: rule ? "Rule updated" : "Rule created" });
       onSaved();
@@ -139,7 +139,7 @@ export function RuleAuthoringChat({
         data: {
           message,
           history,
-          draft,
+          draft: draft ? normalizeDraft(draft) : undefined,
           awaitingConfirmation: status === "ready_for_confirmation",
         },
       },
@@ -149,7 +149,7 @@ export function RuleAuthoringChat({
             ...current,
             { role: "assistant", content: result.assistantMessage },
           ]);
-          if (result.draft) setDraft(result.draft);
+          if (result.draft) setDraft(normalizeDraft(result.draft));
           setStatus(result.status);
           if (result.status === "approved" && result.draft) {
             saveApprovedDraft(result.draft);
@@ -226,7 +226,7 @@ export function RuleAuthoringChat({
 
             {status === "ready_for_confirmation" && draft && (
               <RulePreview
-                draft={draft}
+                draft={normalizeDraft(draft)}
                 categoryNames={categoryNames}
                 sourceNames={sourceNames}
                 audienceTargets={audienceTargets}
@@ -299,6 +299,10 @@ function RulePreview({
   onConfirm: () => void;
   disabled: boolean;
 }) {
+  const categoryIds = draft.categoryIds ?? [];
+  const sourceIds = draft.sourceIds ?? [];
+  const audienceTargetIds = draft.audienceTargetIds ?? [];
+
   return (
     <div className="ml-9 rounded-xl border border-primary/30 bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -316,25 +320,25 @@ function RulePreview({
       <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
         <PreviewValue
           label="Categories"
-          value={draft.categoryIds
-            .map((id) => categoryNames[id] ?? id)
-            .join(", ")}
+          value={categoryIds.map((id) => categoryNames[id] ?? id).join(", ")}
         />
         <PreviewValue label="Action" value={draft.action} />
-        {draft.sourceIds.length > 0 && (
+        {sourceIds.length > 0 && (
           <PreviewValue
             label="Sources"
-            value={draft.sourceIds
-              .map((id) => sourceNames[id] ?? id)
-              .join(", ")}
+            value={sourceIds.map((id) => sourceNames[id] ?? id).join(", ")}
           />
         )}
         <PreviewValue label="Operator" value={draft.conditionOperator} />
-        {draft.audienceTargetIds.length > 0 && (
+        {audienceTargetIds.length > 0 && (
           <PreviewValue
             label="Audience targets"
-            value={draft.audienceTargetIds
-              .map((id) => audienceTargets.find((target) => target.id === id)?.name ?? id)
+            value={audienceTargetIds
+              .map(
+                (id) =>
+                  audienceTargets.find((target) => target.id === id)?.name ??
+                  id,
+              )
               .join(", ")}
           />
         )}
@@ -370,8 +374,17 @@ function PreviewValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
+export function normalizeDraft(draft: RuleAuthoringDraft): RuleAuthoringDraft {
   return {
+    ...draft,
+    categoryIds: draft.categoryIds ?? [],
+    sourceIds: draft.sourceIds ?? [],
+    audienceTargetIds: draft.audienceTargetIds ?? [],
+  };
+}
+
+function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
+  return normalizeDraft({
     name: rule.name,
     description: rule.description,
     promptTemplate: rule.promptTemplate,
@@ -384,7 +397,7 @@ function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
     categoryIds: rule.categoryIds,
     sourceIds: rule.sourceIds,
     audienceTargetIds: rule.audienceTargetIds,
-  };
+  });
 }
 
 function apiErrorMessage(error: unknown, fallback: string) {

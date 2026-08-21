@@ -664,6 +664,9 @@ export const sendRuleAuthoringMessageBodyHistoryMax = 30;
 export const sendRuleAuthoringMessageBodyDraftPriorityMin = 0;
 export const sendRuleAuthoringMessageBodyDraftPriorityMax = 100;
 
+export const sendRuleAuthoringMessageBodyDraftCategoryIdsDefault = [];
+export const sendRuleAuthoringMessageBodyDraftSourceIdsDefault = [];
+export const sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault = [];
 export const sendRuleAuthoringMessageBodyAwaitingConfirmationDefault = false;
 
 export const SendRuleAuthoringMessageBody = zod.object({
@@ -682,9 +685,9 @@ export const SendRuleAuthoringMessageBody = zod.object({
   "isEnabled": zod.boolean(),
   "conditionOperator": zod.string(),
   "action": zod.string(),
-  "categoryIds": zod.array(zod.string()),
-  "sourceIds": zod.array(zod.string()),
-  "audienceTargetIds": zod.array(zod.string())
+  "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftCategoryIdsDefault),
+  "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftSourceIdsDefault),
+  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault)
 }).optional(),
   "awaitingConfirmation": zod.boolean().default(sendRuleAuthoringMessageBodyAwaitingConfirmationDefault)
 })
@@ -692,7 +695,9 @@ export const SendRuleAuthoringMessageBody = zod.object({
 export const sendRuleAuthoringMessageResponseDraftPriorityMin = 0;
 export const sendRuleAuthoringMessageResponseDraftPriorityMax = 100;
 
-
+export const sendRuleAuthoringMessageResponseDraftCategoryIdsDefault = [];
+export const sendRuleAuthoringMessageResponseDraftSourceIdsDefault = [];
+export const sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault = [];
 
 export const SendRuleAuthoringMessageResponse = zod.object({
   "status": zod.enum(['clarifying', 'ready_for_confirmation', 'needs_changes', 'approved']),
@@ -707,9 +712,9 @@ export const SendRuleAuthoringMessageResponse = zod.object({
   "isEnabled": zod.boolean(),
   "conditionOperator": zod.string(),
   "action": zod.string(),
-  "categoryIds": zod.array(zod.string()),
-  "sourceIds": zod.array(zod.string()),
-  "audienceTargetIds": zod.array(zod.string())
+  "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftCategoryIdsDefault),
+  "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftSourceIdsDefault),
+  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault)
 }).optional(),
   "unresolvedFields": zod.array(zod.string())
 })

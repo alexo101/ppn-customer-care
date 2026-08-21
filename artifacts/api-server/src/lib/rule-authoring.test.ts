@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { authorRule, validateDraft } from "./rule-authoring";
+import {
+  authorRule,
+  normalizeRuleAuthoringDraft,
+  validateDraft,
+} from "./rule-authoring";
 import type {
   RuleAuthoringContext,
   RuleAuthoringDraft,
@@ -168,6 +172,28 @@ describe("authorRule", () => {
     expect(result.draft?.audienceTargetIds).toEqual(["acme-users"]);
   });
 
+  it("defaults omitted audience targets to an empty array for preview", async () => {
+    const { audienceTargetIds: _omitted, ...draftWithoutAudience } = validDraft;
+    const provider: RuleAuthoringProvider = {
+      generate: vi.fn().mockResolvedValue({
+        status: "ready",
+        assistantMessage: "Please confirm this rule.",
+        draft: draftWithoutAudience,
+        unresolvedFields: [],
+      }),
+    };
+
+    const result = await authorRule(
+      { message: "Handle billing questions", context },
+      provider,
+    );
+
+    expect(result.status).toBe("ready_for_confirmation");
+    expect(result.draft?.audienceTargetIds).toEqual([]);
+    expect(result.draft?.categoryIds).toEqual(["billing"]);
+    expect(result.draft?.sourceIds).toEqual(["help-center"]);
+  });
+
   it("preserves a model clarification instead of guessing an ambiguous value", async () => {
     const provider: RuleAuthoringProvider = {
       generate: vi.fn().mockResolvedValue({
@@ -249,6 +275,18 @@ describe("authorRule", () => {
   });
 });
 
+describe("normalizeRuleAuthoringDraft", () => {
+  it("fills missing optional arrays so previews can read length safely", () => {
+    const { audienceTargetIds: _a, sourceIds: _s, categoryIds: _c, ...rest } =
+      validDraft;
+    const normalized = normalizeRuleAuthoringDraft(rest);
+
+    expect(normalized.categoryIds).toEqual([]);
+    expect(normalized.sourceIds).toEqual([]);
+    expect(normalized.audienceTargetIds).toEqual([]);
+  });
+});
+
 describe("validateDraft", () => {
   it("requires a clarification prompt for the clarification action", () => {
     const result = validateDraft(
@@ -267,5 +305,13 @@ describe("validateDraft", () => {
   it("rejects fractional priorities before database persistence", () => {
     const result = validateDraft({ ...validDraft, priority: 10.5 }, context);
     expect(result.unresolvedFields).toContain("priority");
+  });
+
+  it("accepts drafts that omit audience targets and returns an empty array", () => {
+    const { audienceTargetIds: _omitted, ...draftWithoutAudience } = validDraft;
+    const result = validateDraft(draftWithoutAudience, context);
+
+    expect(result.unresolvedFields).toEqual([]);
+    expect(result.draft?.audienceTargetIds).toEqual([]);
   });
 });

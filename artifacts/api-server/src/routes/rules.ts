@@ -36,7 +36,12 @@ import {
   createRuleAuthoringProvider,
   RuleAuthoringProviderError,
 } from "../lib/llm";
-import { authorRule, isApproval, isBareRejection } from "../lib/rule-authoring";
+import {
+  authorRule,
+  isApproval,
+  isBareRejection,
+  normalizeRuleAuthoringDraft,
+} from "../lib/rule-authoring";
 import {
   DEFAULT_ACTIONS,
   DEFAULT_OPERATORS,
@@ -169,7 +174,7 @@ router.post(
         assistantMessage: isApproval(parsed.data.message)
           ? "Approved. I’ll save this rule now."
           : "What would you like me to change in the proposed rule?",
-        draft: parsed.data.draft,
+        draft: normalizeRuleAuthoringDraft(parsed.data.draft),
         unresolvedFields: [],
       });
       return;

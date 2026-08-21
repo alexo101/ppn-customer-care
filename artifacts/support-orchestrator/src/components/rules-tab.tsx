@@ -160,7 +160,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
                 .map((id) => sourceNames[id])
                 .filter((name): name is string => Boolean(name)),
               requiresSource: rule.sourceIds.length > 0,
-              audienceTargetNames: rule.audienceTargetIds
+              audienceTargetNames: (rule.audienceTargetIds ?? [])
                 .map((id) => audienceTargetNames[id])
                 .filter((name): name is string => Boolean(name)),
             });

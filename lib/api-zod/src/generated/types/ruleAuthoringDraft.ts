@@ -20,7 +20,7 @@ export interface RuleAuthoringDraft {
   isEnabled: boolean;
   conditionOperator: string;
   action: string;
-  categoryIds: string[];
-  sourceIds: string[];
-  audienceTargetIds: string[];
+  categoryIds?: string[];
+  sourceIds?: string[];
+  audienceTargetIds?: string[];
 }

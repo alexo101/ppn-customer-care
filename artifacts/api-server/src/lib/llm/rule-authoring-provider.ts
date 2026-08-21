@@ -8,6 +8,12 @@ export type RuleAuthoringDraft = {
   isEnabled: boolean;
   conditionOperator: string;
   action: string;
+  categoryIds?: string[];
+  sourceIds?: string[];
+  audienceTargetIds?: string[];
+};
+
+export type NormalizedRuleAuthoringDraft = RuleAuthoringDraft & {
   categoryIds: string[];
   sourceIds: string[];
   audienceTargetIds: string[];
