@@ -6,10 +6,12 @@ import {
   useListRules,
   useListSources,
   useListTargets,
+  useUpdateRule,
   type OrchestratorRule,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { Reorder, useDragControls } from "framer-motion";
+import { GripVertical, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,9 +22,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { RuleAuthoringChat } from "@/components/rule-authoring-chat";
 import { useToast } from "@/hooks/use-toast";
 import { formatRuleSentence } from "@/lib/rules";
@@ -36,12 +38,19 @@ export function RulesTab({ agentId }: { agentId: string }) {
   const { data: sources = [] } = useListSources({ agentId });
   const { data: audienceTargets = [] } = useListTargets({ agentId });
   const deleteRule = useDeleteRule();
+  const updateRule = useUpdateRule();
   const [search, setSearch] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<OrchestratorRule | null>(null);
   const [ruleToDelete, setRuleToDelete] = useState<OrchestratorRule | null>(
     null,
   );
+  // Local ordered copy for drag-and-drop (mirrors server list when not dragging)
+  const [localRules, setLocalRules] = useState<OrchestratorRule[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Keep localRules in sync with server data when not actively dragging
+  const orderedRules = isDragging ? localRules : rules;
 
   const categoryNames = useMemo(
     () =>
@@ -59,10 +68,12 @@ export function RulesTab({ agentId }: { agentId: string }) {
     [audienceTargets],
   );
 
+  const isSearching = search.trim().length > 0;
+
   const filteredRules = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return rules;
-    return rules.filter((rule) =>
+    if (!query) return orderedRules;
+    return orderedRules.filter((rule) =>
       [
         rule.name,
         rule.conditionOperator,
@@ -74,7 +85,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
         .toLowerCase()
         .includes(query),
     );
-  }, [rules, search, categoryNames, sourceNames]);
+  }, [orderedRules, search, categoryNames, sourceNames]);
 
   const invalidateRules = () =>
     queryClient.invalidateQueries({
@@ -105,6 +116,63 @@ export function RulesTab({ agentId }: { agentId: string }) {
         },
       },
     );
+  };
+
+  const handleToggle = (rule: OrchestratorRule, isEnabled: boolean) => {
+    // Optimistic update
+    queryClient.setQueryData(
+      getListRulesQueryKey({ agentId }),
+      (prev: OrchestratorRule[] | undefined) =>
+        prev?.map((r) => (r.id === rule.id ? { ...r, isEnabled } : r)),
+    );
+    updateRule.mutate(
+      { id: rule.id, data: { isEnabled } },
+      {
+        onError: (error) => {
+          invalidateRules();
+          toast({
+            title: "Could not update rule",
+            description: apiErrorMessage(error, "Please try again."),
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  const handleReorderEnd = (reordered: OrchestratorRule[]) => {
+    setIsDragging(false);
+    const n = reordered.length;
+    // Top of list = highest priority (n-1 down to 0)
+    const withNewPriorities = reordered.map((rule, index) => ({
+      rule,
+      newPriority: n - 1 - index,
+    }));
+
+    const changed = withNewPriorities.filter(
+      ({ rule, newPriority }) => rule.priority !== newPriority,
+    );
+    if (changed.length === 0) return;
+
+    // Optimistic update to cache
+    const nextRules = reordered.map(({ id }, index) => ({
+      ...rules.find((r) => r.id === id)!,
+      priority: n - 1 - index,
+    }));
+    queryClient.setQueryData(getListRulesQueryKey({ agentId }), nextRules);
+
+    Promise.all(
+      changed.map(({ rule, newPriority }) =>
+        updateRule.mutateAsync({ id: rule.id, data: { priority: newPriority } }),
+      ),
+    ).catch((error) => {
+      invalidateRules();
+      toast({
+        title: "Could not save order",
+        description: apiErrorMessage(error, "Please try again."),
+        variant: "destructive",
+      });
+    });
   };
 
   return (
@@ -149,72 +217,52 @@ export function RulesTab({ agentId }: { agentId: string }) {
         </div>
 
         <div className="space-y-2.5">
-          {filteredRules.map((rule) => {
-            const sentence = formatRuleSentence({
-              operator: rule.conditionOperator,
-              categoryNames: rule.categoryIds
-                .map((id) => categoryNames[id])
-                .filter((name): name is string => Boolean(name)),
-              action: rule.action,
-              sourceNames: rule.sourceIds
-                .map((id) => sourceNames[id])
-                .filter((name): name is string => Boolean(name)),
-              requiresSource: rule.sourceIds.length > 0,
-              audienceTargetNames: (rule.audienceTargetIds ?? [])
-                .map((id) => audienceTargetNames[id])
-                .filter((name): name is string => Boolean(name)),
-            });
-
-            return (
-              <div
-                key={rule.id}
-                className="group flex items-start rounded-lg border border-border/80 bg-card shadow-sm transition-all hover:border-blue-200 hover:bg-accent/20 dark:hover:border-blue-900/50"
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 p-3 text-left"
-                  onClick={() => openAuthoring(rule)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium leading-6 text-foreground">
-                      {sentence}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge
-                        variant="secondary"
-                        className="h-5 text-[10px] font-mono"
-                      >
-                        P{rule.priority}
-                      </Badge>
-                      <span
-                        className={cn(
-                          "text-[11px] font-semibold uppercase tracking-wider",
-                          rule.isEnabled
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-muted-foreground/60",
-                        )}
-                      >
-                        {rule.isEnabled ? "ON" : "OFF"}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Select to edit conversationally
-                  </p>
-                </button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="mr-2 mt-2 h-8 w-8 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus:opacity-100"
-                  onClick={() => setRuleToDelete(rule)}
-                  aria-label={`Delete ${rule.name}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            );
-          })}
+          {isSearching ? (
+            // Filtered list – no drag while searching
+            <div className="space-y-2.5">
+              {filteredRules.map((rule) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  categoryNames={categoryNames}
+                  sourceNames={sourceNames}
+                  audienceTargetNames={audienceTargetNames}
+                  draggable={false}
+                  onEdit={() => openAuthoring(rule)}
+                  onDelete={() => setRuleToDelete(rule)}
+                  onToggle={(enabled) => handleToggle(rule, enabled)}
+                />
+              ))}
+            </div>
+          ) : (
+            <Reorder.Group
+              axis="y"
+              values={orderedRules}
+              onReorder={(reordered) => {
+                setIsDragging(true);
+                setLocalRules(reordered);
+              }}
+              className="space-y-2.5"
+              layoutScroll
+              as="div"
+              onMouseUp={() => {
+                if (isDragging) handleReorderEnd(localRules);
+              }}
+            >
+              {orderedRules.map((rule) => (
+                <ReorderRuleRow
+                  key={rule.id}
+                  rule={rule}
+                  categoryNames={categoryNames}
+                  sourceNames={sourceNames}
+                  audienceTargetNames={audienceTargetNames}
+                  onEdit={() => openAuthoring(rule)}
+                  onDelete={() => setRuleToDelete(rule)}
+                  onToggle={(enabled) => handleToggle(rule, enabled)}
+                />
+              ))}
+            </Reorder.Group>
+          )}
 
           {filteredRules.length === 0 && (
             <div className="rounded-lg border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
@@ -263,6 +311,142 @@ export function RulesTab({ agentId }: { agentId: string }) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+// ─── Row shared between draggable and static lists ───────────────────────────
+
+type RowProps = {
+  rule: OrchestratorRule;
+  categoryNames: Record<string, string>;
+  sourceNames: Record<string, string>;
+  audienceTargetNames: Record<string, string>;
+  draggable: boolean;
+  dragControls?: ReturnType<typeof useDragControls>;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggle: (enabled: boolean) => void;
+};
+
+function RuleRow({
+  rule,
+  categoryNames,
+  sourceNames,
+  audienceTargetNames,
+  draggable,
+  dragControls,
+  onEdit,
+  onDelete,
+  onToggle,
+}: RowProps) {
+  const sentence = formatRuleSentence({
+    operator: rule.conditionOperator,
+    categoryNames: rule.categoryIds
+      .map((id) => categoryNames[id])
+      .filter((name): name is string => Boolean(name)),
+    action: rule.action,
+    sourceNames: rule.sourceIds
+      .map((id) => sourceNames[id])
+      .filter((name): name is string => Boolean(name)),
+    requiresSource: rule.sourceIds.length > 0,
+    audienceTargetNames: (rule.audienceTargetIds ?? [])
+      .map((id) => audienceTargetNames[id])
+      .filter((name): name is string => Boolean(name)),
+  });
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center rounded-lg border border-border/80 bg-card shadow-sm transition-all hover:border-blue-200 hover:bg-accent/20 dark:hover:border-blue-900/50",
+        !rule.isEnabled && "opacity-60",
+      )}
+    >
+      {/* Drag handle */}
+      <div
+        className={cn(
+          "flex h-full cursor-grab items-center px-2 py-3 text-muted-foreground/40 transition-colors hover:text-muted-foreground active:cursor-grabbing",
+          !draggable && "pointer-events-none invisible",
+        )}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          dragControls?.start(e);
+        }}
+      >
+        <GripVertical className="h-4 w-4" />
+      </div>
+
+      {/* Rule sentence / click to edit */}
+      <button
+        type="button"
+        className="min-w-0 flex-1 py-3 pr-2 text-left"
+        onClick={onEdit}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-medium leading-6 text-foreground">
+            {sentence}
+          </p>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Select to edit conversationally
+        </p>
+      </button>
+
+      {/* Enable / disable toggle */}
+      <div
+        className="flex shrink-0 items-center gap-2 px-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span
+          className={cn(
+            "text-[11px] font-semibold uppercase tracking-wider",
+            rule.isEnabled
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-muted-foreground/60",
+          )}
+        >
+          {rule.isEnabled ? "ON" : "OFF"}
+        </span>
+        <Switch
+          checked={rule.isEnabled}
+          onCheckedChange={onToggle}
+          aria-label={rule.isEnabled ? "Disable rule" : "Enable rule"}
+        />
+      </div>
+
+      {/* Delete */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="mr-2 h-8 w-8 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus:opacity-100"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        aria-label={`Delete ${rule.name}`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+// ─── Framer-motion Reorder item wrapper ──────────────────────────────────────
+
+type ReorderRowProps = Omit<RowProps, "draggable" | "dragControls">;
+
+function ReorderRuleRow(props: ReorderRowProps) {
+  const dragControls = useDragControls();
+
+  return (
+    <Reorder.Item
+      value={props.rule}
+      dragListener={false}
+      dragControls={dragControls}
+      className="list-none"
+    >
+      <RuleRow {...props} draggable dragControls={dragControls} />
+    </Reorder.Item>
   );
 }
 

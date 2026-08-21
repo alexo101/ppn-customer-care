@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and, or, isNull, inArray } from "drizzle-orm";
+import { eq, and, or, isNull, inArray, desc } from "drizzle-orm";
 import {
   db,
   orchestratorRulesTable,
@@ -82,7 +82,7 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
     .select()
     .from(orchestratorRulesTable)
     .where(where)
-    .orderBy(orchestratorRulesTable.priority);
+    .orderBy(desc(orchestratorRulesTable.priority));
   res.json(await toRules(rows));
 });
 
