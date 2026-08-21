@@ -414,7 +414,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[9px] uppercase font-mono tracking-wider h-5",
+                        "text-xs h-5",
                         integration.connected ? "text-emerald-500" : "text-muted-foreground",
                       )}
                     >
@@ -460,7 +460,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-medium text-sm truncate">{source.name}</span>
-                      <Badge variant="outline" className="text-[9px] uppercase font-mono tracking-wider h-5 shrink-0">
+                      <Badge variant="outline" className="text-xs h-5 shrink-0">
                         {SOURCE_LABELS[source.sourceType] ?? source.sourceType}
                       </Badge>
                     </div>
@@ -468,17 +468,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                   </div>
                 </button>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span
-                    className={cn(
-                      "text-[11px] font-semibold tracking-wider uppercase",
-                      source.isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60",
-                    )}
-                  >
-                    {source.isEnabled ? "ON" : "OFF"}
-                  </span>
                   <Switch
                     checked={source.isEnabled}
                     onCheckedChange={(checked) => handleToggle(source, checked)}
+                    aria-label={source.isEnabled ? "Disable source" : "Enable source"}
                   />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -715,7 +708,7 @@ function IntegrationDialog({
             <Badge
               variant="outline"
               className={cn(
-                "text-[9px] uppercase font-mono tracking-wider h-5",
+                "text-xs h-5",
                 connected ? "text-emerald-500" : "text-muted-foreground",
               )}
             >

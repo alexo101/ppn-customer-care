@@ -1,7 +1,8 @@
 import { Bot, Send } from "lucide-react";
-import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
+import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
 
 type ChatAppearancePreviewProps = {
+  name?: string;
   ctaColor?: string;
   backgroundColor?: string;
   logoUrl?: string | null;
@@ -9,6 +10,7 @@ type ChatAppearancePreviewProps = {
 };
 
 export function ChatAppearancePreview({
+  name,
   ctaColor = DEFAULT_CTA_COLOR,
   backgroundColor = DEFAULT_BACKGROUND_COLOR,
   logoUrl,
@@ -34,7 +36,7 @@ export function ChatAppearancePreview({
           </div>
         )}
         <div className="min-w-0">
-          <div className="font-medium text-sm leading-tight truncate">Support Assistant</div>
+          <div className="font-medium text-sm leading-tight truncate">{name?.trim() || DEFAULT_CHAT_NAME}</div>
           <div className="text-[10px] opacity-80">Looks like your website</div>
         </div>
       </div>

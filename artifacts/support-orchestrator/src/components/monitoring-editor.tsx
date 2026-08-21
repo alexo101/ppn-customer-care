@@ -260,7 +260,7 @@ export function MonitoringEditor({ agentId }: { agentId: string }) {
                     <TableCell className="font-mono text-muted-foreground">{convo.id.split("-")[0]}</TableCell>
                     <TableCell className="font-medium">{conversationSubject(convo)}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={cn("text-[10px] uppercase font-mono tracking-wider h-5", statusBadgeClass(convo.status))}>
+                      <Badge variant="outline" className={cn("text-xs h-5 capitalize", statusBadgeClass(convo.status))}>
                         {convo.status.replaceAll("_", " ")}
                       </Badge>
                     </TableCell>
@@ -320,12 +320,12 @@ export function MonitoringEditor({ agentId }: { agentId: string }) {
                       <span className="line-clamp-2">{question.content}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={cn("text-[10px] uppercase font-mono tracking-wider h-5", questionTypeBadgeClass(question.type))}>
+                      <Badge variant="outline" className={cn("text-xs h-5", questionTypeBadgeClass(question.type))}>
                         {QUESTION_TYPE_LABEL[question.type]}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={cn("text-[10px] uppercase font-mono tracking-wider h-5", statusBadgeClass(question.conversationStatus))}>
+                      <Badge variant="outline" className={cn("text-xs h-5 capitalize", statusBadgeClass(question.conversationStatus))}>
                         {question.conversationStatus.replaceAll("_", " ")}
                       </Badge>
                     </TableCell>

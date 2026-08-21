@@ -7,6 +7,7 @@ import {
   useListConversationLogs,
   useSendMessage,
   useCreateConversation,
+  useSubmitFeedback,
   getListConversationsQueryKey
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,7 +29,9 @@ import {
   PanelRightOpen,
   Send,
   Loader2,
-  Info
+  Info,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -77,7 +80,7 @@ export default function Chat({ agentId }: { agentId?: string }) {
       {/* Thread List */}
       <div className="w-72 flex-shrink-0 border-r border-border bg-card flex flex-col h-full z-10">
         <div className="h-14 flex items-center px-4 border-b border-border justify-between shrink-0">
-          <div className="font-medium text-sm">Active Threads</div>
+          <div className="font-semibold text-sm">Conversations</div>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCreate} disabled={createConvo.isPending}>
             {createConvo.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           </Button>
@@ -96,16 +99,16 @@ export default function Chat({ agentId }: { agentId?: string }) {
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
             {loadingConvos ? (
-              <div className="p-4 text-center text-xs text-muted-foreground font-mono">LOADING_THREADS...</div>
+              <div className="p-4 text-center text-sm text-muted-foreground">Loading threads…</div>
             ) : filteredConvos.length === 0 ? (
-              <div className="p-4 text-center text-xs text-muted-foreground">No conversations found.</div>
+              <div className="p-4 text-center text-sm text-muted-foreground">No conversations found.</div>
             ) : (
               filteredConvos.map(convo => (
                 <button
                   key={convo.id}
                   onClick={() => setActiveId(convo.id)}
                   className={cn(
-                    "w-full text-left p-3 rounded-md transition-colors text-sm flex flex-col gap-1.5 border",
+                    "w-full text-left p-3 rounded-lg transition-colors text-sm flex flex-col gap-1.5 border",
                     activeId === convo.id 
                       ? "bg-primary/5 border-primary/20" 
                       : "bg-background border-transparent hover:border-border hover:bg-card"
@@ -115,8 +118,8 @@ export default function Chat({ agentId }: { agentId?: string }) {
                     <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[120px]">{convo.id.split('-')[0]}</span>
                     <StatusBadge status={convo.status} />
                   </div>
-                  <div className="font-medium truncate text-xs">{(convo.metadata as any)?.subject || 'Untitled Query'}</div>
-                  <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <div className="font-medium truncate text-sm">{(convo.metadata as any)?.subject || 'Untitled Query'}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {format(new Date(convo.lastActivityAt), 'HH:mm - MMM d')}
                   </div>
@@ -162,7 +165,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   
   return (
-    <span className={cn("text-[9px] px-1.5 py-0.5 rounded-sm border uppercase font-mono tracking-wider", styles[status] || styles.closed)}>
+    <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full border capitalize", styles[status] || styles.closed)}>
       {status.replace('_', ' ')}
     </span>
   );
@@ -185,7 +188,11 @@ function ActiveChat({
   const { data: logs = [], refetch: refetchLogs } = useListConversationLogs(conversationId);
   
   const sendMessage = useSendMessage();
+  const submitFeedback = useSubmitFeedback();
   const [input, setInput] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState<"positive" | "negative" | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const queryClient = useQueryClient();
@@ -196,13 +203,42 @@ function ActiveChat({
     }
   }, [messages]);
 
+  useEffect(() => {
+    setFeedbackRating(null);
+    setFeedbackComment("");
+    setFeedbackSent(false);
+  }, [conversationId]);
+
+  const latestAssistant = [...messages].reverse().find((message) => message.sender === "assistant");
+  const sendFeedback = (rating: "positive" | "negative") => {
+    if (!latestAssistant || submitFeedback.isPending) return;
+    if (rating === "negative" && feedbackRating !== "negative") {
+      setFeedbackRating("negative");
+      return;
+    }
+    submitFeedback.mutate(
+      {
+        id: conversationId,
+        data: {
+          messageId: latestAssistant.id,
+          rating,
+          comment: rating === "negative" ? feedbackComment || undefined : undefined,
+        },
+      },
+      { onSuccess: () => setFeedbackSent(true) },
+    );
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || sendMessage.isPending) return;
     
     sendMessage.mutate({
       id: conversationId,
-      data: { content: input }
+      data: {
+        content: input,
+        context: { currentUrl: window.location.href },
+      }
     }, {
       onSuccess: () => {
         setInput('');
@@ -252,9 +288,9 @@ function ActiveChat({
                     "flex flex-col gap-1 max-w-[80%]",
                     isUser ? "items-end" : "items-start"
                   )}>
-                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
-                      <span>{isUser ? 'USER' : 'ORCHESTRATOR'}</span>
-                      <span>{format(new Date(msg.createdAt), 'HH:mm:ss')}</span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="font-medium">{isUser ? 'User' : 'Agent'}</span>
+                      <span className="font-mono text-[10px]">{format(new Date(msg.createdAt), 'HH:mm:ss')}</span>
                     </div>
                     <div className={cn(
                       "p-3 rounded-lg text-sm border",
@@ -274,19 +310,46 @@ function ActiveChat({
                 <div className="w-8 h-8 rounded-md flex items-center justify-center shrink-0 border bg-card border-border text-foreground">
                   <Bot className="w-4 h-4" />
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  PROCESSING...
+                  Thinking…
                 </div>
               </div>
             )}
           </div>
         </ScrollArea>
 
+        {convo?.status === "resolved" && latestAssistant && !feedbackSent && (
+          <div className="border-t border-border bg-card px-6 py-3">
+            <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>Was this answer helpful?</span>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => sendFeedback("positive")} aria-label="Helpful">
+                <ThumbsUp className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => sendFeedback("negative")} aria-label="Not helpful">
+                <ThumbsDown className="h-3.5 w-3.5" />
+              </Button>
+              {feedbackRating === "negative" && (
+                <Input
+                  value={feedbackComment}
+                  onChange={(event) => setFeedbackComment(event.target.value)}
+                  placeholder="What could be improved?"
+                  className="h-7 min-w-48 flex-1 text-xs"
+                />
+              )}
+              {feedbackRating === "negative" && (
+                <Button size="sm" className="h-7 text-xs" onClick={() => sendFeedback("negative")} disabled={submitFeedback.isPending}>
+                  Send
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="p-4 border-t border-border bg-card shrink-0">
           <form onSubmit={handleSend} className="max-w-3xl mx-auto relative">
             <Input 
-              placeholder="Send message to orchestrator..." 
+              placeholder="Send a message…" 
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={sendMessage.isPending || convo?.status === 'closed'}
@@ -309,48 +372,48 @@ function ActiveChat({
         <div className="w-1/3 flex-shrink-0 border-l border-border bg-sidebar text-sidebar-foreground flex flex-col z-10 h-full overflow-hidden">
           <div className="h-14 flex items-center px-4 border-b border-sidebar-border bg-sidebar shrink-0">
             <Terminal className="w-4 h-4 mr-2 text-sidebar-primary" />
-            <span className="font-mono text-xs uppercase tracking-wider font-medium">Orchestrator Telemetry</span>
+            <span className="text-sm font-medium">Telemetry</span>
           </div>
           
           <Tabs defaultValue="logs" className="flex-1 flex flex-col h-full overflow-hidden">
             <TabsList className="w-full justify-start rounded-none border-b border-sidebar-border h-10 bg-sidebar/50 px-2 shrink-0">
-              <TabsTrigger value="logs" className="text-xs font-mono data-[state=active]:bg-sidebar-accent data-[state=active]:text-sidebar-accent-foreground h-7">LOGS</TabsTrigger>
-              <TabsTrigger value="metadata" className="text-xs font-mono data-[state=active]:bg-sidebar-accent data-[state=active]:text-sidebar-accent-foreground h-7">METADATA</TabsTrigger>
+              <TabsTrigger value="logs" className="text-xs data-[state=active]:bg-sidebar-accent data-[state=active]:text-sidebar-accent-foreground h-7">Logs</TabsTrigger>
+              <TabsTrigger value="metadata" className="text-xs data-[state=active]:bg-sidebar-accent data-[state=active]:text-sidebar-accent-foreground h-7">Metadata</TabsTrigger>
             </TabsList>
             
             <TabsContent value="logs" className="flex-1 m-0 p-0 overflow-hidden outline-none">
               <ScrollArea className="h-full">
                 <div className="p-4 space-y-4">
                   {logs.length === 0 ? (
-                    <div className="text-center text-xs text-sidebar-foreground/50 font-mono py-8">NO_LOGS_FOUND</div>
+                    <div className="text-center text-sm text-sidebar-foreground/50 py-8">No logs yet for this conversation.</div>
                   ) : (
                     logs.map((log) => (
-                      <div key={log.id} className="border border-sidebar-border bg-sidebar-accent/20 rounded-md overflow-hidden">
-                        <div className="bg-sidebar-accent/40 px-3 py-2 border-b border-sidebar-border flex items-center justify-between text-[10px] font-mono">
-                          <div className="flex items-center gap-2">
+                      <div key={log.id} className="border border-sidebar-border bg-sidebar-accent/20 rounded-lg overflow-hidden">
+                        <div className="bg-sidebar-accent/40 px-3 py-2 border-b border-sidebar-border flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2 text-sidebar-foreground/70">
                             <Cpu className="w-3 h-3 text-sidebar-primary" />
-                            <span>{format(new Date(log.createdAt), 'HH:mm:ss.SSS')}</span>
+                            <span className="font-mono text-[10px]">{format(new Date(log.createdAt), 'HH:mm:ss.SSS')}</span>
                           </div>
-                          <Badge variant="outline" className="text-[9px] h-4 rounded-sm border-sidebar-border text-sidebar-foreground/70">
+                          <Badge variant="outline" className="text-[10px] h-5 capitalize border-sidebar-border text-sidebar-foreground/70">
                             {log.resolutionStatus}
                           </Badge>
                         </div>
-                        <div className="p-3 text-xs space-y-3">
+                        <div className="p-3 text-sm space-y-3">
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <div className="text-[9px] uppercase font-mono text-sidebar-foreground/50 mb-1">Intent</div>
+                              <div className="text-xs text-sidebar-foreground/50 mb-1">Intent</div>
                               <div className="font-medium text-sidebar-primary truncate">{log.detectedCategory}</div>
                             </div>
                             <div>
-                              <div className="text-[9px] uppercase font-mono text-sidebar-foreground/50 mb-1">Confidence</div>
-                              <div className="font-mono">{Math.round(log.confidenceScore * 100)}%</div>
+                              <div className="text-xs text-sidebar-foreground/50 mb-1">Confidence</div>
+                              <div>{Math.round(log.confidenceScore * 100)}%</div>
                             </div>
                           </div>
                           
                           {log.ruleUsed && (
                             <div>
-                              <div className="text-[9px] uppercase font-mono text-sidebar-foreground/50 mb-1">Rule Applied</div>
-                              <div className="font-mono text-xs bg-sidebar-accent/40 p-1.5 rounded border border-sidebar-border truncate">
+                              <div className="text-xs text-sidebar-foreground/50 mb-1">Rule applied</div>
+                              <div className="font-mono text-xs bg-sidebar-accent/40 p-1.5 rounded-md border border-sidebar-border truncate">
                                 {log.ruleUsed}
                               </div>
                             </div>
@@ -358,10 +421,10 @@ function ActiveChat({
                           
                           {log.dataSourcesQueried && log.dataSourcesQueried.length > 0 && (
                             <div>
-                              <div className="text-[9px] uppercase font-mono text-sidebar-foreground/50 mb-1">Sources</div>
+                              <div className="text-xs text-sidebar-foreground/50 mb-1">Sources</div>
                               <div className="flex flex-wrap gap-1">
                                 {log.dataSourcesQueried.map(src => (
-                                  <span key={src} className="px-1.5 py-0.5 rounded-sm bg-sidebar-accent/60 border border-sidebar-border text-[9px] font-mono">
+                                  <span key={src} className="px-1.5 py-0.5 rounded-full bg-sidebar-accent/60 border border-sidebar-border text-[10px]">
                                     {src}
                                   </span>
                                 ))}
@@ -369,7 +432,7 @@ function ActiveChat({
                             </div>
                           )}
                           
-                          <div className="flex items-center justify-between text-[9px] font-mono text-sidebar-foreground/50 pt-2 border-t border-sidebar-border/50">
+                          <div className="flex items-center justify-between text-xs font-mono text-sidebar-foreground/50 pt-2 border-t border-sidebar-border/50">
                             <span>{log.llmModel || 'gpt-4o'}</span>
                             <span>{log.latencyMs}ms</span>
                             <span>{log.tokensUsed} tokens</span>
@@ -386,24 +449,24 @@ function ActiveChat({
               <ScrollArea className="h-full">
                 <div className="space-y-4">
                   <div>
-                    <div className="text-[10px] uppercase font-mono text-sidebar-foreground/50 mb-2">Internal ID</div>
-                    <div className="font-mono text-xs p-2 bg-sidebar-accent/30 rounded border border-sidebar-border break-all">
+                    <div className="text-xs text-sidebar-foreground/50 mb-2">Internal ID</div>
+                    <div className="font-mono text-xs p-2 bg-sidebar-accent/30 rounded-md border border-sidebar-border break-all">
                       {convo?.id}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase font-mono text-sidebar-foreground/50 mb-2">Raw Metadata</div>
-                    <pre className="font-mono text-[10px] p-3 bg-sidebar-accent/30 rounded border border-sidebar-border overflow-x-auto text-sidebar-primary/80">
+                    <div className="text-xs text-sidebar-foreground/50 mb-2">Raw metadata</div>
+                    <pre className="font-mono text-[10px] p-3 bg-sidebar-accent/30 rounded-md border border-sidebar-border overflow-x-auto text-sidebar-primary/80">
                       {JSON.stringify(convo?.metadata, null, 2)}
                     </pre>
                   </div>
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-sidebar-border/50">
                     <div>
-                      <div className="text-[10px] uppercase font-mono text-sidebar-foreground/50 mb-1">Created</div>
+                      <div className="text-xs text-sidebar-foreground/50 mb-1">Created</div>
                       <div className="text-xs">{convo ? format(new Date(convo.createdAt), 'MMM d, HH:mm:ss') : '-'}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase font-mono text-sidebar-foreground/50 mb-1">Resolved</div>
+                      <div className="text-xs text-sidebar-foreground/50 mb-1">Resolved</div>
                       <div className="text-xs">{convo?.resolvedAt ? format(new Date(convo.resolvedAt), 'MMM d, HH:mm:ss') : 'N/A'}</div>
                     </div>
                   </div>

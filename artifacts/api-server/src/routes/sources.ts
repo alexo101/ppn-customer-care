@@ -19,6 +19,9 @@ import {
 
 import { getOwnedAgent } from "../lib/agents";
 import { getSourceIntegration, listSourceIntegrations } from "../lib/replit-integrations";
+import { indexSource } from "../lib/knowledge-indexing";
+import { createEmbeddingProvider } from "../lib/llm";
+import { logger } from "../lib/logger";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const MAX_DOCX_BYTES = 10 * 1024 * 1024;
@@ -111,6 +114,7 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(toSource(row));
+  queueSourceIndex(row.id);
 });
 
 router.get("/sources/integrations", requireAuth, async (_req, res): Promise<void> => {
@@ -170,6 +174,7 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
     .returning();
 
   res.status(201).json(toSource(row));
+  queueSourceIndex(row.id);
 });
 
 router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
@@ -204,6 +209,9 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   res.json(toSource(row));
+  if (d.sourceType !== undefined || d.connectionConfig !== undefined) {
+    queueSourceIndex(row.id);
+  }
 });
 
 router.delete("/sources/:id", requireAuth, async (req, res): Promise<void> => {
@@ -264,6 +272,7 @@ router.post("/connectors", requireAuth, async (req, res): Promise<void> => {
       name: parsed.data.name,
       endpointPattern: parsed.data.endpointPattern,
       authType: parsed.data.authType,
+      authConfig: parsed.data.authConfig ?? {},
       isEnabled: parsed.data.isEnabled ?? true,
     })
     .returning();
@@ -289,6 +298,7 @@ router.patch("/connectors/:id", requireAuth, async (req, res): Promise<void> => 
   if (d.name !== undefined) updates.name = d.name;
   if (d.endpointPattern !== undefined) updates.endpointPattern = d.endpointPattern;
   if (d.authType !== undefined) updates.authType = d.authType;
+  if (d.authConfig !== undefined) updates.authConfig = d.authConfig;
   if (d.isEnabled !== undefined) updates.isEnabled = d.isEnabled;
 
   const [row] = await db
@@ -343,10 +353,22 @@ function toConnector(row: typeof apiConnectorsTable.$inferSelect) {
     name: row.name,
     endpointPattern: row.endpointPattern,
     authType: row.authType,
+    authConfig: (row.authConfig as Record<string, unknown>) ?? {},
     isEnabled: row.isEnabled,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };
+}
+
+function queueSourceIndex(sourceId: string): void {
+  void (async () => {
+    try {
+      await indexSource(sourceId, createEmbeddingProvider());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error({ sourceId, error: message }, "Could not index knowledge source");
+    }
+  })();
 }
 
 export default router;

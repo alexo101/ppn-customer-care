@@ -2,7 +2,7 @@ import { pgTable, text, timestamp, boolean, integer, uuid, unique } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { intentCategoriesTable } from "./categories";
-import { knowledgeSourcesTable } from "./sources";
+import { apiConnectorsTable, knowledgeSourcesTable } from "./sources";
 import { agentsTable } from "./agents";
 import { audienceTargetsTable } from "./targets";
 
@@ -53,6 +53,14 @@ export const ruleSourceLinksTable = pgTable("rule_source_links", {
   unique("rule_source_links_rule_id_source_id").on(table.ruleId, table.sourceId),
 ]);
 
+export const ruleConnectorLinksTable = pgTable("rule_connector_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ruleId: uuid("rule_id").notNull().references(() => orchestratorRulesTable.id, { onDelete: "cascade" }),
+  connectorId: uuid("connector_id").notNull().references(() => apiConnectorsTable.id, { onDelete: "cascade" }),
+}, (table) => [
+  unique("rule_connector_links_rule_id_connector_id").on(table.ruleId, table.connectorId),
+]);
+
 export const ruleAudienceTargetLinksTable = pgTable("rule_audience_target_links", {
   id: uuid("id").primaryKey().defaultRandom(),
   ruleId: uuid("rule_id").notNull().references(() => orchestratorRulesTable.id, { onDelete: "cascade" }),
@@ -67,6 +75,7 @@ export type OrchestratorRule = typeof orchestratorRulesTable.$inferSelect;
 export type InsertRule = z.infer<typeof insertRuleSchema>;
 export type RuleCategoryLink = typeof ruleCategoryLinksTable.$inferSelect;
 export type RuleSourceLink = typeof ruleSourceLinksTable.$inferSelect;
+export type RuleConnectorLink = typeof ruleConnectorLinksTable.$inferSelect;
 export type RuleAudienceTargetLink = typeof ruleAudienceTargetLinksTable.$inferSelect;
 export type RuleVocabulary = typeof ruleVocabulariesTable.$inferSelect;
 export type InsertRuleVocabulary = z.infer<typeof insertRuleVocabularySchema>;

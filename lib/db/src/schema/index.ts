@@ -7,3 +7,4 @@ export * from "./analytics";
 export * from "./appearance";
 export * from "./training-questions";
 export * from "./targets";
+export * from "./knowledge-chunks";

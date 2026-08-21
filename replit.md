@@ -1,6 +1,6 @@
-# [Project name]
+# Customer Support AI Orchestrator
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An authenticated support assistant that classifies questions, selects configured rules, retrieves knowledge, and generates grounded answers.
 
 ## Run & Operate
 
@@ -10,6 +10,11 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+- Required for live orchestration and indexing: `OPENAI_API_KEY`
+- Optional LLM configuration: `CLASSIFICATION_MODEL` and `ANSWER_MODEL` (default `gpt-5-nano`), `EMBEDDING_MODEL` (default `text-embedding-3-small`)
+- Optional provider selectors: `CLASSIFICATION_LLM_PROVIDER`, `ANSWER_LLM_PROVIDER`, and `EMBEDDING_LLM_PROVIDER` (default `openai`)
+- API connector credentials are configured with environment variables referenced by each connector's `authConfig` (for example `CONNECTOR_ACME_TOKEN`); secret values are never stored in the database.
+- Before pushing the schema, enable pgvector once: `CREATE EXTENSION IF NOT EXISTS vector;`
 
 ## Stack
 
@@ -22,23 +27,41 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/api-server/src/routes/conversations.ts` — authenticated conversation API and orchestrator workflow
+- `artifacts/api-server/src/lib/llm/` — OpenAI classification, answer, embedding, and rule-authoring providers
+- `artifacts/api-server/src/lib/retrieval.ts` — pgvector similarity retrieval
+- `artifacts/api-server/src/lib/knowledge-indexing.ts` — document chunking and embedding
+- `artifacts/api-server/src/lib/api-connector.ts` — approved generic REST connector execution
+- `artifacts/api-server/src/lib/conversation-lifecycle.ts` — inactive-conversation auto-close sweep
+- `artifacts/api-server/src/lib/conversation-analytics.ts` — resolution and cost rollups
+- `lib/db/src/schema/` — Drizzle/Postgres source-of-truth, including `knowledge-chunks.ts`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Runtime classification and answer generation fail with HTTP 503 when the LLM is unavailable; they do not silently fall back to heuristics.
+- Greeting and resolution messages use deterministic shortcuts and do not require an LLM call.
+- Uploaded `.docx` files are chunked and indexed with `text-embedding-3-small`; Notion, Confluence, and API sources still require a fetch integration before they can be indexed.
+- The orchestrator chooses the highest probability category returned by the classifier, then applies the highest-priority matching rule.
+- Conversation statuses follow active, pending clarification, escalated, resolved, and closed states; resolved/closed conversations receive analytics rollups and inactive conversations are closed after one hour.
+- `query_live_data` rules call their linked enabled API connectors with environment-backed authentication; missing credentials fail the workflow rather than silently sending ungrounded data.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Configure agents, categories, rules, audience targets, and knowledge sources.
+- Inspect per-message orchestration stages, confidence, retrieved sources, and LLM logs.
+- Answer user questions with responses grounded in linked knowledge-source content.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+The runtime answer and classification models should use `gpt-5-nano` in Replit because `gpt-5.6-luna` is not available there.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run `CREATE EXTENSION IF NOT EXISTS vector;` before `pnpm --filter @workspace/db run push`.
+- Existing document sources need `pnpm --filter @workspace/scripts run reindex-knowledge-sources` after the vector schema is applied.
+- Source indexing is queued after source creation/update; an indexing failure is logged and does not roll back the source save.
+- New connector and conversation analytics tables require the database schema push before deploying the API.
+- The API server runs the inactivity sweep every five minutes in non-test environments.
 
 ## Pointers
 

@@ -52,27 +52,27 @@ export default function CreateAgentPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
-      <div className="h-14 px-6 border-b border-border flex items-center justify-between bg-card shrink-0 gap-3">
+      <div className="h-16 px-6 md:px-8 border-b border-border flex items-center justify-between bg-card shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+          <Button variant="ghost" size="icon" className="h-9 w-9" asChild>
             <Link href="/agents"><ArrowLeft className="w-4 h-4" /></Link>
           </Button>
-          <h1 className="text-lg font-medium tracking-tight truncate">Create agent</h1>
+          <h1 className="text-xl font-semibold tracking-tight truncate">Create agent</h1>
         </div>
         <div className="flex items-center gap-2">
           {step > 0 && (
-            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setStep(step - 1)}>
+            <Button variant="outline" size="sm" onClick={() => setStep(step - 1)}>
               Back
             </Button>
           )}
-          <Button size="sm" className="h-8 text-xs" onClick={handleNext} disabled={!canContinue || createAgent.isPending}>
+          <Button size="sm" onClick={handleNext} disabled={!canContinue || createAgent.isPending}>
             {step === STEPS.length - 1 ? "Finish" : "Continue"}
-            {step === STEPS.length - 1 ? <Check className="w-3.5 h-3.5 ml-1" /> : <ArrowRight className="w-3.5 h-3.5 ml-1" />}
+            {step === STEPS.length - 1 ? <Check className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
           </Button>
         </div>
       </div>
 
-      <div className="px-6 py-4 border-b border-border bg-card/50">
+      <div className="px-6 md:px-8 py-4 border-b border-border bg-card/50">
         <ol className="flex flex-wrap gap-2">
           {STEPS.map((item, index) => (
             <li key={item.id}>
@@ -83,7 +83,7 @@ export default function CreateAgentPage() {
                   if (index === 0 || agentId) setStep(index);
                 }}
                 className={cn(
-                  "text-xs px-3 py-1.5 rounded-full border transition-colors",
+                  "text-sm px-3.5 py-1.5 rounded-full border transition-colors font-medium",
                   index === step
                     ? "bg-primary text-primary-foreground border-primary"
                     : index < step || (index === 0 && agentId)
@@ -98,24 +98,24 @@ export default function CreateAgentPage() {
         </ol>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 md:p-8">
         <div className="max-w-7xl mx-auto">
           {error && <p className="text-sm text-destructive mb-4">{error}</p>}
 
           {step === 0 && !agentId && (
-            <div className="max-w-lg space-y-3">
-              <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+            <div className="max-w-lg space-y-4">
+              <div className="rounded-xl border border-border bg-background p-5 space-y-3">
                 <div className="pb-3 border-b border-border">
-                  <h3 className="text-sm font-medium">Name</h3>
-                  <p className="text-xs text-muted-foreground mt-1">Display name for this agent.</p>
+                  <h3 className="text-sm font-semibold">Name</h3>
+                  <p className="text-sm text-muted-foreground mt-1">Display name for this agent.</p>
                 </div>
                 <Label htmlFor="agent-name" className="sr-only">Name</Label>
                 <Input id="agent-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Billing support" />
               </div>
-              <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+              <div className="rounded-xl border border-border bg-background p-5 space-y-3">
                 <div className="pb-3 border-b border-border">
-                  <h3 className="text-sm font-medium">Description</h3>
-                  <p className="text-xs text-muted-foreground mt-1">What this agent handles.</p>
+                  <h3 className="text-sm font-semibold">Description</h3>
+                  <p className="text-sm text-muted-foreground mt-1">What this agent handles.</p>
                 </div>
                 <Label htmlFor="agent-description" className="sr-only">Description</Label>
                 <Textarea id="agent-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short summary of this agent" />

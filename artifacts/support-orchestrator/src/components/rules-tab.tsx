@@ -3,6 +3,7 @@ import {
   getListRulesQueryKey,
   useDeleteRule,
   useListCategories,
+  useListConnectors,
   useListRules,
   useListSources,
   useListTargets,
@@ -11,7 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Reorder, useDragControls } from "framer-motion";
-import { GripVertical, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { GripVertical, PenLine, Plus, Search, Sparkles, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,7 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { RuleAuthoringChat } from "@/components/rule-authoring-chat";
+import { RuleEditorDialog } from "@/components/rule-editor-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatRuleSentence } from "@/lib/rules";
 import { cn } from "@/lib/utils";
@@ -36,12 +37,14 @@ export function RulesTab({ agentId }: { agentId: string }) {
   const { data: rules = [] } = useListRules({ agentId });
   const { data: categories = [] } = useListCategories({ agentId });
   const { data: sources = [] } = useListSources({ agentId });
+  const { data: connectors = [] } = useListConnectors({ agentId });
   const { data: audienceTargets = [] } = useListTargets({ agentId });
   const deleteRule = useDeleteRule();
   const updateRule = useUpdateRule();
   const [search, setSearch] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<OrchestratorRule | null>(null);
+  const [editorMode, setEditorMode] = useState<"manual" | "ai">("manual");
   const [ruleToDelete, setRuleToDelete] = useState<OrchestratorRule | null>(
     null,
   );
@@ -80,20 +83,25 @@ export function RulesTab({ agentId }: { agentId: string }) {
         rule.action,
         ...rule.categoryIds.map((id) => categoryNames[id] ?? ""),
         ...rule.sourceIds.map((id) => sourceNames[id] ?? ""),
+        ...(rule.connectorIds ?? []).map((id) => connectors.find((connector) => connector.id === id)?.name ?? ""),
       ]
         .join(" ")
         .toLowerCase()
         .includes(query),
     );
-  }, [orderedRules, search, categoryNames, sourceNames]);
+  }, [orderedRules, search, categoryNames, sourceNames, connectors]);
 
   const invalidateRules = () =>
     queryClient.invalidateQueries({
       queryKey: getListRulesQueryKey({ agentId }),
     });
 
-  const openAuthoring = (rule: OrchestratorRule | null) => {
+  const openAuthoring = (
+    rule: OrchestratorRule | null,
+    mode: "manual" | "ai" = "manual",
+  ) => {
     setEditingRule(rule);
+    setEditorMode(mode);
     setChatOpen(true);
   };
 
@@ -187,22 +195,33 @@ export function RulesTab({ agentId }: { agentId: string }) {
               {rules.length}
             </span>
           </div>
-          <Button
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => openAuthoring(null)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Rule
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => openAuthoring(null, "manual")}
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              Write manually
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => openAuthoring(null, "ai")}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Describe to AI
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <PenLine className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p className="text-xs leading-5 text-muted-foreground">
-            Describe a rule in your own words. The assistant will clarify
-            anything ambiguous, create the rule, and ask for approval before it
-            is saved.
+            Create rules by filling in the fields yourself, or describe them in
+            plain language and let the assistant draft them. You can switch
+            methods and review the rule before saving.
           </p>
         </div>
 
@@ -268,22 +287,30 @@ export function RulesTab({ agentId }: { agentId: string }) {
             <div className="rounded-lg border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
               {search
                 ? "No rules match your search."
-                : "No rules yet. Describe your first rule to the assistant."}
+                : "No rules yet. Write your first rule manually or describe it to the assistant."}
             </div>
           )}
         </div>
       </div>
 
-      <RuleAuthoringChat
+      <RuleEditorDialog
         agentId={agentId}
         rule={editingRule}
         categories={categories}
         sources={sources}
+        connectors={connectors}
         audienceTargets={audienceTargets}
         open={chatOpen}
+        initialMode={editorMode}
+        suggestedPriority={
+          rules.length > 0 ? Math.max(...rules.map((rule) => rule.priority)) + 1 : 0
+        }
         onOpenChange={(next) => {
           setChatOpen(next);
-          if (!next) setEditingRule(null);
+          if (!next) {
+            setEditingRule(null);
+            setEditorMode("manual");
+          }
         }}
         onSaved={invalidateRules}
       />
@@ -396,16 +423,6 @@ function RuleRow({
         className="flex shrink-0 items-center gap-2 px-2"
         onClick={(e) => e.stopPropagation()}
       >
-        <span
-          className={cn(
-            "text-[11px] font-semibold uppercase tracking-wider",
-            rule.isEnabled
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-muted-foreground/60",
-          )}
-        >
-          {rule.isEnabled ? "ON" : "OFF"}
-        </span>
         <Switch
           checked={rule.isEnabled}
           onCheckedChange={onToggle}

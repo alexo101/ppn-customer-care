@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   useCreateConversation,
+  useGetAgent,
   useGetAgentAppearance,
   useGetConversation,
   useListMessages,
   useSendMessage,
   getGetAgentAppearanceQueryKey,
+  getGetAgentQueryKey,
   getGetConversationQueryKey,
   getListMessagesQueryKey,
 } from "@workspace/api-client-react";
@@ -15,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAppearance } from "@/components/appearance-provider";
-import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
+import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
 
 type SupportChatPanelProps = {
   agentId?: string;
@@ -40,6 +42,12 @@ export function SupportChatPanel({
 }: SupportChatPanelProps) {
   const queryClient = useQueryClient();
   const { appearance: sessionAppearance } = useAppearance();
+  const { data: agent } = useGetAgent(agentId ?? "", {
+    query: {
+      enabled: Boolean(agentId),
+      queryKey: getGetAgentQueryKey(agentId ?? ""),
+    },
+  });
   const { data: agentAppearance } = useGetAgentAppearance(agentId ?? "", {
     query: {
       enabled: Boolean(agentId),
@@ -51,6 +59,7 @@ export function SupportChatPanel({
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
   const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
   const logoUrl = appearance?.logoUrl ?? null;
+  const chatName = agent?.name?.trim() || DEFAULT_CHAT_NAME;
   const onCta = contrastHex(ctaColor);
 
   const [convoId, setConvoId] = useState<string | null>(null);
@@ -167,7 +176,7 @@ export function SupportChatPanel({
             <Bot className="w-5 h-5" />
           )}
           <div className="min-w-0">
-            <div className="font-medium truncate text-sm">Support Assistant</div>
+            <div className="font-medium truncate text-sm">{chatName}</div>
             <div className="text-[10px] opacity-80 truncate">
               {source === "training" ? "Training preview" : "Online"}
             </div>

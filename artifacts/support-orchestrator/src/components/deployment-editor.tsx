@@ -7,32 +7,175 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Rocket } from "lucide-react";
+import { FaHtml5, FaReact, FaVuejs, FaAngular } from "react-icons/fa";
+import type { IconType } from "react-icons";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 
-function widgetEmbedSnippet(agentId: string) {
+const IFRAME_STYLE =
+  "position:fixed;right:0;bottom:0;border:0;z-index:2147483647;width:420px;height:720px;background:transparent;";
+
+type Snippet = {
+  code: string;
+  language: string;
+  filename: string;
+};
+
+function widgetUrlFor(agentId: string) {
   const origin = window.location.origin;
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const widgetUrl = `${origin}${base}/widget?agentId=${encodeURIComponent(agentId)}`;
-  return `<script>
+  return `${origin}${base}/widget?agentId=${encodeURIComponent(agentId)}`;
+}
+
+function htmlSnippet(widgetUrl: string): Snippet {
+  return {
+    language: "HTML",
+    filename: "index.html",
+    code: `<script>
   (function () {
     var iframe = document.createElement("iframe");
     iframe.src = ${JSON.stringify(widgetUrl)};
     iframe.title = "Support chat";
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;border:0;z-index:2147483647;width:420px;height:720px;background:transparent;";
+    iframe.style.cssText = ${JSON.stringify(IFRAME_STYLE)};
     document.body.appendChild(iframe);
   })();
-</script>`;
+</script>`,
+  };
+}
+
+function reactSnippet(widgetUrl: string): Snippet {
+  return {
+    language: "TSX",
+    filename: "SupportWidget.tsx",
+    code: `import { useEffect } from "react";
+
+const WIDGET_URL = ${JSON.stringify(widgetUrl)};
+const IFRAME_STYLE = ${JSON.stringify(IFRAME_STYLE)};
+
+export function SupportWidget() {
+  useEffect(() => {
+    const iframe = document.createElement("iframe");
+    iframe.src = WIDGET_URL;
+    iframe.title = "Support chat";
+    iframe.style.cssText = IFRAME_STYLE;
+    document.body.appendChild(iframe);
+    return () => {
+      iframe.remove();
+    };
+  }, []);
+
+  return null;
+}`,
+  };
+}
+
+function vueSnippet(widgetUrl: string): Snippet {
+  return {
+    language: "Vue",
+    filename: "SupportWidget.vue",
+    code: `<script setup>
+import { onMounted, onUnmounted } from "vue";
+
+const WIDGET_URL = ${JSON.stringify(widgetUrl)};
+const IFRAME_STYLE = ${JSON.stringify(IFRAME_STYLE)};
+
+let iframe;
+
+onMounted(() => {
+  iframe = document.createElement("iframe");
+  iframe.src = WIDGET_URL;
+  iframe.title = "Support chat";
+  iframe.style.cssText = IFRAME_STYLE;
+  document.body.appendChild(iframe);
+});
+
+onUnmounted(() => {
+  iframe?.remove();
+});
+</script>
+
+<template></template>`,
+  };
+}
+
+function angularSnippet(widgetUrl: string): Snippet {
+  return {
+    language: "TypeScript",
+    filename: "support-widget.component.ts",
+    code: `import { Component, OnInit, OnDestroy } from "@angular/core";
+
+const WIDGET_URL = ${JSON.stringify(widgetUrl)};
+const IFRAME_STYLE = ${JSON.stringify(IFRAME_STYLE)};
+
+@Component({
+  selector: "app-support-widget",
+  standalone: true,
+  template: "",
+})
+export class SupportWidgetComponent implements OnInit, OnDestroy {
+  private iframe?: HTMLIFrameElement;
+
+  ngOnInit() {
+    this.iframe = document.createElement("iframe");
+    this.iframe.src = WIDGET_URL;
+    this.iframe.title = "Support chat";
+    this.iframe.style.cssText = IFRAME_STYLE;
+    document.body.appendChild(this.iframe);
+  }
+
+  ngOnDestroy() {
+    this.iframe?.remove();
+  }
+}`,
+  };
+}
+
+const FRAMEWORKS: {
+  id: string;
+  label: string;
+  icon: IconType;
+  snippet: (widgetUrl: string) => Snippet;
+}[] = [
+  { id: "html", label: "Regular", icon: FaHtml5, snippet: htmlSnippet },
+  { id: "react", label: "React", icon: FaReact, snippet: reactSnippet },
+  { id: "vue", label: "Vue", icon: FaVuejs, snippet: vueSnippet },
+  { id: "angular", label: "Angular", icon: FaAngular, snippet: angularSnippet },
+];
+
+function CopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copySnippet = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+      toast({ title: "Snippet copied" });
+    } catch {
+      toast({
+        title: "Could not copy snippet",
+        description: "Select the code and copy it manually.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={copySnippet}>
+      {copied ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+      {copied ? "Copied" : "Copy snippet"}
+    </Button>
+  );
 }
 
 export function DeploymentEditor({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
   const { data: agent, isLoading } = useGetAgent(agentId);
   const updateAgent = useUpdateAgent();
-  const [copied, setCopied] = useState(false);
-  const snippet = widgetEmbedSnippet(agentId);
+  const widgetUrl = widgetUrlFor(agentId);
   const enabled = Boolean(agent?.isEnabled);
 
   const setEnabled = async (isEnabled: boolean) => {
@@ -52,21 +195,6 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
       toast({
         title: "Could not update agent",
         description: err instanceof Error ? err.message : "Try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const copySnippet = async () => {
-    try {
-      await navigator.clipboard.writeText(snippet);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-      toast({ title: "Snippet copied" });
-    } catch {
-      toast({
-        title: "Could not copy snippet",
-        description: "Select the code and copy it manually.",
         variant: "destructive",
       });
     }
@@ -108,27 +236,47 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
       </div>
 
       <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-        <div className="pb-3 border-b border-border flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-medium">Embed snippet</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              Paste this code before the closing body tag on your website to add the chat widget.
-            </p>
-          </div>
-          <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={copySnippet}>
-            {copied ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
-            {copied ? "Copied" : "Copy snippet"}
-          </Button>
+        <div className="pb-3 border-b border-border">
+          <h3 className="text-sm font-medium">Embed snippet</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose your stack and paste the snippet into your app to add the chat widget.
+          </p>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="embed-snippet" className="text-xs">HTML</Label>
-          <Textarea
-            id="embed-snippet"
-            readOnly
-            value={snippet}
-            className="font-mono text-[11px] min-h-[180px] resize-none"
-          />
-        </div>
+
+        <Tabs defaultValue="html">
+          <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
+            {FRAMEWORKS.map((framework) => {
+              const Icon = framework.icon;
+              return (
+                <TabsTrigger key={framework.id} value={framework.id} className="gap-1.5">
+                  <Icon className="w-3.5 h-3.5" />
+                  {framework.label}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+
+          {FRAMEWORKS.map((framework) => {
+            const snippet = framework.snippet(widgetUrl);
+            return (
+              <TabsContent key={framework.id} value={framework.id} className="mt-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor={`embed-snippet-${framework.id}`} className="text-xs">
+                    {snippet.language}
+                    <span className="ml-1.5 text-muted-foreground font-normal">{snippet.filename}</span>
+                  </Label>
+                  <CopyButton code={snippet.code} />
+                </div>
+                <Textarea
+                  id={`embed-snippet-${framework.id}`}
+                  readOnly
+                  value={snippet.code}
+                  className="font-mono text-[11px] min-h-[220px] resize-none"
+                />
+              </TabsContent>
+            );
+          })}
+        </Tabs>
       </div>
     </div>
   );

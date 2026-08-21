@@ -263,7 +263,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                 <button type="button" className="min-w-0 text-left flex-1" onClick={() => openEdit(target)}>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-medium text-sm truncate">{target.name}</span>
-                    <Badge variant="outline" className="text-[9px] uppercase font-mono tracking-wider h-5 shrink-0">
+                    <Badge variant="outline" className="text-xs h-5 shrink-0">
                       {target.matchMode === "all" ? "Match all" : "Match any"}
                     </Badge>
                   </div>
@@ -279,14 +279,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   </div>
                 </button>
                 <div className="flex items-center gap-3 shrink-0 pt-0.5">
-                  <span
-                    className={cn(
-                      "text-[11px] font-semibold tracking-wider uppercase",
-                      target.isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60",
-                    )}
-                  >
-                    {target.isEnabled ? "ON" : "OFF"}
-                  </span>
                   <Switch
                     checked={target.isEnabled}
                     onCheckedChange={(checked) => {

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, jsonb, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb, uuid, integer, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { agentsTable } from "./agents";
@@ -49,6 +49,20 @@ export const conversationFeedbackTable = pgTable("conversation_feedback", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const conversationAnalyticsTable = pgTable("conversation_analytics", {
+  conversationId: uuid("conversation_id").primaryKey().references(() => conversationsTable.id, { onDelete: "cascade" }),
+  resolutionStatus: text("resolution_status").notNull(),
+  resolutionTimeMs: integer("resolution_time_ms"),
+  interactionCount: integer("interaction_count").notNull().default(0),
+  sourcesUsed: text("sources_used").array().notNull().default([]),
+  connectorsUsed: text("connectors_used").array().notNull().default([]),
+  totalTokens: integer("total_tokens").notNull().default(0),
+  estimatedCostUsd: numeric("estimated_cost_usd", { precision: 12, scale: 8 }).notNull().default("0"),
+  feedbackRating: text("feedback_rating"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 export const insertConversationSchema = createInsertSchema(conversationsTable).omit({ id: true, createdAt: true, lastActivityAt: true });
 export const insertMessageSchema = createInsertSchema(messagesTable).omit({ id: true, createdAt: true });
 export const insertLogSchema = createInsertSchema(orchestratorLogsTable).omit({ id: true, createdAt: true });
@@ -60,3 +74,4 @@ export type Message = typeof messagesTable.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type OrchestratorLog = typeof orchestratorLogsTable.$inferSelect;
 export type ConversationFeedback = typeof conversationFeedbackTable.$inferSelect;
+export type ConversationAnalytics = typeof conversationAnalyticsTable.$inferSelect;

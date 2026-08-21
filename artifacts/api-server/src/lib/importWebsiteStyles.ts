@@ -64,6 +64,24 @@ const NAMED_COLORS: Record<string, string> = {
   forestgreen: "#228B22",
 };
 
+function debugLog(location: string, message: string, data: Record<string, unknown>, hypothesisId: string) {
+  // #region agent log
+  fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e104fc" },
+    body: JSON.stringify({
+      sessionId: "e104fc",
+      runId: "post-fix",
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+}
+
 export async function importWebsiteStyles(rawUrl: string): Promise<ImportedWebsiteStyle> {
   const startUrl = normalizeHttpUrl(rawUrl);
   const htmlResponse = await safeFetch(startUrl);
@@ -71,10 +89,44 @@ export async function importWebsiteStyles(rawUrl: string): Promise<ImportedWebsi
   const html = await readLimitedText(htmlResponse, MAX_HTML_BYTES);
   const $ = load(html);
 
-  const cssTexts = await collectStylesheets($, finalUrl);
-  const cssVars = extractCssVariables([...extractStyleTagCss($), ...cssTexts].join("\n"));
+  const stylesheetHrefs = $("link[rel='stylesheet']")
+    .toArray()
+    .map((el) => $(el).attr("href"))
+    .filter((href): href is string => Boolean(href));
 
-  const ctaScored = detectCtaColors($, cssTexts, cssVars);
+  const cssTexts = [...extractStyleTagCss($), ...(await collectStylesheets($, finalUrl))];
+  const combinedCss = cssTexts.join("\n");
+  const cssVars = extractCssVariables(combinedCss);
+  const brandLikeVarNames = Object.keys(cssVars)
+    .filter((name) => /primary|accent|brand|cta|button|violet|purple|indigo/i.test(name))
+    .slice(0, 30);
+
+  const haystack = `${html}\n${combinedCss}`;
+  // #region agent log
+  debugLog(
+    "importWebsiteStyles.ts:importWebsiteStyles",
+    "Fetched site CSS/HTML for CTA detection",
+    {
+      finalUrl,
+      htmlBytes: Buffer.byteLength(html),
+      stylesheetHrefCount: stylesheetHrefs.length,
+      stylesheetHrefs: stylesheetHrefs.slice(0, 8),
+      fetchedCssCount: cssTexts.length,
+      styleTagCount: extractStyleTagCss($).length,
+      cssVarCount: Object.keys(cssVars).length,
+      brandLikeVarNames,
+      brandLikeVarSamples: Object.fromEntries(
+        brandLikeVarNames.slice(0, 12).map((name) => [name, cssVars[name]?.slice(0, 80)]),
+      ),
+      contains5A52FF: /#5A52FF|#5a52ff|90,\s*82,\s*255|90 82 255/i.test(haystack),
+      containsOklch: /oklch\(/i.test(haystack),
+      containsColorMix: /color-mix\(/i.test(haystack),
+    },
+    "A,B,C",
+  );
+  // #endregion
+
+  const ctaScored = detectCtaColors($, cssTexts, cssVars, html);
   const backgroundScored = detectBackgroundColors($, cssTexts, cssVars);
   const logos = detectLogos($, finalUrl);
 
@@ -288,19 +340,45 @@ function extractCssVariables(css: string): CssVars {
 }
 
 function resolveCssValue(raw: string, vars: CssVars, depth = 0): string {
-  if (depth > 6) return raw;
+  if (depth > 8) return raw;
   const trimmed = raw.trim();
-  const varMatch = trimmed.match(/^var\(\s*(--[a-zA-Z0-9_-]+)\s*(?:,\s*(.+))?\)$/i);
-  if (!varMatch) return trimmed;
-  const resolved = vars[varMatch[1]];
-  if (resolved) return resolveCssValue(resolved, vars, depth + 1);
-  if (varMatch[2]) return resolveCssValue(varMatch[2], vars, depth + 1);
-  return trimmed;
+  const replaced = trimmed.replace(
+    /var\(\s*(--[a-zA-Z0-9_-]+)\s*(?:,\s*((?:[^)(]+|\([^)(]*\))*))?\)/gi,
+    (full, name: string, fallback?: string) => {
+      if (vars[name]) return vars[name];
+      if (fallback) return fallback.trim();
+      return full;
+    },
+  );
+  if (replaced !== trimmed) return resolveCssValue(replaced, vars, depth + 1);
+  return replaced;
+}
+
+function brandVariableNames(vars: CssVars): string[] {
+  const names = Object.keys(vars);
+  const preferred = names.filter((name) =>
+    /^--(?:[a-z0-9-]*-)?(?:color-)?(?:primary|brand|cta|accent)(?:-color)?(?:-500)?$/i.test(name),
+  );
+  return [...new Set([...preferred, ...names.filter((name) => /primary-500$|brand-500$|cta-500$/i.test(name))])];
+}
+
+function addHslChannelBrands(scored: ScoredColor[], vars: CssVars): void {
+  for (const name of Object.keys(vars)) {
+    const prefix = name.match(/^(--.+)-h$/i)?.[1];
+    if (!prefix || !/primary|brand|cta|accent/i.test(prefix)) continue;
+    const h = vars[`${prefix}-h`];
+    const s = vars[`${prefix}-s`];
+    const l = vars[`${prefix}-l`];
+    if (!h || !s || !l) continue;
+    const sat = s.includes("%") ? s : `${s}%`;
+    const lig = l.includes("%") ? l : `${l}%`;
+    addColor(scored, toHex(`hsl(${h}, ${sat}, ${lig})`, vars), 14);
+  }
 }
 
 type ScoredColor = { hex: string; score: number };
 
-function detectCtaColors($: CheerioAPI, cssTexts: string[], vars: CssVars): ScoredColor[] {
+function detectCtaColors($: CheerioAPI, cssTexts: string[], vars: CssVars, html = ""): ScoredColor[] {
   const scored: ScoredColor[] = [];
 
   const metaTheme = $('meta[name="theme-color"]').attr("content");
@@ -319,10 +397,12 @@ function detectCtaColors($: CheerioAPI, cssTexts: string[], vars: CssVars): Scor
     "--button-background",
     "--color-button",
     "--tw-color-primary",
+    ...brandVariableNames(vars),
   ];
   for (const name of brandVarNames) {
-    addColor(scored, toHex(vars[name], vars), 8);
+    addColor(scored, toHex(vars[name], vars), name.includes("primary") || name.includes("cta") ? 11 : 8);
   }
+  addHslChannelBrands(scored, vars);
 
   $("a, button, input[type='submit']").each((_, el) => {
     const node = $(el);
@@ -364,9 +444,35 @@ function detectCtaColors($: CheerioAPI, cssTexts: string[], vars: CssVars): Scor
     addColor(scored, colorFromDeclaration(body, "background", vars), score - 1);
   }
 
-  return scored
+  const beforeFilter = [...scored].sort((a, b) => b.score - a.score).slice(0, 12);
+  const filtered = scored
     .filter((c) => isLikelyCta(c.hex))
     .sort((a, b) => b.score - a.score);
+  // #region agent log
+  debugLog(
+    "importWebsiteStyles.ts:detectCtaColors",
+    "CTA color scoring result",
+    {
+      rawScoreCount: scored.length,
+      filteredCount: filtered.length,
+      topBeforeFilter: beforeFilter,
+      topAfterFilter: filtered.slice(0, 8),
+      found5A52FF: scored.some((c) => c.hex === "#5A52FF"),
+      resolvedPrimary500: toHex(vars["--c-primary-500"], vars),
+      resolvedPrimaryHsl: toHex(
+        vars["--c-primary-h"] && vars["--c-primary-s"] && vars["--c-primary-l"]
+          ? `hsl(${vars["--c-primary-h"]}, ${vars["--c-primary-s"]}, ${vars["--c-primary-l"]})`
+          : undefined,
+        vars,
+      ),
+      chosenCta: filtered[0]?.hex ?? null,
+      htmlHasCtaClass: /cta|btn-primary|button-primary/i.test(html),
+      cssRuleHits: (cssTexts.join("\n").match(/([^{}]+)\{([^{}]+)\}/g) || []).length,
+    },
+    "C,D",
+  );
+  // #endregion
+  return filtered;
 }
 
 function detectBackgroundColors($: CheerioAPI, cssTexts: string[], vars: CssVars): ScoredColor[] {
@@ -534,12 +640,15 @@ function colorFromDeclaration(cssBlob: string, property: string, vars: CssVars):
   const re = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;}]+)`, "i");
   const match = cssBlob.match(re);
   if (!match) return null;
-  const value = match[1].trim();
-  if (property === "background" && /url\(/i.test(value) && !/(#|rgb|hsl|var\()/i.test(value)) {
+  const value = match[1].trim().replace(/!important/gi, "").trim();
+  if (property === "background" && /url\(/i.test(value) && !/(#|rgb|hsl|oklch|var\()/i.test(value)) {
     return null;
   }
+  if (/^(hsla?|rgba?|oklch|color-mix)\(/i.test(value) || /var\(/i.test(value)) {
+    return toHex(value, vars);
+  }
   const first = value.split(",")[0]?.trim() ?? value;
-  return toHex(first.replace(/!important/gi, "").trim(), vars);
+  return toHex(first, vars);
 }
 
 function toHex(raw: string | undefined, vars: CssVars): string | null {
@@ -580,7 +689,10 @@ function toHex(raw: string | undefined, vars: CssVars): string | null {
 function parseAlpha(raw: string | undefined): number {
   if (!raw) return 1;
   if (raw.endsWith("%")) return Number(raw.slice(0, -1)) / 100;
-  return Number(raw);
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  if (n > 1) return Math.min(n / 100, 1);
+  return n;
 }
 
 function normalizeHex(hex: string): string | null {

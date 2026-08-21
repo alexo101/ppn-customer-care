@@ -126,8 +126,16 @@ export interface Message {
   createdAt: string;
 }
 
+export interface ConversationContext {
+  currentUrl?: string;
+  userRole?: string;
+  referredClientId?: string;
+  referredContractId?: string;
+}
+
 export interface SendMessageInput {
   content: string;
+  context?: ConversationContext;
 }
 
 export type OrchestratorStageDetails = { [key: string]: unknown };
@@ -159,9 +167,17 @@ export interface SendMessageResult {
   shouldAskResolution: boolean;
 }
 
+export type FeedbackInputRating = typeof FeedbackInputRating[keyof typeof FeedbackInputRating];
+
+
+export const FeedbackInputRating = {
+  positive: 'positive',
+  negative: 'negative',
+} as const;
+
 export interface FeedbackInput {
   messageId: string;
-  rating: string;
+  rating: FeedbackInputRating;
   /** @nullable */
   comment?: string | null;
 }
@@ -242,6 +258,7 @@ export interface OrchestratorRule {
   action: string;
   categoryIds: string[];
   sourceIds: string[];
+  connectorIds: string[];
   audienceTargetIds: string[];
   createdAt: string;
   updatedAt: string;
@@ -260,6 +277,7 @@ export interface RuleInput {
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  connectorIds?: string[];
   audienceTargetIds?: string[];
 }
 
@@ -275,6 +293,7 @@ export interface RuleUpdate {
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  connectorIds?: string[];
   audienceTargetIds?: string[];
 }
 
@@ -311,6 +330,7 @@ export interface RuleAuthoringDraft {
   action: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  connectorIds?: string[];
   audienceTargetIds?: string[];
 }
 
@@ -541,28 +561,37 @@ export interface TargetUpdate {
   conditions?: TargetConditionInput[];
 }
 
+export type ApiConnectorAuthConfig = { [key: string]: unknown };
+
 export interface ApiConnector {
   id: string;
   name: string;
   endpointPattern: string;
   authType: string;
+  authConfig: ApiConnectorAuthConfig;
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+export type ConnectorInputAuthConfig = { [key: string]: unknown };
 
 export interface ConnectorInput {
   name: string;
   agentId?: string;
   endpointPattern: string;
   authType: string;
+  authConfig?: ConnectorInputAuthConfig;
   isEnabled?: boolean;
 }
+
+export type ConnectorUpdateAuthConfig = { [key: string]: unknown };
 
 export interface ConnectorUpdate {
   name?: string;
   endpointPattern?: string;
   authType?: string;
+  authConfig?: ConnectorUpdateAuthConfig;
   isEnabled?: boolean;
 }
 
@@ -575,6 +604,9 @@ export interface AnalyticsSummary {
   totalMessages: number;
   positiveRatings: number;
   negativeRatings: number;
+  avgResolutionTimeMs: number;
+  avgInteractionsPerConversation: number;
+  estimatedTotalCostUsd: number;
 }
 
 export interface Appearance {

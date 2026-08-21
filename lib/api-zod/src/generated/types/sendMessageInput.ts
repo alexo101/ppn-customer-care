@@ -5,7 +5,9 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { ConversationContext } from './conversationContext';
 
 export interface SendMessageInput {
   content: string;
+  context?: ConversationContext;
 }

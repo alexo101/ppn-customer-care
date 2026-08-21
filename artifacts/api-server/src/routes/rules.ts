@@ -5,10 +5,12 @@ import {
   orchestratorRulesTable,
   ruleCategoryLinksTable,
   ruleSourceLinksTable,
+  ruleConnectorLinksTable,
   ruleAudienceTargetLinksTable,
   ruleVocabulariesTable,
   intentCategoriesTable,
   knowledgeSourcesTable,
+  apiConnectorsTable,
   audienceTargetsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -107,6 +109,7 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
     agentId,
     parsed.data.categoryIds,
     parsed.data.sourceIds,
+    parsed.data.connectorIds,
     parsed.data.audienceTargetIds,
     res,
   );
@@ -136,6 +139,7 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
     row.id,
     parsed.data.categoryIds ?? [],
     parsed.data.sourceIds ?? [],
+    parsed.data.connectorIds ?? [],
     parsed.data.audienceTargetIds ?? [],
   );
   const [created] = await toRules([row]);
@@ -319,6 +323,7 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
     existing.agentId,
     parsed.data.categoryIds,
     parsed.data.sourceIds,
+    parsed.data.connectorIds,
     parsed.data.audienceTargetIds,
     res,
   );
@@ -369,6 +374,7 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
   if (
     parsed.data.categoryIds !== undefined ||
     parsed.data.sourceIds !== undefined ||
+    parsed.data.connectorIds !== undefined ||
     parsed.data.audienceTargetIds !== undefined
   ) {
     const current = (await toRules([row]))[0];
@@ -376,6 +382,7 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
       row.id,
       parsed.data.categoryIds ?? current.categoryIds,
       parsed.data.sourceIds ?? current.sourceIds,
+      parsed.data.connectorIds ?? current.connectorIds,
       parsed.data.audienceTargetIds ?? current.audienceTargetIds,
     );
   }
@@ -498,6 +505,7 @@ router.post(
       req.userId,
       rule.agentId,
       [parsed.data.categoryId],
+      undefined,
       undefined,
       undefined,
       res,
@@ -771,6 +779,7 @@ async function validateRuleTargets(
   agentId: string | null,
   categoryIds: string[] | undefined,
   sourceIds: string[] | undefined,
+  connectorIds: string[] | undefined,
   audienceTargetIds: string[] | undefined,
   res: { status: (n: number) => { json: (b: unknown) => void } },
 ) {
@@ -824,6 +833,31 @@ async function validateRuleTargets(
     }
   }
 
+  if (connectorIds?.length) {
+    const uniqueIds = [...new Set(connectorIds)];
+    const connectors = await db
+      .select({
+        id: apiConnectorsTable.id,
+        agentId: apiConnectorsTable.agentId,
+        userId: apiConnectorsTable.userId,
+      })
+      .from(apiConnectorsTable)
+      .where(inArray(apiConnectorsTable.id, uniqueIds));
+    if (connectors.length !== uniqueIds.length) {
+      res.status(400).json({ error: "One or more connectors were not found." });
+      return false;
+    }
+    const invalid = connectors.some((connector) => {
+      const owned = connector.userId === userId || connector.userId == null;
+      const sameAgent = !agentId || connector.agentId === agentId;
+      return !owned || !sameAgent;
+    });
+    if (invalid) {
+      res.status(400).json({ error: "Connectors must belong to this agent." });
+      return false;
+    }
+  }
+
   if (audienceTargetIds?.length) {
     const uniqueIds = [...new Set(audienceTargetIds)];
     const targets = await db
@@ -856,6 +890,7 @@ async function replaceRuleLinks(
   ruleId: string,
   categoryIds: string[],
   sourceIds: string[],
+  connectorIds: string[],
   audienceTargetIds: string[],
 ) {
   await Promise.all([
@@ -866,12 +901,16 @@ async function replaceRuleLinks(
       .delete(ruleSourceLinksTable)
       .where(eq(ruleSourceLinksTable.ruleId, ruleId)),
     db
+      .delete(ruleConnectorLinksTable)
+      .where(eq(ruleConnectorLinksTable.ruleId, ruleId)),
+    db
       .delete(ruleAudienceTargetLinksTable)
       .where(eq(ruleAudienceTargetLinksTable.ruleId, ruleId)),
   ]);
 
   const uniqueCategories = [...new Set(categoryIds)];
   const uniqueSources = [...new Set(sourceIds)];
+  const uniqueConnectors = [...new Set(connectorIds)];
   const uniqueAudienceTargets = [...new Set(audienceTargetIds)];
 
   await Promise.all([
@@ -885,6 +924,11 @@ async function replaceRuleLinks(
           .insert(ruleSourceLinksTable)
           .values(uniqueSources.map((sourceId) => ({ ruleId, sourceId })))
       : Promise.resolve(),
+    uniqueConnectors.length > 0
+      ? db
+          .insert(ruleConnectorLinksTable)
+          .values(uniqueConnectors.map((connectorId) => ({ ruleId, connectorId })))
+      : Promise.resolve(),
     uniqueAudienceTargets.length > 0
       ? db
           .insert(ruleAudienceTargetLinksTable)
@@ -896,7 +940,7 @@ async function replaceRuleLinks(
 async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
-  const [categoryLinks, sourceLinks, audienceTargetLinks] = await Promise.all([
+  const [categoryLinks, sourceLinks, connectorLinks, audienceTargetLinks] = await Promise.all([
     db
       .select()
       .from(ruleCategoryLinksTable)
@@ -905,6 +949,10 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
       .select()
       .from(ruleSourceLinksTable)
       .where(inArray(ruleSourceLinksTable.ruleId, ids)),
+    db
+      .select()
+      .from(ruleConnectorLinksTable)
+      .where(inArray(ruleConnectorLinksTable.ruleId, ids)),
     db
       .select()
       .from(ruleAudienceTargetLinksTable)
@@ -922,6 +970,12 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
     const list = sourcesByRule.get(link.ruleId) ?? [];
     list.push(link.sourceId);
     sourcesByRule.set(link.ruleId, list);
+  }
+  const connectorsByRule = new Map<string, string[]>();
+  for (const link of connectorLinks) {
+    const list = connectorsByRule.get(link.ruleId) ?? [];
+    list.push(link.connectorId);
+    connectorsByRule.set(link.ruleId, list);
   }
   const audienceTargetsByRule = new Map<string, string[]>();
   for (const link of audienceTargetLinks) {
@@ -944,6 +998,7 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
     agentId: row.agentId ?? null,
     categoryIds: categoriesByRule.get(row.id) ?? [],
     sourceIds: sourcesByRule.get(row.id) ?? [],
+    connectorIds: connectorsByRule.get(row.id) ?? [],
     audienceTargetIds: audienceTargetsByRule.get(row.id) ?? [],
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),

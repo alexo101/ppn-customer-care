@@ -23,12 +23,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type ChatMessage = {
+export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
 
-type ChatStatus = RuleAuthoringResponseStatus | "idle";
+export type ChatStatus = RuleAuthoringResponseStatus | "idle";
 
 type RuleAuthoringChatProps = {
   agentId: string;
@@ -306,7 +306,7 @@ function RulePreview({
   return (
     <div className="ml-9 rounded-xl border border-primary/30 bg-card p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+        <p className="text-sm font-semibold text-primary">
           Rule ready for confirmation
         </p>
         <div className="flex items-center gap-1.5">
@@ -403,4 +403,195 @@ function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
 function apiErrorMessage(error: unknown, fallback: string) {
   if (!(error instanceof Error)) return fallback;
   return error.message.replace(/^HTTP \d+\s[^:]+:\s*/, "") || fallback;
+}
+
+export type RuleAuthoringPanelProps = {
+  agentId: string;
+  rule: OrchestratorRule | null;
+  categories: IntentCategory[];
+  sources: KnowledgeSource[];
+  audienceTargets: Target[];
+  draft: RuleAuthoringDraft | undefined;
+  onDraftChange: (draft: RuleAuthoringDraft) => void;
+  messages: ChatMessage[];
+  onMessagesChange: (messages: ChatMessage[]) => void;
+  status: ChatStatus;
+  onStatusChange: (status: ChatStatus) => void;
+  input: string;
+  onInputChange: (value: string) => void;
+  busy: boolean;
+  onApprovedSave: (draft: RuleAuthoringDraft) => void;
+};
+
+export function RuleAuthoringPanel({
+  agentId,
+  categories,
+  sources,
+  audienceTargets,
+  draft,
+  onDraftChange,
+  messages,
+  onMessagesChange,
+  status,
+  onStatusChange,
+  input,
+  onInputChange,
+  busy,
+  onApprovedSave,
+}: RuleAuthoringPanelProps) {
+  const authorRule = useSendRuleAuthoringMessage();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const categoryNames = useMemo(
+    () => Object.fromEntries(categories.map((category) => [category.id, category.name])),
+    [categories],
+  );
+  const sourceNames = useMemo(
+    () => Object.fromEntries(sources.map((source) => [source.id, source.name])),
+    [sources],
+  );
+  const isBusy = busy || authorRule.isPending;
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, status]);
+
+  const sendMessage = (content: string) => {
+    const message = content.trim();
+    if (!message || isBusy) return;
+    const history = messages.slice(-30);
+    onMessagesChange([...messages, { role: "user", content: message }]);
+    onInputChange("");
+
+    authorRule.mutate(
+      {
+        agentId,
+        data: {
+          message,
+          history,
+          draft: draft ? normalizeDraft(draft) : undefined,
+          awaitingConfirmation: status === "ready_for_confirmation",
+        },
+      },
+      {
+        onSuccess: (result) => {
+          onMessagesChange([
+            ...messages,
+            { role: "user", content: message },
+            { role: "assistant", content: result.assistantMessage },
+          ]);
+          if (result.draft) onDraftChange(normalizeDraft(result.draft));
+          onStatusChange(result.status);
+          if (result.status === "approved" && result.draft) {
+            onApprovedSave(result.draft);
+          }
+        },
+        onError: (error) => {
+          onMessagesChange([
+            ...messages,
+            { role: "user", content: message },
+            {
+              role: "assistant",
+              content: apiErrorMessage(
+                error,
+                "Rule authoring is temporarily unavailable. Please try again.",
+              ),
+            },
+          ]);
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-5 py-5">
+        <div className="mx-auto max-w-2xl space-y-4">
+          {messages.map((message, index) => {
+            const isUser = message.role === "user";
+            return (
+              <div key={`${message.role}-${index}`} className={cn("flex gap-2", isUser && "justify-end")}>
+                {!isUser && (
+                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Bot className="h-4 w-4" />
+                  </span>
+                )}
+                <div
+                  className={cn(
+                    "max-w-[82%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm shadow-sm",
+                    isUser
+                      ? "rounded-tr-sm bg-primary text-primary-foreground"
+                      : "rounded-tl-sm border border-border bg-card text-card-foreground",
+                  )}
+                >
+                  {message.content}
+                </div>
+                {isUser && (
+                  <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <User className="h-4 w-4" />
+                  </span>
+                )}
+              </div>
+            );
+          })}
+
+          {authorRule.isPending && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Building the rule…
+            </div>
+          )}
+
+          {status === "ready_for_confirmation" && draft && (
+            <RulePreview
+              draft={normalizeDraft(draft)}
+              categoryNames={categoryNames}
+              sourceNames={sourceNames}
+              audienceTargets={audienceTargets}
+              onConfirm={() => onApprovedSave(draft)}
+              disabled={isBusy}
+            />
+          )}
+        </div>
+      </div>
+
+      <form
+        className="border-t border-border bg-card p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          sendMessage(input);
+        }}
+      >
+        <div className="mx-auto flex max-w-2xl items-end gap-2">
+          <Textarea
+            value={input}
+            onChange={(event) => onInputChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage(input);
+              }
+            }}
+            placeholder={
+              status === "ready_for_confirmation"
+                ? "Reply OK, or describe what to change…"
+                : "Describe your rule or answer the question…"
+            }
+            disabled={isBusy || status === "approved"}
+            className="min-h-[44px] max-h-32 resize-none text-sm"
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={!input.trim() || isBusy || status === "approved"}
+            aria-label="Send message"
+          >
+            {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+        <p className="mx-auto mt-2 max-w-2xl text-[11px] text-muted-foreground">
+          Nothing is saved until you explicitly approve the proposed rule.
+        </p>
+      </form>
+    </div>
+  );
 }

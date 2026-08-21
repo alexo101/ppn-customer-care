@@ -5,11 +5,13 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { ConnectorInputAuthConfig } from './connectorInputAuthConfig';
 
 export interface ConnectorInput {
   name: string;
   agentId?: string;
   endpointPattern: string;
   authType: string;
+  authConfig?: ConnectorInputAuthConfig;
   isEnabled?: boolean;
 }

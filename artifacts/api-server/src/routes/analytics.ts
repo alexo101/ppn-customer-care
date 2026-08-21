@@ -40,11 +40,21 @@ router.get("/analytics/summary", requireAuth, async (req, res): Promise<void> =>
     JOIN conversations c ON c.id = ol.conversation_id
     WHERE c.user_id = ${userId}
   `);
+  const { rows: analyticsRows } = await db.execute(sql`
+    SELECT
+      AVG(ca.resolution_time_ms)::float AS avg_resolution_time_ms,
+      AVG(ca.interaction_count)::float AS avg_interactions_per_conversation,
+      SUM(ca.estimated_cost_usd::numeric)::float AS estimated_total_cost_usd
+    FROM conversation_analytics ca
+    JOIN conversations c ON c.id = ca.conversation_id
+    WHERE c.user_id = ${userId}
+  `);
 
   const r = (convRows[0] ?? {}) as Record<string, unknown>;
   const m = (msgRows[0] ?? {}) as Record<string, unknown>;
   const f = (feedbackRows[0] ?? {}) as Record<string, unknown>;
   const l = (logRows[0] ?? {}) as Record<string, unknown>;
+  const a = (analyticsRows[0] ?? {}) as Record<string, unknown>;
 
   res.json({
     totalConversations: Number(r.total_conversations ?? 0),
@@ -55,6 +65,9 @@ router.get("/analytics/summary", requireAuth, async (req, res): Promise<void> =>
     totalMessages: Number(m.total_messages ?? 0),
     positiveRatings: Number(f.positive_ratings ?? 0),
     negativeRatings: Number(f.negative_ratings ?? 0),
+    avgResolutionTimeMs: Number(a.avg_resolution_time_ms ?? 0),
+    avgInteractionsPerConversation: Number(a.avg_interactions_per_conversation ?? 0),
+    estimatedTotalCostUsd: Number(a.estimated_total_cost_usd ?? 0),
   });
 });
 

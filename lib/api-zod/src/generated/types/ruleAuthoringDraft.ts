@@ -22,5 +22,6 @@ export interface RuleAuthoringDraft {
   action: string;
   categoryIds?: string[];
   sourceIds?: string[];
+  connectorIds?: string[];
   audienceTargetIds?: string[];
 }

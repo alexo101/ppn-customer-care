@@ -1603,6 +1603,21 @@ components:
       properties:
         content:
           type: string
+        context:
+          $ref: "#/components/schemas/ConversationContext"
+
+    ConversationContext:
+      type: object
+      additionalProperties: false
+      properties:
+        currentUrl:
+          type: string
+        userRole:
+          type: string
+        referredClientId:
+          type: string
+        referredContractId:
+          type: string
 
     SendMessageResult:
       type: object
@@ -1629,6 +1644,7 @@ components:
           type: string
         rating:
           type: string
+          enum: [positive, negative]
         comment:
           type: ["string", "null"]
 
@@ -1797,7 +1813,7 @@ components:
     # ── Orchestrator Rule ─────────────────────────────────────────────────
     OrchestratorRule:
       type: object
-      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, audienceTargetIds, createdAt, updatedAt]
+      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, connectorIds, audienceTargetIds, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1824,6 +1840,10 @@ components:
           items:
             type: string
         sourceIds:
+          type: array
+          items:
+            type: string
+        connectorIds:
           type: array
           items:
             type: string
@@ -1868,6 +1888,10 @@ components:
           type: array
           items:
             type: string
+        connectorIds:
+          type: array
+          items:
+            type: string
         audienceTargetIds:
           type: array
           items:
@@ -1899,6 +1923,10 @@ components:
           items:
             type: string
         sourceIds:
+          type: array
+          items:
+            type: string
+        connectorIds:
           type: array
           items:
             type: string
@@ -1949,6 +1977,11 @@ components:
             type: string
           default: []
         sourceIds:
+          type: array
+          items:
+            type: string
+          default: []
+        connectorIds:
           type: array
           items:
             type: string
@@ -2269,7 +2302,7 @@ components:
     # ── API Connector ─────────────────────────────────────────────────────
     ApiConnector:
       type: object
-      required: [id, name, endpointPattern, authType, isEnabled, createdAt, updatedAt]
+      required: [id, name, endpointPattern, authType, authConfig, isEnabled, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2279,6 +2312,9 @@ components:
           type: string
         authType:
           type: string
+        authConfig:
+          type: object
+          additionalProperties: true
         isEnabled:
           type: boolean
         createdAt:
@@ -2298,6 +2334,9 @@ components:
           type: string
         authType:
           type: string
+        authConfig:
+          type: object
+          additionalProperties: true
         isEnabled:
           type: boolean
 
@@ -2310,13 +2349,16 @@ components:
           type: string
         authType:
           type: string
+        authConfig:
+          type: object
+          additionalProperties: true
         isEnabled:
           type: boolean
 
     # ── Analytics ─────────────────────────────────────────────────────────
     AnalyticsSummary:
       type: object
-      required: [totalConversations, activeConversations, resolvedConversations, escalatedConversations, avgConfidenceScore, totalMessages, positiveRatings, negativeRatings]
+      required: [totalConversations, activeConversations, resolvedConversations, escalatedConversations, avgConfidenceScore, totalMessages, positiveRatings, negativeRatings, avgResolutionTimeMs, avgInteractionsPerConversation, estimatedTotalCostUsd]
       properties:
         totalConversations:
           type: number
@@ -2333,6 +2375,12 @@ components:
         positiveRatings:
           type: number
         negativeRatings:
+          type: number
+        avgResolutionTimeMs:
+          type: number
+        avgInteractionsPerConversation:
+          type: number
+        estimatedTotalCostUsd:
           type: number
 
     # ── Appearance ────────────────────────────────────────────────────────

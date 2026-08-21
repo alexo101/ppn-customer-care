@@ -5,12 +5,14 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiConnectorAuthConfig } from './apiConnectorAuthConfig';
 
 export interface ApiConnector {
   id: string;
   name: string;
   endpointPattern: string;
   authType: string;
+  authConfig: ApiConnectorAuthConfig;
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;

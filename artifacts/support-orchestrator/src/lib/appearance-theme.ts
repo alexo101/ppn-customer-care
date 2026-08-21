@@ -1,5 +1,6 @@
 export const DEFAULT_CTA_COLOR = "#0EA5E9";
 export const DEFAULT_BACKGROUND_COLOR = "#F8FAFC";
+export const DEFAULT_CHAT_NAME = "Support Assistant";
 
 export type AppearanceColors = {
   ctaColor: string;

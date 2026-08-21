@@ -42,21 +42,14 @@ type Draft = {
 
 function FieldBlock({
   title,
-  description,
   children,
 }: {
   title: string;
-  description?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-      <div className="pb-3 border-b border-border">
-        <h3 className="text-sm font-medium">{title}</h3>
-        {description ? (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        ) : null}
-      </div>
+      <h3 className="text-sm font-medium">{title}</h3>
       {children}
     </div>
   );
@@ -140,6 +133,25 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       {
         onSuccess: (result) => {
           const next = result.appearance;
+          // #region agent log
+          fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e104fc" },
+            body: JSON.stringify({
+              sessionId: "e104fc",
+              runId: "post-fix",
+              hypothesisId: "E",
+              location: "appearance-editor.tsx:handleImport.onSuccess",
+              message: "Client received import appearance",
+              data: {
+                ctaColor: next.ctaColor,
+                ctaColorCandidates: result.ctaColorCandidates ?? [],
+                currentDraftCta: draft.ctaColor,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
           setDraft({
             websiteUrl: next.websiteUrl ?? draft.websiteUrl,
             ctaColor: next.ctaColor,
@@ -273,7 +285,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
         <div className="space-y-3">
-          <FieldBlock title="Name" description="Display name for this agent.">
+          <FieldBlock title="Name">
             <Label htmlFor={`agent-name-${agentId}`} className="sr-only">Name</Label>
             <Input
               id={`agent-name-${agentId}`}
@@ -283,7 +295,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             />
           </FieldBlock>
 
-          <FieldBlock title="Description" description="What this agent handles.">
+          <FieldBlock title="Description">
             <Label htmlFor={`agent-description-${agentId}`} className="sr-only">Description</Label>
             <Textarea
               id={`agent-description-${agentId}`}
@@ -294,10 +306,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             />
           </FieldBlock>
 
-          <FieldBlock
-            title="Website URL"
-            description="Import CTA color, background color, and logo from a homepage."
-          >
+          <FieldBlock title="Website URL">
             <form onSubmit={handleImport} className="flex flex-col sm:flex-row gap-2">
               <div className="flex-1 flex items-center gap-2">
                 <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -319,12 +328,9 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
                 Import styling
               </Button>
             </form>
-            {pageTitle ? (
-              <p className="text-[11px] text-muted-foreground">Detected from: {pageTitle}</p>
-            ) : null}
           </FieldBlock>
 
-          <FieldBlock title="CTA color" description="Buttons, header, and user chat bubbles.">
+          <FieldBlock title="CTA color">
             <ColorField
               label="CTA color"
               value={draft.ctaColor}
@@ -335,7 +341,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             />
           </FieldBlock>
 
-          <FieldBlock title="Background color" description="Chat panel background.">
+          <FieldBlock title="Background color">
             <ColorField
               label="Background color"
               value={draft.backgroundColor}
@@ -346,7 +352,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             />
           </FieldBlock>
 
-          <FieldBlock title="Logo" description="You can change this logo anytime.">
+          <FieldBlock title="Logo">
             <div className="flex items-center gap-4">
               <div className="h-16 w-16 rounded-lg border border-border bg-card flex items-center justify-center overflow-hidden shrink-0">
                 {draft.logoUrl ? (
@@ -386,8 +392,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
               </div>
             </div>
             {logoCandidates.length > 1 && (
-              <div className="space-y-2 pt-2 border-t border-border">
-                <p className="text-[11px] text-muted-foreground">Other logos found on the page</p>
+              <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   {logoCandidates.map((src) => (
                     <button
@@ -409,6 +414,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
         </div>
 
         <ChatAppearancePreview
+          name={name}
           ctaColor={isHexColor(draft.ctaColor) ? draft.ctaColor : DEFAULT_CTA_COLOR}
           backgroundColor={isHexColor(draft.backgroundColor) ? draft.backgroundColor : DEFAULT_BACKGROUND_COLOR}
           logoUrl={draft.logoUrl || null}

@@ -285,7 +285,13 @@ export const SendMessageParams = zod.object({
 })
 
 export const SendMessageBody = zod.object({
-  "content": zod.string()
+  "content": zod.string(),
+  "context": zod.object({
+  "currentUrl": zod.string().optional(),
+  "userRole": zod.string().optional(),
+  "referredClientId": zod.string().optional(),
+  "referredContractId": zod.string().optional()
+}).optional()
 })
 
 export const SendMessageResponse = zod.object({
@@ -325,7 +331,7 @@ export const SubmitFeedbackParams = zod.object({
 
 export const SubmitFeedbackBody = zod.object({
   "messageId": zod.string(),
-  "rating": zod.string(),
+  "rating": zod.enum(['positive', 'negative']),
   "comment": zod.string().nullish()
 })
 
@@ -603,6 +609,7 @@ export const ListRulesResponseItem = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
+  "connectorIds": zod.array(zod.string()),
   "audienceTargetIds": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -626,6 +633,7 @@ export const CreateRuleBody = zod.object({
   "action": zod.string().optional(),
   "categoryIds": zod.array(zod.string()).optional(),
   "sourceIds": zod.array(zod.string()).optional(),
+  "connectorIds": zod.array(zod.string()).optional(),
   "audienceTargetIds": zod.array(zod.string()).optional()
 })
 
@@ -642,6 +650,7 @@ export const CreateRuleResponse = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
+  "connectorIds": zod.array(zod.string()),
   "audienceTargetIds": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -666,6 +675,7 @@ export const sendRuleAuthoringMessageBodyDraftPriorityMax = 100;
 
 export const sendRuleAuthoringMessageBodyDraftCategoryIdsDefault = [];
 export const sendRuleAuthoringMessageBodyDraftSourceIdsDefault = [];
+export const sendRuleAuthoringMessageBodyDraftConnectorIdsDefault = [];
 export const sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault = [];
 export const sendRuleAuthoringMessageBodyAwaitingConfirmationDefault = false;
 
@@ -687,6 +697,7 @@ export const SendRuleAuthoringMessageBody = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftCategoryIdsDefault),
   "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftSourceIdsDefault),
+  "connectorIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftConnectorIdsDefault),
   "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault)
 }).optional(),
   "awaitingConfirmation": zod.boolean().default(sendRuleAuthoringMessageBodyAwaitingConfirmationDefault)
@@ -697,6 +708,7 @@ export const sendRuleAuthoringMessageResponseDraftPriorityMax = 100;
 
 export const sendRuleAuthoringMessageResponseDraftCategoryIdsDefault = [];
 export const sendRuleAuthoringMessageResponseDraftSourceIdsDefault = [];
+export const sendRuleAuthoringMessageResponseDraftConnectorIdsDefault = [];
 export const sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault = [];
 
 export const SendRuleAuthoringMessageResponse = zod.object({
@@ -714,6 +726,7 @@ export const SendRuleAuthoringMessageResponse = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftCategoryIdsDefault),
   "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftSourceIdsDefault),
+  "connectorIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftConnectorIdsDefault),
   "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault)
 }).optional(),
   "unresolvedFields": zod.array(zod.string())
@@ -739,6 +752,7 @@ export const UpdateRuleBody = zod.object({
   "action": zod.string().optional(),
   "categoryIds": zod.array(zod.string()).optional(),
   "sourceIds": zod.array(zod.string()).optional(),
+  "connectorIds": zod.array(zod.string()).optional(),
   "audienceTargetIds": zod.array(zod.string()).optional()
 })
 
@@ -755,6 +769,7 @@ export const UpdateRuleResponse = zod.object({
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
+  "connectorIds": zod.array(zod.string()),
   "audienceTargetIds": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1165,6 +1180,7 @@ export const ListConnectorsResponseItem = zod.object({
   "name": zod.string(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
+  "authConfig": zod.record(zod.string(), zod.unknown()),
   "isEnabled": zod.boolean(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1180,6 +1196,7 @@ export const CreateConnectorBody = zod.object({
   "agentId": zod.string().optional(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
+  "authConfig": zod.record(zod.string(), zod.unknown()).optional(),
   "isEnabled": zod.boolean().optional()
 })
 
@@ -1188,6 +1205,7 @@ export const CreateConnectorResponse = zod.object({
   "name": zod.string(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
+  "authConfig": zod.record(zod.string(), zod.unknown()),
   "isEnabled": zod.boolean(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1205,6 +1223,7 @@ export const UpdateConnectorBody = zod.object({
   "name": zod.string().optional(),
   "endpointPattern": zod.string().optional(),
   "authType": zod.string().optional(),
+  "authConfig": zod.record(zod.string(), zod.unknown()).optional(),
   "isEnabled": zod.boolean().optional()
 })
 
@@ -1213,6 +1232,7 @@ export const UpdateConnectorResponse = zod.object({
   "name": zod.string(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
+  "authConfig": zod.record(zod.string(), zod.unknown()),
   "isEnabled": zod.boolean(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
@@ -1240,7 +1260,10 @@ export const GetAnalyticsSummaryResponse = zod.object({
   "avgConfidenceScore": zod.number(),
   "totalMessages": zod.number(),
   "positiveRatings": zod.number(),
-  "negativeRatings": zod.number()
+  "negativeRatings": zod.number(),
+  "avgResolutionTimeMs": zod.number(),
+  "avgInteractionsPerConversation": zod.number(),
+  "estimatedTotalCostUsd": zod.number()
 })
 
 

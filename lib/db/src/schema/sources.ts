@@ -22,6 +22,7 @@ export const apiConnectorsTable = pgTable("api_connectors", {
   name: text("name").notNull(),
   endpointPattern: text("endpoint_pattern").notNull(),
   authType: text("auth_type").notNull(),
+  authConfig: jsonb("auth_config").notNull().default({}),
   isEnabled: boolean("is_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

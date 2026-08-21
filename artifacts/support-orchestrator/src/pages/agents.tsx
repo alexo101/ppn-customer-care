@@ -9,6 +9,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
+import { Badge } from "@/components/ui/badge";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -19,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 export default function AgentsBoard() {
   const { data: agents = [], isLoading } = useListAgents();
@@ -28,48 +38,63 @@ export default function AgentsBoard() {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
-      <div className="h-14 px-6 border-b border-border flex items-center justify-between bg-card shrink-0">
-        <h1 className="text-lg font-medium tracking-tight">Agents</h1>
-        <Button size="sm" className="h-8 text-xs" asChild>
+      <div className="h-16 px-6 md:px-8 border-b border-border flex items-center justify-between bg-card shrink-0">
+        <h1 className="text-xl font-semibold tracking-tight">Agents</h1>
+        <Button size="sm" asChild>
           <Link href="/agents/new">
-            <Plus className="w-3.5 h-3.5 mr-1" />
+            <Plus className="w-3.5 h-3.5" />
             Create agent
           </Link>
         </Button>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-6 md:p-8">
         <div className="max-w-7xl mx-auto">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading agents...</p>
+            <p className="text-sm text-muted-foreground">Loading agents…</p>
           ) : agents.length === 0 ? (
-            <div className="border border-dashed border-border rounded-xl p-12 text-center space-y-3">
-              <Bot className="w-10 h-10 mx-auto text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">No agents yet. Create one to configure conversations, categories, sources, targets, rules, and appearance.</p>
-              <Button asChild>
-                <Link href="/agents/new">Create agent</Link>
-              </Button>
-            </div>
+            <Empty className="border border-dashed rounded-xl py-16">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Bot />
+                </EmptyMedia>
+                <EmptyTitle>Create your first agent</EmptyTitle>
+                <EmptyDescription>
+                  An agent brings together conversations, categories, sources, targets, rules, and appearance in one place.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button asChild>
+                  <Link href="/agents/new">
+                    <Plus className="w-3.5 h-3.5" />
+                    Create agent
+                  </Link>
+                </Button>
+              </EmptyContent>
+            </Empty>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {agents.map((agent) => (
-                <Card key={agent.id} className="shadow-none border-border hover:border-primary/40 transition-colors">
+                <Card key={agent.id} className="hover:border-primary/40 transition-colors">
                   <CardHeader className="flex flex-row items-start justify-between gap-3">
                     <Link href={`/agents/${agent.id}/appearance`} className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        <CardTitle className="text-sm font-medium truncate">{agent.name}</CardTitle>
-                        <span className={`text-[10px] uppercase tracking-wide font-medium shrink-0 ${agent.isEnabled ? "text-emerald-600" : "text-muted-foreground"}`}>
+                        <CardTitle className="text-base font-semibold truncate">{agent.name}</CardTitle>
+                        <Badge
+                          variant={agent.isEnabled ? "default" : "secondary"}
+                          className={cn("shrink-0", agent.isEnabled ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-transparent shadow-none" : "shadow-none")}
+                        >
                           {agent.isEnabled ? "Active" : "Inactive"}
-                        </span>
+                        </Badge>
                       </div>
-                      <CardDescription className="text-xs mt-1 line-clamp-2">
+                      <CardDescription className="text-sm mt-1.5 line-clamp-2">
                         {agent.description || "No description"}
                       </CardDescription>
                     </Link>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
                       onClick={() => setToDelete({ id: agent.id, name: agent.name })}
                     >
                       <Trash className="w-3.5 h-3.5" />

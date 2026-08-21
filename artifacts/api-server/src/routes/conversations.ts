@@ -11,10 +11,12 @@ import {
   orchestratorRulesTable,
   ruleCategoryLinksTable,
   ruleSourceLinksTable,
+  ruleConnectorLinksTable,
   ruleAudienceTargetLinksTable,
   audienceTargetsTable,
   targetConditionsTable,
   knowledgeSourcesTable,
+  apiConnectorsTable,
 } from "@workspace/db";
 import {
   ListConversationsQueryParams,
@@ -30,9 +32,24 @@ import {
   ListConversationLogsParams,
   ListQuestionsQueryParams,
 } from "@workspace/api-zod";
+import type { ClassificationResult } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
 import { actionUsesSources, categoryMatchesOperator, normalizeAction } from "../lib/rule-engine";
 import { resolveUserEmail } from "../lib/identity";
+import {
+  AnswerProviderError,
+  ClassificationProviderError,
+  EmbeddingProviderError,
+  createAnswerProvider,
+  createClassificationProvider,
+  createEmbeddingProvider,
+} from "../lib/llm";
+import { classifyIntentWithMetadata, isIntentShortcut } from "../lib/classify-intent";
+import { generateAnswer, requiresAnswerProvider } from "../lib/generate-answer";
+import { retrieveRelevantChunks } from "../lib/retrieval";
+import { callConnector } from "../lib/api-connector";
+import { applyGuardrails } from "../lib/guardrails";
+import { updateConversationAnalytics } from "../lib/conversation-analytics";
 import {
   matchesAudienceTarget,
   type AudienceTargetForMatching,
@@ -244,6 +261,11 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
   // Stage 1: capture authenticated user identity
   stages[0].status = "running";
   const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
+  const storedContext = isPlainObject(existingMeta.context) ? existingMeta.context : {};
+  const requestContext: Record<string, unknown> = {
+    ...storedContext,
+    ...(isPlainObject(parsed.data.context) ? parsed.data.context : {}),
+  };
   const existingPerson = isPlainObject(existingMeta.person)
     ? existingMeta.person
     : {};
@@ -255,10 +277,15 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
     attributes: {
       user_id: req.userId,
       ...(email ? { email } : {}),
+      ...requestContext,
     },
   };
   stages[0].status = "completed";
-  stages[0].details = { person_type: person.personType, email_known: Boolean(email) };
+  stages[0].details = {
+    person_type: person.personType,
+    email_known: Boolean(email),
+    context_fields: Object.keys(requestContext).filter((key) => requestContext[key] != null),
+  };
 
   // Stage 2: load categories
   stages[1].status = "running";
@@ -274,62 +301,228 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
   stages[1].status = "completed";
   stages[1].details = { categories_loaded: categories.length };
 
-  // Stage 3: classify intent
-  stages[2].status = "running";
-  const classification = classifyIntent(parsed.data.content, categories);
-  if (email) classification.entities.email = email;
-  stages[2].status = "completed";
-  stages[2].details = { category: classification.primaryCategory, confidence: classification.confidence };
-
-  // Stage 4: load rules
-  stages[3].status = "running";
-  const classifiedCategory = classification.primaryCategoryId
-    ? categories.find((category) => category.id === classification.primaryCategoryId) ?? {
-        id: classification.primaryCategoryId,
-        name: classification.primaryCategory,
-      }
-    : classification.primaryCategory
-      ? { id: "", name: classification.primaryCategory }
-      : null;
-
-  const rule = await matchRuleForAgent(conv.agentId, classifiedCategory, person);
-  stages[3].status = "completed";
-  stages[3].details = {
-    rule_used: rule?.name ?? "None",
-    operator: rule?.conditionOperator ?? null,
-    action: rule?.action ?? null,
-    email_known: Boolean(email),
+  let classification: ClassificationResult = {
+    primaryCategory: "General",
+    primaryCategoryId: "",
+    confidence: 0,
+    secondaryCategories: [],
+    entities: {},
+    rule: "None",
+    ruleId: "",
   };
-
+  let classificationModel = "none";
+  let classificationTokens = 0;
+  let rule: Rule | null = null;
+  let retrievedChunks: import("../lib/llm").RetrievedChunk[] = [];
+  let retrievalModel = "none";
+  let retrievalTokens = 0;
+  let responseText = "";
+  let resolutionStatus = "active";
+  let shouldAskResolution = false;
+  let answerModel = "none";
+  let answerTokens = 0;
+  let promptAssembled = "";
   let dataSourcesQueried: string[] = [];
-  if (rule && actionUsesSources(rule.action)) {
-    const sourceLinks = await db
-      .select({ name: knowledgeSourcesTable.name })
-      .from(ruleSourceLinksTable)
-      .innerJoin(knowledgeSourcesTable, eq(ruleSourceLinksTable.sourceId, knowledgeSourcesTable.id))
-      .where(eq(ruleSourceLinksTable.ruleId, rule.id));
-    dataSourcesQueried = sourceLinks.map((row) => row.name);
+  let retrievalNeedsClarification = false;
+  let retrievalAccessDenied = false;
+
+  try {
+    // Stage 3: classify intent with the configured LLM.
+    stages[2].status = "running";
+    const prevMessages = await db
+      .select()
+      .from(messagesTable)
+      .where(eq(messagesTable.conversationId, conv.id))
+      .orderBy(messagesTable.createdAt);
+    const classificationResult = await classifyIntentWithMetadata(
+      parsed.data.content,
+      prevMessages,
+      categories,
+      isIntentShortcut(parsed.data.content)
+        ? undefined
+        : createClassificationProvider(),
+      requestContext,
+    );
+    classification = classificationResult.classification;
+    if (email) classification.entities.email = email;
+    classificationModel = classificationResult.model;
+    classificationTokens = classificationResult.totalTokens;
+    stages[2].status = "completed";
+    stages[2].details = {
+      category: classification.primaryCategory,
+      confidence: classification.confidence,
+      probabilities: classificationResult.probabilities,
+      model: classificationModel,
+    };
+
+    // Stage 4: identify the highest-priority matching rule.
+    stages[3].status = "running";
+    const classifiedCategory = classification.primaryCategoryId
+      ? categories.find((category) => category.id === classification.primaryCategoryId) ?? {
+          id: classification.primaryCategoryId,
+          name: classification.primaryCategory,
+        }
+      : classification.primaryCategory
+        ? { id: "", name: classification.primaryCategory }
+        : null;
+    rule = await matchRuleForAgent(conv.agentId, classifiedCategory, person);
+    stages[3].status = "completed";
+    stages[3].details = {
+      rule_used: rule?.name ?? "None",
+      operator: rule?.conditionOperator ?? null,
+      action: rule?.action ?? null,
+      email_known: Boolean(email),
+    };
+
+    // Stage 5: retrieve relevant content from sources linked to the rule.
+    stages[4].status = "running";
+    if (rule && actionUsesSources(rule.action)) {
+      const sourceLinks = await db
+        .select({
+          id: knowledgeSourcesTable.id,
+          name: knowledgeSourcesTable.name,
+        })
+        .from(ruleSourceLinksTable)
+        .innerJoin(
+          knowledgeSourcesTable,
+          eq(ruleSourceLinksTable.sourceId, knowledgeSourcesTable.id),
+        )
+        .where(eq(ruleSourceLinksTable.ruleId, rule.id));
+      if (sourceLinks.length > 0) {
+        const retrieval = await retrieveRelevantChunks(
+          sourceLinks.map((source) => source.id),
+          parsed.data.content,
+          createEmbeddingProvider(),
+        );
+        retrievedChunks = retrieval.chunks;
+        retrievalModel = retrieval.model;
+        retrievalTokens = retrieval.totalTokens;
+        dataSourcesQueried = [
+          ...new Set(retrievedChunks.map((chunk) => chunk.sourceName)),
+        ];
+      }
+      if (normalizeAction(rule.action) === "query_live_data") {
+        const connectorLinks = await db
+          .select({
+            id: apiConnectorsTable.id,
+            name: apiConnectorsTable.name,
+            endpointPattern: apiConnectorsTable.endpointPattern,
+            authType: apiConnectorsTable.authType,
+            authConfig: apiConnectorsTable.authConfig,
+          })
+          .from(ruleConnectorLinksTable)
+          .innerJoin(
+            apiConnectorsTable,
+            eq(ruleConnectorLinksTable.connectorId, apiConnectorsTable.id),
+          )
+          .where(
+            and(
+              eq(ruleConnectorLinksTable.ruleId, rule.id),
+              eq(apiConnectorsTable.isEnabled, true),
+            ),
+          );
+        for (const connector of connectorLinks) {
+          dataSourcesQueried.push(connector.name);
+          const result = await callConnector(connector, {
+            query: parsed.data.content,
+            params: classification.entities,
+          });
+          if (!result.ok && (result.status === 401 || result.status === 403)) {
+            retrievalAccessDenied = true;
+          }
+          if (result.ok && hasUsableConnectorBody(result.body)) {
+            retrievedChunks.push({
+              sourceId: result.sourceName,
+              sourceName: result.sourceName,
+              content: JSON.stringify(result.body),
+              distance: 0,
+              kind: "api",
+            });
+          }
+        }
+        dataSourcesQueried = [...new Set(dataSourcesQueried)];
+        retrievalNeedsClarification =
+          connectorLinks.length === 0 ||
+          !retrievedChunks.some((chunk) => chunk.kind === "api");
+      }
+      if (normalizeAction(rule.action) === "search_answer" && sourceLinks.length > 0 && retrievedChunks.length === 0) {
+        retrievalNeedsClarification = true;
+      }
+    }
+    stages[4].status = "completed";
+    stages[4].details = {
+      chunks_retrieved: retrievedChunks.length,
+      sources: dataSourcesQueried,
+      model: retrievalModel,
+      access_denied: retrievalAccessDenied,
+    };
+
+    // Stage 6: generate a grounded answer with the configured LLM.
+    stages[5].status = "running";
+    const answerRule = !rule
+      ? {
+          action: "ask clarification",
+          description: "",
+          promptTemplate: "",
+          requiresClarificationPrompt:
+            "I couldn't identify a configured support workflow for that request. Could you provide more detail?",
+          escalationTrigger: false,
+        }
+      : (retrievalAccessDenied || retrievalNeedsClarification)
+        ? {
+            ...rule,
+            action: "ask clarification",
+            ...(retrievalAccessDenied
+              ? {
+                  requiresClarificationPrompt:
+                    "I don't have permission to access the information needed for this request. Please contact an administrator or human support agent.",
+                }
+              : {}),
+          }
+        : rule;
+    const answerResult = await generateAnswer(
+      parsed.data.content,
+      classification,
+      answerRule,
+      prevMessages,
+      person.attributes,
+      retrievedChunks,
+      requiresAnswerProvider(parsed.data.content, rule)
+        ? createAnswerProvider()
+        : undefined,
+      requestContext,
+    );
+    responseText = answerResult.responseText;
+    resolutionStatus = answerResult.resolutionStatus;
+    shouldAskResolution = answerResult.shouldAskResolution;
+    answerModel = answerResult.model;
+    answerTokens = answerResult.totalTokens;
+    promptAssembled = answerResult.promptAssembled;
+    const guardrailResult = applyGuardrails(responseText, {
+      retrievedChunks,
+      rule: answerRule,
+      personAttributes: person.attributes,
+    });
+    responseText = guardrailResult.responseText;
+    if (guardrailResult.blocked) {
+      resolutionStatus = "pending_clarification";
+      shouldAskResolution = false;
+    }
+    stages[5].status = "completed";
+    stages[5].details = {
+      resolution_status: resolutionStatus,
+      model: answerModel,
+      chunks_used: retrievedChunks.length,
+      guardrails: guardrailResult.actions,
+    };
+  } catch (error) {
+    const message = workflowProviderErrorMessage(error);
+    res.status(503).json({ error: message });
+    return;
   }
 
-  // Stage 5: generate response
-  stages[4].status = "running";
-  const prevMessages = await db
-    .select()
-    .from(messagesTable)
-    .where(eq(messagesTable.conversationId, conv.id))
-    .orderBy(messagesTable.createdAt);
-
-  const { responseText, resolutionStatus, shouldAskResolution } = generateResponse(
-    parsed.data.content,
-    classification,
-    rule,
-    prevMessages,
-    person.attributes,
-  );
-  stages[4].status = "completed";
-  stages[4].details = { resolution_status: resolutionStatus };
-
   const latencyMs = Date.now() - startTs;
+  stages[6].status = "running";
 
   // Save assistant message
   const [assistantMsg] = await db
@@ -338,31 +531,28 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
     .returning();
 
   // Update conversation (and capture a subject from the first user message)
+  const nextStatus = nextConversationStatus(
+    resolutionStatus,
+    Boolean(rule && (rule.escalationTrigger || normalizeAction(rule.action) === "escalate")),
+    conv.status,
+  );
   const conversationPatch: Record<string, unknown> = {
     lastActivityAt: new Date(),
-    status: rule && (rule.escalationTrigger || normalizeAction(rule.action) === "escalate") ? "escalated" : conv.status,
-  };
-  if (!isPlainObject(existingMeta.person) || existingMeta.person.email !== email) {
-    conversationPatch.metadata = {
+    status: nextStatus,
+    metadata: {
       ...existingMeta,
+      context: requestContext,
       person: {
         personType: "user",
         user_id: req.userId,
         ...(email ? { email } : {}),
       },
-    };
-  }
+    },
+  };
+  if (nextStatus === "resolved") conversationPatch.resolvedAt = new Date();
   if (typeof existingMeta.subject !== "string" || !existingMeta.subject.trim()) {
     conversationPatch.metadata = {
-      ...(isPlainObject(conversationPatch.metadata)
-        ? conversationPatch.metadata
-        : {}),
-      ...existingMeta,
-      person: {
-        personType: "user",
-        user_id: req.userId,
-        ...(email ? { email } : {}),
-      },
+      ...(conversationPatch.metadata as Record<string, unknown>),
       subject: parsed.data.content.slice(0, 120),
     };
   }
@@ -384,13 +574,24 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
       detectedEntities: classification.entities,
       ruleUsed: rule ? `${rule.name} (${rule.conditionOperator} / ${rule.action})` : "None",
       dataSourcesQueried,
-      promptAssembled: rule?.promptTemplate ?? "",
-      tokensUsed: String(Math.floor(parsed.data.content.length / 4)),
+      promptAssembled,
+      tokensUsed: String(classificationTokens + retrievalTokens + answerTokens),
       latencyMs: String(latencyMs),
-      llmModel: "simulated-v1",
+      llmModel: [classificationModel, retrievalModel, answerModel]
+        .filter((model) => model !== "none")
+        .join(", "),
       resolutionStatus,
     })
     .returning();
+  if (nextStatus === "resolved") {
+    await updateConversationAnalytics(conv.id);
+  }
+  stages[6].status = "completed";
+  stages[6].details = {
+    status: nextStatus,
+    confirmation_required: shouldAskResolution,
+    feedback_available: nextStatus === "resolved",
+  };
 
   res.json({
     message: toMessage(assistantMsg),
@@ -426,12 +627,28 @@ router.post("/conversations/:id/feedback", requireAuth, async (req, res): Promis
     return;
   }
 
+  const [message] = await db
+    .select({ id: messagesTable.id })
+    .from(messagesTable)
+    .where(
+      and(
+        eq(messagesTable.id, parsed.data.messageId),
+        eq(messagesTable.conversationId, params.data.id),
+      ),
+    )
+    .limit(1);
+  if (!message) {
+    res.status(400).json({ error: "Message does not belong to this conversation." });
+    return;
+  }
+
   await db.insert(conversationFeedbackTable).values({
     conversationId: params.data.id,
     messageId: parsed.data.messageId ?? null,
     rating: parsed.data.rating,
     comment: parsed.data.comment ?? null,
   });
+  await updateConversationAnalytics(params.data.id);
 
   res.status(201).json({ success: true });
 });
@@ -551,6 +768,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasUsableConnectorBody(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
 function parseDayStart(value?: string): Date | null {
   if (!value) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -586,7 +811,6 @@ function conversationDateFilters(fromDate?: string, toDate?: string) {
   return filters;
 }
 
-type Category = typeof intentCategoriesTable.$inferSelect;
 type Rule = typeof orchestratorRulesTable.$inferSelect;
 type QuestionType = "question" | "unanswered" | "escalated";
 
@@ -683,6 +907,23 @@ function classifyQuestionType(
   return "question";
 }
 
+function nextConversationStatus(
+  resolutionStatus: string,
+  escalated: boolean,
+  previousStatus: string,
+): string {
+  if (escalated || resolutionStatus === "escalated") return "escalated";
+  if (resolutionStatus === "resolved") return "resolved";
+  if (
+    resolutionStatus === "pending_clarification" ||
+    resolutionStatus === "pending_resolution"
+  ) {
+    return "pending_clarification";
+  }
+  if (resolutionStatus === "active") return "active";
+  return previousStatus;
+}
+
 function toQuestion(row: {
   id: string;
   conversationId: string;
@@ -707,171 +948,21 @@ function buildStages() {
     { stage: 2, name: "Load Categories", status: "pending" as string, details: {} as Record<string, unknown> },
     { stage: 3, name: "Classify Intent", status: "pending" as string, details: {} as Record<string, unknown> },
     { stage: 4, name: "Match Rules", status: "pending" as string, details: {} as Record<string, unknown> },
-    { stage: 5, name: "Generate Response", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 5, name: "Retrieve Knowledge", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 6, name: "Generate Response", status: "pending" as string, details: {} as Record<string, unknown> },
+    { stage: 7, name: "Request Closing", status: "pending" as string, details: {} as Record<string, unknown> },
   ];
 }
 
-function classifyIntent(message: string, categories: Category[]) {
-  const lower = message.toLowerCase().trim();
-  const RESOLUTION = ["thanks", "thank you", "solved", "that works", "perfect", "got it", "great", "resolved"];
-  const GREETING = ["hello", "hi", "hey", "good morning", "good afternoon"];
-
-  if (RESOLUTION.some((k) => lower.includes(k))) {
-    return {
-      primaryCategory: "Resolution",
-      primaryCategoryId: "",
-      confidence: 0.95,
-      secondaryCategories: [],
-      entities: {},
-      rule: "None",
-      ruleId: "",
-    };
+function workflowProviderErrorMessage(error: unknown): string {
+  if (
+    error instanceof ClassificationProviderError ||
+    error instanceof EmbeddingProviderError ||
+    error instanceof AnswerProviderError
+  ) {
+    return error.message;
   }
-  if (GREETING.some((k) => lower.startsWith(k))) {
-    return {
-      primaryCategory: "Greeting",
-      primaryCategoryId: "",
-      confidence: 0.9,
-      secondaryCategories: [],
-      entities: {},
-      rule: "None",
-      ruleId: "",
-    };
-  }
-
-  const scored: { cat: Category; score: number }[] = [];
-  for (const cat of categories) {
-    let score = 0;
-    for (const kw of (cat.keywords as string[]) ?? []) {
-      if (lower.includes(kw.toLowerCase())) score += 1;
-    }
-    for (const ex of (cat.examples as string[]) ?? []) {
-      const exl = ex.toLowerCase().replace("...", "");
-      if (lower.includes(exl) || exl.includes(lower)) score += 2;
-    }
-    if (score > 0) scored.push({ cat, score });
-  }
-  scored.sort((a, b) => b.score - a.score);
-
-  if (scored.length === 0) {
-    const fallback = categories[0];
-    return {
-      primaryCategory: fallback?.name ?? "General",
-      primaryCategoryId: fallback?.id ?? "",
-      confidence: 0.5,
-      secondaryCategories: [],
-      entities: {},
-      rule: "None",
-      ruleId: "",
-    };
-  }
-
-  const maxScore = scored[0].score;
-  const confidence = Math.min(0.99, 0.5 + maxScore * 0.1);
-  const primary = scored[0].cat;
-  const secondary = scored.slice(1, 3).filter((s) => s.score > 0).map((s) => s.cat.name);
-
-  const entities: Record<string, unknown> = {};
-  const uuidMatch = lower.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
-  if (uuidMatch) entities.detected_uuid = uuidMatch[0];
-
-  return {
-    primaryCategory: primary.name,
-    primaryCategoryId: primary.id,
-    confidence,
-    secondaryCategories: secondary,
-    entities,
-    rule: "None",
-    ruleId: "",
-  };
-}
-
-function generateResponse(
-  message: string,
-  classification: ReturnType<typeof classifyIntent>,
-  rule: Rule | null,
-  history: (typeof messagesTable.$inferSelect)[],
-  attributes: Record<string, unknown>,
-) {
-  const lower = message.toLowerCase().trim();
-  const RESOLUTION = ["thanks", "thank you", "solved", "that works", "perfect", "got it", "great", "resolved"];
-  const GREETING = ["hello", "hi", "hey", "good morning", "good afternoon"];
-  const GREETINGS_RESPONSES = [
-    "Hello! I'm your AI support assistant. How can I help you today?",
-    "Hi there! What can I assist you with?",
-    "Welcome! I'm here to help. What do you need?",
-  ];
-
-  let responseText = "";
-  let resolutionStatus = "active";
-  let shouldAskResolution = false;
-
-  if (RESOLUTION.some((k) => lower.includes(k))) {
-    responseText = "Great to hear! If you need anything else, don't hesitate to reach out. Have a great day!";
-    resolutionStatus = "resolved";
-  } else if (GREETING.some((k) => lower.startsWith(k))) {
-    responseText = GREETINGS_RESPONSES[Math.floor(Math.random() * GREETINGS_RESPONSES.length)];
-  } else if (rule) {
-    const actionKind = normalizeAction(rule.action);
-    if (rule.escalationTrigger || actionKind === "escalate") {
-      responseText =
-        "I understand this is an important issue. I'm escalating this to a human support agent who will assist you shortly. Please stay on the line.";
-      resolutionStatus = "escalated";
-    } else if (actionKind === "ask_clarification") {
-      responseText = rule.requiresClarificationPrompt
-        ? renderTemplate(rule.requiresClarificationPrompt, attributes)
-        : `I need a bit more detail about your ${classification.primaryCategory} request before I can continue.`;
-      resolutionStatus = "pending_clarification";
-    } else if (actionKind === "search_answer" || actionKind === "query_live_data") {
-      const sourceHint = rule.action.trim() || "search answer";
-      const promptTemplate = renderTemplate(rule.promptTemplate, attributes);
-      responseText = promptTemplate
-        ? `Based on your ${classification.primaryCategory} inquiry, I will ${sourceHint}. ${promptTemplate}`
-        : `I'll ${sourceHint} for your ${classification.primaryCategory} inquiry and use the linked source to respond.`;
-      const msgCount = history.filter((m) => m.sender === "user").length;
-      if (msgCount >= 2 && !resolutionStatus.includes("resolved")) {
-        shouldAskResolution = true;
-        responseText +=
-          "\n\nDoes this answer your question? Please let me know if you need further assistance.";
-        resolutionStatus = "pending_resolution";
-      }
-    } else if (actionKind === "generate_from_template" && rule.promptTemplate) {
-      responseText = `Based on your ${classification.primaryCategory} inquiry: ${renderTemplate(rule.promptTemplate, attributes)}`;
-      const msgCount = history.filter((m) => m.sender === "user").length;
-      if (msgCount >= 2 && !resolutionStatus.includes("resolved")) {
-        shouldAskResolution = true;
-        responseText +=
-          "\n\nDoes this answer your question? Please let me know if you need further assistance.";
-        resolutionStatus = "pending_resolution";
-      }
-    } else if (rule.promptTemplate) {
-      responseText = `Based on your ${classification.primaryCategory} inquiry, I will ${rule.action}. ${renderTemplate(rule.promptTemplate, attributes)}`;
-    } else {
-      responseText = `I understand your ${classification.primaryCategory} request. I will ${rule.action}. Could you provide more details so I can assist you better?`;
-    }
-  } else {
-    const fallbacks: Record<string, string> = {
-      Greeting: GREETINGS_RESPONSES[0],
-      Resolution: "Great to hear! Have a great day!",
-    };
-    responseText =
-      fallbacks[classification.primaryCategory] ??
-      `Thank you for reaching out about your ${classification.primaryCategory} inquiry. I'm here to help. Could you provide more details?`;
-    const msgCount = history.filter((m) => m.sender === "user").length;
-    if (msgCount >= 3) {
-      shouldAskResolution = true;
-      resolutionStatus = "pending_resolution";
-    }
-  }
-
-  return { responseText, resolutionStatus, shouldAskResolution };
-}
-
-function renderTemplate(template: string, attributes: Record<string, unknown>): string {
-  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
-    const value = attributes[key];
-    return value == null ? "" : String(value);
-  });
+  return "The orchestrator is temporarily unavailable. Please try again.";
 }
 
 function toConversation(row: typeof conversationsTable.$inferSelect) {

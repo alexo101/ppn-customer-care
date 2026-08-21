@@ -172,6 +172,26 @@ async function importAppearanceFor(
 ) {
   try {
     const imported = await importWebsiteStyles(url);
+    // #region agent log
+    fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e104fc" },
+      body: JSON.stringify({
+        sessionId: "e104fc",
+        runId: "post-fix",
+        hypothesisId: "D,E",
+        location: "appearance.ts:importAppearanceFor",
+        message: "Import result before persist",
+        data: {
+          url,
+          ctaColor: imported.ctaColor,
+          ctaColorCandidates: imported.ctaColorCandidates,
+          usedDefault: imported.ctaColor === DEFAULT_CTA_COLOR,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     const importedAt = new Date();
     const row = await upsertAppearance(userId, agentId, {
       websiteUrl: imported.websiteUrl,

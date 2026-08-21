@@ -5,16 +5,19 @@ import {
   useSendMessage, 
   useListMessages,
   useGetConversation,
+  useGetAgent,
   useGetAgentAppearance,
   getGetAgentAppearanceQueryKey,
+  getGetAgentQueryKey,
+  useSubmitFeedback,
 } from '@workspace/api-client-react';
-import { Send, Bot, Loader2, Minus, MessageSquare } from 'lucide-react';
+import { Send, Bot, Loader2, Minus, MessageSquare, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useAppearance } from '@/components/appearance-provider';
-import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CTA_COLOR } from '@/lib/appearance-theme';
+import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from '@/lib/appearance-theme';
 
 export default function Widget() {
   const search = useSearch();
@@ -22,6 +25,9 @@ export default function Widget() {
   const [isOpen, setIsOpen] = useState(false);
   const [convoId, setConvoId] = useState<string | null>(null);
   const { appearance: sessionAppearance } = useAppearance();
+  const { data: agent } = useGetAgent(agentId ?? '', {
+    query: { enabled: Boolean(agentId), queryKey: getGetAgentQueryKey(agentId ?? '') },
+  });
   const { data: agentAppearance } = useGetAgentAppearance(agentId ?? '', {
     query: { enabled: Boolean(agentId), queryKey: getGetAgentAppearanceQueryKey(agentId ?? '') },
   });
@@ -30,16 +36,21 @@ export default function Widget() {
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
   const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
   const logoUrl = appearance?.logoUrl ?? null;
+  const chatName = agent?.name?.trim() || DEFAULT_CHAT_NAME;
   const onCta = contrastHex(ctaColor);
   const onBackground = contrastHex(backgroundColor);
   
   const createConvo = useCreateConversation();
   const sendMessage = useSendMessage();
+  const submitFeedback = useSubmitFeedback();
   
   const { data: convo } = useGetConversation(convoId ?? '');
   const { data: messages = [], refetch } = useListMessages(convoId ?? '');
   
   const [input, setInput] = useState('');
+  const [feedbackRating, setFeedbackRating] = useState<"positive" | "negative" | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,6 +58,12 @@ export default function Widget() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    setFeedbackRating(null);
+    setFeedbackComment('');
+    setFeedbackSent(false);
+  }, [convoId]);
 
   const handleOpen = () => {
     setIsOpen(true);
@@ -65,13 +82,33 @@ export default function Widget() {
     
     sendMessage.mutate({
       id: convoId,
-      data: { content: input }
+      data: {
+        content: input,
+        context: { currentUrl: window.location.href },
+      }
     }, {
       onSuccess: () => {
         setInput('');
         refetch();
       }
     });
+  };
+
+  const latestAssistant = [...messages].reverse().find((message) => message.sender === 'assistant');
+  const sendFeedback = (rating: "positive" | "negative") => {
+    if (!latestAssistant || submitFeedback.isPending) return;
+    if (rating === "negative" && feedbackRating !== "negative") {
+      setFeedbackRating("negative");
+      return;
+    }
+    submitFeedback.mutate({
+      id: convoId!,
+      data: {
+        messageId: latestAssistant.id,
+        rating,
+        comment: rating === "negative" ? feedbackComment || undefined : undefined,
+      },
+    }, { onSuccess: () => setFeedbackSent(true) });
   };
 
   return (
@@ -112,7 +149,7 @@ export default function Widget() {
               ) : (
                 <Bot className="w-5 h-5" />
               )}
-              <div className="font-medium truncate">Support Assistant</div>
+              <div className="font-medium truncate">{chatName}</div>
             </div>
             <div className="flex gap-1">
               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-black/10" style={{ color: onCta }} onClick={() => setIsOpen(false)}>
@@ -162,6 +199,33 @@ export default function Widget() {
               )}
             </div>
           </ScrollArea>
+
+          {convo?.status === 'resolved' && latestAssistant && !feedbackSent && (
+            <div className="border-t border-border bg-background px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Was this helpful?</span>
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => sendFeedback("positive")} aria-label="Helpful">
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => sendFeedback("negative")} aria-label="Not helpful">
+                  <ThumbsDown className="h-3.5 w-3.5" />
+                </Button>
+                {feedbackRating === "negative" && (
+                  <Input
+                    value={feedbackComment}
+                    onChange={(event) => setFeedbackComment(event.target.value)}
+                    placeholder="What could be improved?"
+                    className="h-7 min-w-32 flex-1 text-xs"
+                  />
+                )}
+                {feedbackRating === "negative" && (
+                  <Button size="sm" className="h-7 text-xs" onClick={() => sendFeedback("negative")} disabled={submitFeedback.isPending}>
+                    Send
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Input */}
           <div className="p-3 bg-background border-t border-border shrink-0">

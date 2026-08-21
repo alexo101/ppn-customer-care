@@ -15,4 +15,7 @@ export interface AnalyticsSummary {
   totalMessages: number;
   positiveRatings: number;
   negativeRatings: number;
+  avgResolutionTimeMs: number;
+  avgInteractionsPerConversation: number;
+  estimatedTotalCostUsd: number;
 }

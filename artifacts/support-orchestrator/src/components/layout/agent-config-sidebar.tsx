@@ -27,17 +27,17 @@ export function AgentConfigSidebar({
   isEnabled: boolean;
 }) {
   return (
-    <aside className="w-56 bg-card text-foreground border-r border-border flex flex-col flex-shrink-0">
-      <div className="h-14 px-3 border-b border-border flex items-center gap-2 min-w-0">
-        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
+    <aside className="hidden md:flex w-64 bg-card text-foreground border-r border-border flex-col flex-shrink-0">
+      <div className="h-16 px-4 border-b border-border flex items-center gap-2.5 min-w-0">
+        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" asChild>
           <Link href="/agents" aria-label="Back to agents">
             <ArrowLeft className="w-4 h-4" />
           </Link>
         </Button>
-        <h2 className="text-sm font-medium tracking-tight truncate flex-1 min-w-0">{agentName}</h2>
+        <h2 className="text-sm font-semibold tracking-tight truncate flex-1 min-w-0">{agentName}</h2>
         <Badge
           className={cn(
-            "shrink-0 border-transparent font-medium px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full shadow-none",
+            "shrink-0 border-transparent font-medium px-2.5 py-0.5 text-xs shadow-none",
             isEnabled
               ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
               : "bg-muted text-muted-foreground"
@@ -47,10 +47,10 @@ export function AgentConfigSidebar({
         </Badge>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-4">
+      <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-5">
         {GROUPS.map((group) => (
           <div key={group.id}>
-            <p className="px-2 mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            <p className="px-2.5 mb-2 text-xs font-medium text-muted-foreground/80">
               {group.label}
             </p>
             <div className="space-y-0.5">
@@ -62,7 +62,7 @@ export function AgentConfigSidebar({
                     key={step.id}
                     href={agentConfigHref(agentId, step.id)}
                     className={cn(
-                      "flex items-center gap-2.5 px-2 py-2 rounded-md transition-colors text-[13px]",
+                      "relative flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg transition-colors text-sm",
                       isActive
                         ? "bg-primary/10 text-primary font-medium"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"

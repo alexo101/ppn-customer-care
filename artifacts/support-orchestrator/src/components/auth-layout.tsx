@@ -13,18 +13,20 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           }}
         />
         <div className="relative z-10 flex items-center gap-3">
-          <Network className="w-8 h-8 text-sidebar-primary" />
-          <div className="font-mono text-xl tracking-tight">SYS_ORCHESTRATOR</div>
+          <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-sidebar-primary/15 text-sidebar-primary">
+            <Network className="w-5 h-5" />
+          </span>
+          <div className="font-semibold text-xl tracking-tight">Orchestrator</div>
         </div>
         <div className="relative z-10 max-w-md">
-          <h1 className="text-4xl font-light tracking-tight mb-4">Command Center for AI Operations</h1>
+          <h1 className="text-4xl font-semibold tracking-tight mb-4 leading-tight">Your AI support team, always in sync</h1>
           <p className="text-sidebar-foreground/60 leading-relaxed">
-            Monitor, intervene, and configure intent models in real-time. Secure authentication
-            required for operational clearance.
+            Monitor conversations, tune intent models, and step in whenever it matters — all from one connected workspace.
           </p>
         </div>
-        <div className="relative z-10 font-mono text-[10px] text-sidebar-foreground/30">
-          SECURE CONNECTION ESTABLISHED / ENCRYPTED
+        <div className="relative z-10 flex items-center gap-1.5 text-xs text-sidebar-foreground/40">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          Secure connection
         </div>
       </div>
 

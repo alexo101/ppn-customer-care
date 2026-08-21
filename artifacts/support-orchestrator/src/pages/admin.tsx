@@ -100,7 +100,7 @@ export function DashboardTab() {
                   </TableCell>
                   <TableCell className="font-mono text-muted-foreground truncate max-w-[200px]">{log.ruleUsed || '-'}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-[10px] uppercase font-mono tracking-wider h-5">{log.resolutionStatus}</Badge>
+                    <Badge variant="outline" className="text-xs h-5 capitalize">{log.resolutionStatus}</Badge>
                   </TableCell>
                 </TableRow>
               ))}
@@ -176,7 +176,7 @@ export function ConversationsTab({ agentId }: { agentId: string }) {
                 <TableCell className="font-mono text-muted-foreground">{convo.id.split('-')[0]}</TableCell>
                 <TableCell className="font-medium">{(convo.metadata as any)?.subject || 'Untitled'}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="text-[10px] uppercase font-mono tracking-wider h-5 bg-card">
+                  <Badge variant="outline" className="text-xs h-5 bg-card capitalize">
                     {convo.status.replace('_', ' ')}
                   </Badge>
                 </TableCell>
@@ -551,18 +551,11 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                     <span className="text-xs text-muted-foreground font-normal">
                       {subs.length} {subs.length === 1 ? 'sub' : 'subs'}
                     </span>
-                    <span
-                      className={cn(
-                        "text-[11px] font-semibold tracking-wider uppercase",
-                        cat.isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60"
-                      )}
-                    >
-                      {cat.isEnabled ? 'ON' : 'OFF'}
-                    </span>
                     <Switch
                       checked={cat.isEnabled}
                       onCheckedChange={(checked) => handleToggleCategory(cat, checked)}
                       onClick={(e) => e.stopPropagation()}
+                      aria-label={cat.isEnabled ? 'Disable category' : 'Enable category'}
                     />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -603,10 +596,10 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
             })}
 
             {filteredParents.length === 0 && !isAddingCategory && (
-              <div className="border border-dashed border-border rounded-lg p-6 text-center text-xs text-muted-foreground">
+              <div className="border border-dashed border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
                 {searchQuery
-                  ? 'No categories matching search.'
-                  : 'No categories yet. Click "+ Add Category" to create one.'}
+                  ? 'No categories matching your search.'
+                  : 'No categories yet. Use "Add Category" to create one.'}
               </div>
             )}
           </div>
@@ -615,7 +608,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
         {/* Right Column: Subcategories */}
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
           {!activeSelectedCategory ? (
-            <div className="border border-dashed border-border rounded-xl p-12 text-center text-xs text-muted-foreground space-y-2">
+            <div className="border border-dashed border-border rounded-xl p-12 text-center text-sm text-muted-foreground space-y-2">
               <FolderTree className="w-8 h-8 text-muted-foreground/50 mx-auto" />
               <p>Select or create a category on the left to manage its subcategories.</p>
             </div>
@@ -705,17 +698,10 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">
-                        <span
-                          className={cn(
-                            "text-[11px] font-semibold tracking-wider uppercase",
-                            sub.isEnabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/60"
-                          )}
-                        >
-                          {sub.isEnabled ? 'ON' : 'OFF'}
-                        </span>
                         <Switch
                           checked={sub.isEnabled}
                           onCheckedChange={(checked) => handleToggleSub(sub, checked)}
+                          aria-label={sub.isEnabled ? 'Disable subcategory' : 'Enable subcategory'}
                         />
 
                         {/* Move subcategory dropdown */}
@@ -823,7 +809,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                 )}
 
                 {currentSubcategories.length === 0 && !isAddingSubcategory && (
-                  <div className="border border-dashed border-border rounded-lg p-8 text-center text-xs text-muted-foreground space-y-1">
+                  <div className="border border-dashed border-border rounded-xl p-8 text-center text-sm text-muted-foreground space-y-1">
                     <p>
                       No subcategories in{' '}
                       <span className="font-semibold text-foreground">

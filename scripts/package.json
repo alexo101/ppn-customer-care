@@ -3,8 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "openai": "^7.5.0"
+  },
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "reindex-knowledge-sources": "tsx ./reindex-knowledge-sources.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
