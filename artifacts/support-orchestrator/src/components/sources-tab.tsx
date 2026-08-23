@@ -6,20 +6,27 @@ import {
   useDeleteSource,
   useListSourceIntegrations,
   useUploadSourceDocument,
+  useRefreshSource,
+  browseSourceIntegration,
   getListSourcesQueryKey,
   getListSourceIntegrationsQueryKey,
   type KnowledgeSource,
+  type SourceBrowseItem,
   type SourceIntegration,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircle,
+  ArrowLeft,
   BookOpen,
   ExternalLink,
   FileText,
   FileUp,
   Link2,
+  Loader2,
   MoreVertical,
   Plug,
+  RefreshCw,
   Table2,
   Trash,
 } from "lucide-react";
@@ -29,6 +36,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -75,6 +84,41 @@ function configString(config: Record<string, unknown> | undefined, key: string) 
   return typeof value === "string" ? value : "";
 }
 
+function configValue(config: Record<string, unknown> | undefined, key: string): unknown {
+  return config?.[key];
+}
+
+function selectedKnowledgeItems(config: Record<string, unknown> | undefined): SourceBrowseItem[] {
+  const raw = configValue(config, "selectedItems");
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const item = entry as Record<string, unknown>;
+    const id = typeof item.id === "string" ? item.id : "";
+    const type = item.type === "page" || item.type === "database" || item.type === "space" ? item.type : null;
+    const title = typeof item.title === "string" ? item.title : id;
+    if (!id || !type) return [];
+    return [{ id, type, title, parentTitle: typeof item.parentTitle === "string" ? item.parentTitle : undefined }];
+  });
+}
+
+function syncStatus(config: Record<string, unknown> | undefined) {
+  const value = configString(config, "syncStatus");
+  if (value === "syncing" || value === "ready" || value === "error" || value === "empty" || value === "idle") {
+    return value;
+  }
+  return "idle";
+}
+
+function syncBadge(config: Record<string, unknown> | undefined) {
+  const status = syncStatus(config);
+  if (status === "ready") return { label: "Synced", className: "text-emerald-500" };
+  if (status === "syncing" || status === "idle") return { label: status === "syncing" ? "Syncing" : "Pending", className: "text-amber-500" };
+  if (status === "empty") return { label: "No content", className: "text-muted-foreground" };
+  if (status === "error") return { label: "Sync failed", className: "text-destructive" };
+  return { label: "Pending", className: "text-muted-foreground" };
+}
+
 function sourceSummary(source: KnowledgeSource) {
   const config = source.connectionConfig;
   if (source.sourceType === "article") {
@@ -88,7 +132,16 @@ function sourceSummary(source: KnowledgeSource) {
     return configString(config, "url") || "Spreadsheet link";
   }
   if (source.sourceType === "notion" || source.sourceType === "confluence") {
-    return "Linked with Replit Integrations";
+    const items = selectedKnowledgeItems(config);
+    const titles = items.map((item) => item.title);
+    const scope =
+      titles.length === 0
+        ? "No content selected"
+        : titles.length <= 2
+          ? titles.join(", ")
+          : `${titles.slice(0, 2).join(", ")} +${titles.length - 2} more`;
+    const error = configString(config, "lastError");
+    return error ? `${scope} · ${error}` : scope;
   }
   return source.sourceType;
 }
@@ -117,6 +170,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   const updateSource = useUpdateSource();
   const deleteSource = useDeleteSource();
   const uploadDocument = useUploadSourceDocument();
+  const refreshSource = useRefreshSource();
 
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [editing, setEditing] = useState<KnowledgeSource | null>(null);
@@ -135,6 +189,17 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   const invalidateSources = () => {
     queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey({ agentId }) });
   };
+
+  useEffect(() => {
+    const pending = sources.some((source) => {
+      if (source.sourceType !== "notion" && source.sourceType !== "confluence") return false;
+      const status = syncStatus(source.connectionConfig);
+      return status === "idle" || status === "syncing";
+    });
+    if (!pending) return;
+    const timer = window.setInterval(invalidateSources, 2500);
+    return () => window.clearInterval(timer);
+  }, [sources, agentId, queryClient]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -178,6 +243,12 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       setTitle(source.name);
       setUrl(configString(source.connectionConfig, "url"));
       setDialog("spreadsheet");
+      return;
+    }
+    if (source.sourceType === "notion" || source.sourceType === "confluence") {
+      setEditing(source);
+      setTitle(source.name);
+      setDialog(source.sourceType);
     }
   };
 
@@ -277,7 +348,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     );
   };
 
-  const handleLinkIntegration = (connectorName: "notion" | "confluence") => {
+  const handleLinkIntegration = (
+    connectorName: "notion" | "confluence",
+    selectedItems: SourceBrowseItem[],
+  ) => {
     const integration = integrationFor(integrations, connectorName);
     if (!integration?.connected) {
       toast({
@@ -287,11 +361,32 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       });
       return;
     }
+    if (selectedItems.length === 0) {
+      toast({ title: "Select at least one item", variant: "destructive" });
+      return;
+    }
 
-    const alreadyLinked = sources.some((source) => source.sourceType === connectorName);
-    if (alreadyLinked) {
-      toast({ title: `${integration.displayName} is already linked to this agent` });
+    const name =
+      title.trim() ||
+      (selectedItems.length === 1
+        ? selectedItems[0].title
+        : `${integration.displayName} (${selectedItems.length})`);
+    const connectionConfig = {
+      connectorName,
+      connectionId: integration.connectionId,
+      selectedItems,
+    };
+    const onSuccess = () => {
+      invalidateSources();
+      toast({ title: editing ? `${integration.displayName} updated` : `${integration.displayName} linked` });
       resetDialog();
+    };
+
+    if (editing) {
+      updateSource.mutate(
+        { id: editing.id, data: { name, connectionConfig } },
+        { onSuccess, onError: handleCreateError },
+      );
       return;
     }
 
@@ -299,19 +394,22 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       {
         data: {
           agentId,
-          name: integration.displayName,
+          name,
           sourceType: connectorName,
-          connectionConfig: {
-            connectorName,
-            connectionId: integration.connectionId,
-          },
+          connectionConfig,
         },
       },
+      { onSuccess, onError: handleCreateError },
+    );
+  };
+
+  const handleRefreshSource = (source: KnowledgeSource) => {
+    refreshSource.mutate(
+      { id: source.id },
       {
         onSuccess: () => {
           invalidateSources();
-          toast({ title: `${integration.displayName} linked` });
-          resetDialog();
+          toast({ title: "Source refreshed" });
         },
         onError: handleCreateError,
       },
@@ -457,12 +555,20 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                   <div className="w-8 h-8 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground shrink-0 border border-border/40">
                     <SourceTypeIcon type={source.sourceType} />
                   </div>
-                  <div className="min-w-0">
+                    <div className="min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-medium text-sm truncate">{source.name}</span>
                       <Badge variant="outline" className="text-xs h-5 shrink-0">
                         {SOURCE_LABELS[source.sourceType] ?? source.sourceType}
                       </Badge>
+                      {(source.sourceType === "notion" || source.sourceType === "confluence") && (
+                        <Badge
+                          variant="outline"
+                          className={cn("text-xs h-5 shrink-0", syncBadge(source.connectionConfig).className)}
+                        >
+                          {syncBadge(source.connectionConfig).label}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{sourceSummary(source)}</p>
                   </div>
@@ -484,9 +590,18 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="text-xs">
-                      {(source.sourceType === "article" || source.sourceType === "spreadsheet") && (
+                      {(source.sourceType === "article" || source.sourceType === "spreadsheet" || source.sourceType === "notion" || source.sourceType === "confluence") && (
                         <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => openEdit(source)}>
                           Edit
+                        </DropdownMenuItem>
+                      )}
+                      {(source.sourceType === "notion" || source.sourceType === "confluence") && (
+                        <DropdownMenuItem
+                          className="gap-2 cursor-pointer"
+                          onClick={() => handleRefreshSource(source)}
+                          disabled={refreshSource.isPending}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" /> Refresh
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem
@@ -629,18 +744,24 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         connectorName="notion"
         integration={integrationFor(integrations, "notion")}
         saving={saving}
+        selectedItems={editing?.sourceType === "notion" ? selectedKnowledgeItems(editing.connectionConfig) : []}
+        sourceName={title}
+        onNameChange={setTitle}
         onOpenChange={(open) => !open && resetDialog()}
         onRefresh={() => refetchIntegrations()}
-        onLink={() => handleLinkIntegration("notion")}
+        onLink={(items) => handleLinkIntegration("notion", items)}
       />
       <IntegrationDialog
         open={confluenceOpen}
         connectorName="confluence"
         integration={integrationFor(integrations, "confluence")}
         saving={saving}
+        selectedItems={editing?.sourceType === "confluence" ? selectedKnowledgeItems(editing.connectionConfig) : []}
+        sourceName={title}
+        onNameChange={setTitle}
         onOpenChange={(open) => !open && resetDialog()}
         onRefresh={() => refetchIntegrations()}
-        onLink={() => handleLinkIntegration("confluence")}
+        onLink={(items) => handleLinkIntegration("confluence", items)}
       />
 
       <AlertDialog
@@ -675,6 +796,9 @@ function IntegrationDialog({
   connectorName,
   integration,
   saving,
+  selectedItems,
+  sourceName,
+  onNameChange,
   onOpenChange,
   onRefresh,
   onLink,
@@ -683,20 +807,107 @@ function IntegrationDialog({
   connectorName: "notion" | "confluence";
   integration?: SourceIntegration;
   saving: boolean;
+  selectedItems: SourceBrowseItem[];
+  sourceName: string;
+  onNameChange: (value: string) => void;
   onOpenChange: (open: boolean) => void;
   onRefresh: () => void;
-  onLink: () => void;
+  onLink: (items: SourceBrowseItem[]) => void;
 }) {
   const name = integration?.displayName ?? (connectorName === "notion" ? "Notion" : "Confluence");
   const connected = Boolean(integration?.connected);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [items, setItems] = useState<SourceBrowseItem[]>([]);
+  const [selected, setSelected] = useState<SourceBrowseItem[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [space, setSpace] = useState<{ id: string; title: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelected(selectedItems);
+    setSearch("");
+    setDebouncedSearch("");
+    setSpace(null);
+    setItems([]);
+    setCursor(null);
+    setError(null);
+  }, [open, connectorName]);
+
+  useEffect(() => {
+    if (!open || !connected) return;
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await browseSourceIntegration({
+          connectorName,
+          query: debouncedSearch || undefined,
+          spaceId: space?.id,
+        });
+        if (cancelled) return;
+        setItems(result.items);
+        setCursor(result.nextCursor ?? null);
+      } catch (err) {
+        if (cancelled) return;
+        setItems([]);
+        setCursor(null);
+        setError(err instanceof Error ? err.message.replace(/^HTTP \d+\s[^:]+:\s*/, "") : "Could not load content.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, connected, connectorName, debouncedSearch, space?.id]);
+
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const result = await browseSourceIntegration({
+        connectorName,
+        query: debouncedSearch || undefined,
+        cursor,
+        spaceId: space?.id,
+      });
+      setItems((current) => uniqueBrowseItems([...current, ...result.items]));
+      setCursor(result.nextCursor ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message.replace(/^HTTP \d+\s[^:]+:\s*/, "") : "Could not load more content.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const toggleItem = (item: SourceBrowseItem, checked: boolean) => {
+    setSelected((current) => {
+      if (checked) return uniqueBrowseItems([...current, item]);
+      return current.filter((entry) => !(entry.id === item.id && entry.type === item.type));
+    });
+  };
+
+  const isSelected = (item: SourceBrowseItem) =>
+    selected.some((entry) => entry.id === item.id && entry.type === item.type);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[640px]">
         <DialogHeader>
-          <DialogTitle>Link {name}</DialogTitle>
+          <DialogTitle>{selectedItems.length > 0 ? `Edit ${name} source` : `Link ${name}`}</DialogTitle>
           <DialogDescription>
-            Native access uses Replit Integrations. Connect once in Replit, then attach it to this agent.
+            Native access uses Replit Integrations. Choose the {name} content this agent can search.
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-lg border border-border p-4 space-y-3">
@@ -717,10 +928,104 @@ function IntegrationDialog({
           </div>
           <p className="text-xs text-muted-foreground">
             {connected
-              ? `${name} is connected in Replit Integrations. Add it as a knowledge source for this agent.`
+              ? `Select ${connectorName === "notion" ? "pages or databases" : "spaces or pages"} to index. Credentials stay in Replit Integrations.`
               : `Open Replit Integrations, sign in to ${name}, then refresh this dialog.`}
           </p>
         </div>
+
+        {connected ? (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor={`${connectorName}-source-name`} className="text-xs">Name (optional)</Label>
+              <Input
+                id={`${connectorName}-source-name`}
+                value={sourceName}
+                onChange={(event) => onNameChange(event.target.value)}
+                placeholder={name}
+              />
+            </div>
+            {space ? (
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setSpace(null)}
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to spaces
+                <span className="font-medium text-foreground">· {space.title}</span>
+              </button>
+            ) : null}
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={connectorName === "notion" ? "Search pages and databases" : space ? "Filter pages" : "Filter spaces"}
+            />
+            {error ? (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            ) : null}
+            <ScrollArea className="h-56 rounded-md border border-border">
+              {loading ? (
+                <div className="flex h-56 items-center justify-center text-xs text-muted-foreground">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading {name} content…
+                </div>
+              ) : items.length === 0 ? (
+                <div className="flex h-56 items-center justify-center px-6 text-center text-xs text-muted-foreground">
+                  {error
+                    ? "Nothing could be loaded from this account."
+                    : `No ${space ? "pages" : connectorName === "notion" ? "pages or databases" : "spaces"} found.`}
+                </div>
+              ) : (
+                <div className="p-2 space-y-1">
+                  {items.map((item) => (
+                    <div key={`${item.type}:${item.id}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/40">
+                      <Checkbox
+                        checked={isSelected(item)}
+                        onCheckedChange={(checked) => toggleItem(item, checked === true)}
+                        aria-label={`Select ${item.title}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm">{item.title}</div>
+                        <div className="text-[11px] text-muted-foreground capitalize">
+                          {item.type}
+                          {item.parentTitle ? ` · ${item.parentTitle}` : ""}
+                        </div>
+                      </div>
+                      {item.type === "space" ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-[11px]"
+                          onClick={() => setSpace({ id: item.id, title: item.title })}
+                        >
+                          Browse pages
+                        </Button>
+                      ) : null}
+                    </div>
+                  ))}
+                  {cursor ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full h-8 text-xs"
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                    >
+                      {loadingMore ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Load more"}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </ScrollArea>
+            <p className="text-[11px] text-muted-foreground">{selected.length} selected</p>
+          </div>
+        ) : null}
+
         <DialogFooter className="gap-2 sm:gap-2">
           <Button type="button" variant="outline" asChild>
             <a href={REPLIT_INTEGRATIONS_URL} target="_blank" rel="noreferrer">
@@ -729,8 +1034,8 @@ function IntegrationDialog({
             </a>
           </Button>
           {connected ? (
-            <Button type="button" onClick={onLink} disabled={saving}>
-              Add {name}
+            <Button type="button" onClick={() => onLink(selected)} disabled={saving || selected.length === 0}>
+              {selectedItems.length > 0 ? "Save selection" : `Add ${name}`}
             </Button>
           ) : (
             <Button type="button" variant="secondary" onClick={onRefresh}>
@@ -741,4 +1046,16 @@ function IntegrationDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function uniqueBrowseItems(items: SourceBrowseItem[]): SourceBrowseItem[] {
+  const seen = new Set<string>();
+  const unique: SourceBrowseItem[] = [];
+  for (const item of items) {
+    const key = `${item.type}:${item.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique;
 }

@@ -30,7 +30,9 @@ An authenticated support assistant that classifies questions, selects configured
 - `artifacts/api-server/src/routes/conversations.ts` — authenticated conversation API and orchestrator workflow
 - `artifacts/api-server/src/lib/llm/` — OpenAI classification, answer, embedding, and rule-authoring providers
 - `artifacts/api-server/src/lib/retrieval.ts` — pgvector similarity retrieval
-- `artifacts/api-server/src/lib/knowledge-indexing.ts` — document chunking and embedding
+- `artifacts/api-server/src/lib/knowledge-indexing.ts` — document chunking, embedding, and Notion/Confluence refresh
+- `artifacts/api-server/src/lib/replit-integrations.ts` — Replit Integrations connection status and authenticated provider proxy
+- `artifacts/api-server/src/lib/notion-knowledge.ts` / `confluence-knowledge.ts` — scoped listing and content normalization
 - `artifacts/api-server/src/lib/api-connector.ts` — approved generic REST connector execution
 - `artifacts/api-server/src/lib/conversation-lifecycle.ts` — inactive-conversation auto-close sweep
 - `artifacts/api-server/src/lib/conversation-analytics.ts` — resolution and cost rollups
@@ -40,7 +42,7 @@ An authenticated support assistant that classifies questions, selects configured
 
 - Runtime classification and answer generation fail with HTTP 503 when the LLM is unavailable; they do not silently fall back to heuristics.
 - Greeting and resolution messages use deterministic shortcuts and do not require an LLM call.
-- Uploaded `.docx` files are chunked and indexed with `text-embedding-3-small`; Notion, Confluence, and API sources still require a fetch integration before they can be indexed.
+- Uploaded `.docx` files, Notion pages/databases, and Confluence spaces/pages are chunked and indexed with `text-embedding-3-small`. Notion and Confluence use Replit Integrations rather than stored API keys; an explicit refresh re-fetches and replaces chunks.
 - The orchestrator chooses the highest probability category returned by the classifier, then applies the highest-priority matching rule.
 - Conversation statuses follow active, pending clarification, escalated, resolved, and closed states; resolved/closed conversations receive analytics rollups and inactive conversations are closed after one hour.
 - `query_live_data` rules call their linked enabled API connectors with environment-backed authentication; missing credentials fail the workflow rather than silently sending ungrounded data.

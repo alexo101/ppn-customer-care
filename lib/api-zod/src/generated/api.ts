@@ -1020,6 +1020,47 @@ export const ListSourceIntegrationsResponse = zod.array(ListSourceIntegrationsRe
 
 
 /**
+ * @summary Browse Notion pages/databases or Confluence spaces/pages
+ */
+export const BrowseSourceIntegrationQueryParams = zod.object({
+  "connectorName": zod.enum(['notion', 'confluence']),
+  "query": zod.coerce.string().optional(),
+  "cursor": zod.coerce.string().optional(),
+  "spaceId": zod.coerce.string().optional()
+})
+
+export const BrowseSourceIntegrationResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['page', 'database', 'space']),
+  "title": zod.string(),
+  "parentTitle": zod.string().optional(),
+  "url": zod.string().optional()
+})),
+  "nextCursor": zod.string().nullish(),
+  "spaceTitle": zod.string().optional()
+})
+
+
+/**
+ * @summary Re-fetch and re-index an integration knowledge source
+ */
+export const RefreshSourceParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const RefreshSourceResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "sourceType": zod.string(),
+  "connectionConfig": zod.record(zod.string(), zod.unknown()),
+  "isEnabled": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
  * @summary Upload a Word document as a knowledge source
  */
 export const UploadSourceDocumentBody = zod.object({

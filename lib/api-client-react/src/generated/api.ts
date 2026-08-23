@@ -27,6 +27,7 @@ import type {
   ApiConnector,
   Appearance,
   AppearanceUpdate,
+  BrowseSourceIntegrationParams,
   CategoryInput,
   CategoryUpdate,
   ConnectorInput,
@@ -67,6 +68,7 @@ import type {
   RuleVocabularyUpdate,
   SendMessageInput,
   SendMessageResult,
+  SourceBrowseResult,
   SourceInput,
   SourceIntegration,
   SourceUpdate,
@@ -3393,6 +3395,161 @@ export function useListSourceIntegrations<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getBrowseSourceIntegrationUrl = (params: BrowseSourceIntegrationParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/sources/integrations/browse?${stringifiedParams}` : `/api/sources/integrations/browse`
+}
+
+/**
+ * @summary Browse Notion pages/databases or Confluence spaces/pages
+ */
+export const browseSourceIntegration = async (params: BrowseSourceIntegrationParams, options?: Parameters<typeof customFetch>[1]): Promise<SourceBrowseResult> => {
+
+  return customFetch<SourceBrowseResult>(getBrowseSourceIntegrationUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getBrowseSourceIntegrationQueryKey = (params?: BrowseSourceIntegrationParams,) => {
+    return [
+    `/api/sources/integrations/browse`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getBrowseSourceIntegrationQueryOptions = <TData = Awaited<ReturnType<typeof browseSourceIntegration>>, TError = ErrorType<ErrorResponse>>(params: BrowseSourceIntegrationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof browseSourceIntegration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getBrowseSourceIntegrationQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof browseSourceIntegration>>> = ({ signal }) => browseSourceIntegration(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof browseSourceIntegration>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type BrowseSourceIntegrationQueryResult = NonNullable<Awaited<ReturnType<typeof browseSourceIntegration>>>
+export type BrowseSourceIntegrationQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Browse Notion pages/databases or Confluence spaces/pages
+ */
+
+export function useBrowseSourceIntegration<TData = Awaited<ReturnType<typeof browseSourceIntegration>>, TError = ErrorType<ErrorResponse>>(
+ params: BrowseSourceIntegrationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof browseSourceIntegration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getBrowseSourceIntegrationQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRefreshSourceUrl = (id: string,) => {
+
+
+
+
+  return `/api/sources/${id}/refresh`
+}
+
+/**
+ * @summary Re-fetch and re-index an integration knowledge source
+ */
+export const refreshSource = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<KnowledgeSource> => {
+
+  return customFetch<KnowledgeSource>(getRefreshSourceUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRefreshSourceMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshSource>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof refreshSource>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['refreshSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshSource>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  refreshSource(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RefreshSourceMutationResult = NonNullable<Awaited<ReturnType<typeof refreshSource>>>
+
+    export type RefreshSourceMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Re-fetch and re-index an integration knowledge source
+ */
+export const useRefreshSource = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshSource>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof refreshSource>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getRefreshSourceMutationOptions(options));
+    }
 
 export const getUploadSourceDocumentUrl = () => {
 

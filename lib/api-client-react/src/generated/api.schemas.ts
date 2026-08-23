@@ -451,6 +451,30 @@ export interface SourceIntegration {
   status?: string | null;
 }
 
+export type SourceBrowseItemType = typeof SourceBrowseItemType[keyof typeof SourceBrowseItemType];
+
+
+export const SourceBrowseItemType = {
+  page: 'page',
+  database: 'database',
+  space: 'space',
+} as const;
+
+export interface SourceBrowseItem {
+  id: string;
+  type: SourceBrowseItemType;
+  title: string;
+  parentTitle?: string;
+  url?: string;
+}
+
+export interface SourceBrowseResult {
+  items: SourceBrowseItem[];
+  /** @nullable */
+  nextCursor?: string | null;
+  spaceTitle?: string;
+}
+
 export interface SourceUploadInput {
   agentId: string;
   name?: string;
@@ -726,6 +750,21 @@ export const ListRuleVocabulariesKind = {
 export type ListSourcesParams = {
 agentId?: string;
 };
+
+export type BrowseSourceIntegrationParams = {
+connectorName: BrowseSourceIntegrationConnectorName;
+query?: string;
+cursor?: string;
+spaceId?: string;
+};
+
+export type BrowseSourceIntegrationConnectorName = typeof BrowseSourceIntegrationConnectorName[keyof typeof BrowseSourceIntegrationConnectorName];
+
+
+export const BrowseSourceIntegrationConnectorName = {
+  notion: 'notion',
+  confluence: 'confluence',
+} as const;
 
 export type ListTargetsParams = {
 agentId: string;

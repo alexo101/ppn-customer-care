@@ -10,6 +10,8 @@ import {
   UpdateSourceParams,
   UpdateSourceBody,
   DeleteSourceParams,
+  BrowseSourceIntegrationQueryParams,
+  RefreshSourceParams,
   ListConnectorsQueryParams,
   CreateConnectorBody,
   UpdateConnectorParams,
@@ -18,8 +20,14 @@ import {
 } from "@workspace/api-zod";
 
 import { getOwnedAgent } from "../lib/agents";
-import { getSourceIntegration, listSourceIntegrations } from "../lib/replit-integrations";
-import { indexSource } from "../lib/knowledge-indexing";
+import {
+  getSourceIntegration,
+  IntegrationProviderError,
+  isSourceIntegrationName,
+  listSourceIntegrations,
+} from "../lib/replit-integrations";
+import { browseIntegrationContent, indexSource } from "../lib/knowledge-indexing";
+import { parseSelectedKnowledgeItems } from "../lib/integration-knowledge";
 import { createEmbeddingProvider } from "../lib/llm";
 import { logger } from "../lib/logger";
 
@@ -87,18 +95,15 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     (parsed.data.connectionConfig as Record<string, unknown> | undefined) ?? {};
 
   if (parsed.data.sourceType === "notion" || parsed.data.sourceType === "confluence") {
-    const integration = await getSourceIntegration(parsed.data.sourceType);
-    if (!integration?.connected) {
-      res.status(400).json({
-        error: `Connect ${parsed.data.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
-      });
+    const integrationConfig = await integrationConnectionConfig(
+      parsed.data.sourceType,
+      connectionConfig,
+    );
+    if ("error" in integrationConfig) {
+      res.status(400).json({ error: integrationConfig.error });
       return;
     }
-    connectionConfig = {
-      ...connectionConfig,
-      connectorName: integration.connectorName,
-      connectionId: integration.connectionId,
-    };
+    connectionConfig = integrationConfig.config;
   }
 
   const [row] = await db
@@ -120,6 +125,83 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
 router.get("/sources/integrations", requireAuth, async (_req, res): Promise<void> => {
   const integrations = await listSourceIntegrations();
   res.json(integrations);
+});
+
+router.get("/sources/integrations/browse", requireAuth, async (req, res): Promise<void> => {
+  const parsed = BrowseSourceIntegrationQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (!isSourceIntegrationName(parsed.data.connectorName)) {
+    res.status(400).json({ error: "Unsupported integration." });
+    return;
+  }
+
+  const integration = await getSourceIntegration(parsed.data.connectorName);
+  if (!integration?.connected) {
+    res.status(403).json({
+      error: `Connect ${integration?.displayName ?? parsed.data.connectorName} in Replit Integrations first.`,
+    });
+    return;
+  }
+
+  try {
+    const result = await browseIntegrationContent(parsed.data.connectorName, {
+      query: parsed.data.query,
+      cursor: parsed.data.cursor,
+      spaceId: parsed.data.spaceId,
+    });
+    res.json(result);
+  } catch (error) {
+    const mapped = integrationErrorResponse(error);
+    res.status(mapped.status).json({ error: mapped.error });
+  }
+});
+
+router.post("/sources/:id/refresh", requireAuth, async (req, res): Promise<void> => {
+  const params = RefreshSourceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(knowledgeSourcesTable)
+    .where(and(eq(knowledgeSourcesTable.id, params.data.id), eq(knowledgeSourcesTable.userId, req.userId)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Source not found" });
+    return;
+  }
+  if (existing.sourceType !== "notion" && existing.sourceType !== "confluence") {
+    res.status(400).json({ error: "Only Notion and Confluence sources can be refreshed." });
+    return;
+  }
+
+  const integration = await getSourceIntegration(existing.sourceType);
+  if (!integration?.connected) {
+    res.status(403).json({
+      error: `Connect ${existing.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
+    });
+    return;
+  }
+
+  try {
+    await indexSource(existing.id, createEmbeddingProvider());
+  } catch (error) {
+    const mapped = integrationErrorResponse(error);
+    res.status(mapped.status === 403 ? 403 : 502).json({ error: mapped.error });
+    return;
+  }
+
+  const [updated] = await db
+    .select()
+    .from(knowledgeSourcesTable)
+    .where(eq(knowledgeSourcesTable.id, existing.id))
+    .limit(1);
+  res.json(toSource(updated ?? existing));
 });
 
 router.post("/sources/upload", requireAuth, (req, res, next) => {
@@ -190,12 +272,35 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db
+    .select()
+    .from(knowledgeSourcesTable)
+    .where(and(eq(knowledgeSourcesTable.id, params.data.id), eq(knowledgeSourcesTable.userId, req.userId)))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Source not found" });
+    return;
+  }
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   const d = parsed.data as Record<string, unknown>;
   if (d.name !== undefined) updates.name = d.name;
   if (d.sourceType !== undefined) updates.sourceType = d.sourceType;
-  if (d.connectionConfig !== undefined) updates.connectionConfig = d.connectionConfig;
   if (d.isEnabled !== undefined) updates.isEnabled = d.isEnabled;
+  if (d.connectionConfig !== undefined) {
+    const incoming = (d.connectionConfig as Record<string, unknown>) ?? {};
+    const sourceType = typeof d.sourceType === "string" ? d.sourceType : existing.sourceType;
+    if (sourceType === "notion" || sourceType === "confluence") {
+      const integrationConfig = await integrationConnectionConfig(sourceType, incoming);
+      if ("error" in integrationConfig) {
+        res.status(400).json({ error: integrationConfig.error });
+        return;
+      }
+      updates.connectionConfig = integrationConfig.config;
+    } else {
+      updates.connectionConfig = incoming;
+    }
+  }
 
   const [row] = await db
     .update(knowledgeSourcesTable)
@@ -357,6 +462,52 @@ function toConnector(row: typeof apiConnectorsTable.$inferSelect) {
     isEnabled: row.isEnabled,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
+  };
+}
+
+async function integrationConnectionConfig(
+  sourceType: "notion" | "confluence",
+  incoming: Record<string, unknown>,
+): Promise<{ config: Record<string, unknown> } | { error: string }> {
+  const integration = await getSourceIntegration(sourceType);
+  if (!integration?.connected) {
+    return {
+      error: `Connect ${sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
+    };
+  }
+  const selectedItems = parseSelectedKnowledgeItems(incoming.selectedItems);
+  if (selectedItems.length === 0) {
+    return { error: "Select at least one page, database, or space." };
+  }
+  return {
+    config: {
+      connectorName: integration.connectorName,
+      connectionId: integration.connectionId,
+      selectedItems,
+      syncStatus: "idle",
+      lastSyncedAt: null,
+      lastError: null,
+      itemCount: 0,
+      chunkCount: 0,
+    },
+  };
+}
+
+function integrationErrorResponse(error: unknown): { status: number; error: string } {
+  if (error instanceof IntegrationProviderError) {
+    const status =
+      error.code === "disconnected" || error.code === "permission"
+        ? 403
+        : error.code === "not_found"
+          ? 404
+          : error.code === "rate_limit"
+            ? 429
+            : 502;
+    return { status, error: error.message };
+  }
+  return {
+    status: 502,
+    error: error instanceof Error ? error.message : "Could not reach the connected provider.",
   };
 }
 
