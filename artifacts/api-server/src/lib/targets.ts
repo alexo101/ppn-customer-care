@@ -88,11 +88,20 @@ export function validateTargetCondition(condition: TargetConditionDraft): string
   return null;
 }
 
+export const EVERYONE_TARGET_NAME = "Everyone";
+export const EVERYONE_TARGET_DESCRIPTION =
+  "A generic target that does not filter by any criteria.";
+
+export function isCatchAllTarget(target: Pick<AudienceTargetForMatching, "conditions">): boolean {
+  return target.conditions.length === 0;
+}
+
 export function matchesAudienceTarget(
   target: AudienceTargetForMatching,
   person: PersonAttributes,
 ): boolean {
-  if (!target.isEnabled || target.conditions.length === 0) return false;
+  if (!target.isEnabled) return false;
+  if (isCatchAllTarget(target)) return true;
 
   const results = target.conditions.map((condition) => {
     if (condition.personType !== person.personType) return false;

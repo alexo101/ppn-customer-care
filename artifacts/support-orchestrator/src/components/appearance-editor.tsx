@@ -330,27 +330,29 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             </form>
           </FieldBlock>
 
-          <FieldBlock title="CTA color">
-            <ColorField
-              label="CTA color"
-              value={draft.ctaColor}
-              hexInput={ctaHexInput}
-              onHexInputChange={setCtaHexInput}
-              onCommit={setCtaColor}
-              candidates={ctaCandidates}
-            />
-          </FieldBlock>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FieldBlock title="CTA color">
+              <ColorField
+                label="CTA color"
+                value={draft.ctaColor}
+                hexInput={ctaHexInput}
+                onHexInputChange={setCtaHexInput}
+                onCommit={setCtaColor}
+                candidates={ctaCandidates}
+              />
+            </FieldBlock>
 
-          <FieldBlock title="Background color">
-            <ColorField
-              label="Background color"
-              value={draft.backgroundColor}
-              hexInput={bgHexInput}
-              onHexInputChange={setBgHexInput}
-              onCommit={setBackgroundColor}
-              candidates={backgroundCandidates}
-            />
-          </FieldBlock>
+            <FieldBlock title="Background color">
+              <ColorField
+                label="Background color"
+                value={draft.backgroundColor}
+                hexInput={bgHexInput}
+                onHexInputChange={setBgHexInput}
+                onCommit={setBackgroundColor}
+                candidates={backgroundCandidates}
+              />
+            </FieldBlock>
+          </div>
 
           <FieldBlock title="Logo">
             <div className="flex items-center gap-4">

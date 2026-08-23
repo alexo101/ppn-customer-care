@@ -5,7 +5,7 @@ export function emptyRuleDraft(priority = 0): RuleAuthoringDraft {
     name: "",
     description: "",
     promptTemplate: "",
-    priority: Math.max(0, Math.min(100, priority)),
+    priority: Math.max(0, priority),
     requiresClarificationPrompt: "",
     escalationTrigger: false,
     isEnabled: true,
@@ -54,6 +54,17 @@ export function normalizeDraft(draft: RuleAuthoringDraft): RuleAuthoringDraft {
 
 export function actionIsEscalation(action: string): boolean {
   return action.trim().toLowerCase().includes("escalat");
+}
+
+export function formatCategoryPath(
+  categoryId: string,
+  categories: Array<{ id: string; name: string; parentId?: string | null }>,
+): string {
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  const category = byId.get(categoryId);
+  if (!category) return categoryId;
+  const parent = category.parentId ? byId.get(category.parentId) : undefined;
+  return parent ? `${parent.name} / ${category.name}` : category.name;
 }
 
 export function formatRuleSentence(input: {

@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RuleEditorDialog } from "@/components/rule-editor-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { formatRuleSentence } from "@/lib/rules";
+import { formatCategoryPath, formatRuleSentence } from "@/lib/rules";
 import { cn } from "@/lib/utils";
 
 export function RulesTab({ agentId }: { agentId: string }) {
@@ -58,7 +58,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
   const categoryNames = useMemo(
     () =>
       Object.fromEntries(
-        categories.map((category) => [category.id, category.name]),
+        categories.map((category) => [category.id, formatCategoryPath(category.id, categories)]),
       ),
     [categories],
   );

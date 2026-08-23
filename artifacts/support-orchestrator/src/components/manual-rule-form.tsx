@@ -10,7 +10,7 @@ import {
   type Target,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { FolderTree, Plus, Save, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,7 +20,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { actionIsEscalation, actionUsesSource, formatRuleSentence, normalizeDraft } from "@/lib/rules";
+import {
+  actionIsEscalation,
+  actionUsesSource,
+  formatCategoryPath,
+  formatRuleSentence,
+  normalizeDraft,
+} from "@/lib/rules";
 
 type VocabularyKind = "operator" | "action";
 
@@ -51,7 +57,7 @@ export function ManualRuleForm({
   const update = (patch: Partial<RuleAuthoringDraft>) =>
     onDraftChange(normalizeDraft({ ...normalized, ...patch }));
   const categoryNames = useMemo(
-    () => Object.fromEntries(categories.map((category) => [category.id, category.name])),
+    () => Object.fromEntries(categories.map((category) => [category.id, formatCategoryPath(category.id, categories)])),
     [categories],
   );
   const sourceNames = useMemo(
@@ -84,28 +90,14 @@ export function ManualRuleForm({
 
           <section className="space-y-3">
             <SectionHeading title="Rule details" description="Give this rule a name and explain what it should do." />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Name" required>
-                <Input
-                  value={normalized.name}
-                  onChange={(event) => update({ name: event.target.value })}
-                  placeholder="e.g. Shipping questions"
-                  required
-                />
-              </Field>
-              <Field label="Priority" hint="Higher priority rules run first.">
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={normalized.priority}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    update({ priority: Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0 });
-                  }}
-                />
-              </Field>
-            </div>
+            <Field label="Name" required>
+              <Input
+                value={normalized.name}
+                onChange={(event) => update({ name: event.target.value })}
+                placeholder="e.g. Shipping questions"
+                required
+              />
+            </Field>
             <Field label="Description">
               <Textarea
                 value={normalized.description}
@@ -117,7 +109,10 @@ export function ManualRuleForm({
           </section>
 
           <section className="space-y-3">
-            <SectionHeading title="When should it run?" description="Choose the operator and at least one category." />
+            <SectionHeading
+              title="When should it run?"
+              description="Choose the operator and at least one category or subcategory."
+            />
             <div className="grid gap-4 lg:grid-cols-[minmax(0,220px)_1fr]">
               <VocabPicker
                 agentId={agentId}
@@ -126,14 +121,10 @@ export function ManualRuleForm({
                 value={normalized.conditionOperator}
                 onChange={(value) => update({ conditionOperator: value })}
               />
-              <MultiCheckList
-                label="Categories"
-                hint="The rule matches when the detected category satisfies the operator."
-                options={categories.map((category) => ({ id: category.id, name: category.name }))}
+              <CategoryHierarchyPicker
+                categories={categories}
                 values={normalized.categoryIds ?? []}
                 onChange={(categoryIds) => update({ categoryIds })}
-                emptyMessage="Create a category first to use it in a rule."
-                required
               />
             </div>
           </section>
@@ -245,7 +236,7 @@ export function ManualRuleForm({
       </div>
       <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card px-6 py-4">
         <p className="text-xs text-muted-foreground">
-          {canSave ? "Ready to save this rule." : "Add a name and at least one category to save."}
+          {canSave ? "Ready to save this rule." : "Add a name and at least one category or subcategory to save."}
         </p>
         <Button type="submit" disabled={saving || !canSave}>
           <Save className="h-4 w-4" />
@@ -303,6 +294,129 @@ function ToggleField({
     <div className="flex items-center gap-2">
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
       <Label htmlFor={id} className="text-xs">{label}</Label>
+    </div>
+  );
+}
+
+function CategoryHierarchyPicker({
+  categories,
+  values,
+  onChange,
+}: {
+  categories: IntentCategory[];
+  values: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const parents = useMemo(
+    () => categories.filter((category) => !category.parentId),
+    [categories],
+  );
+  const childrenByParent = useMemo(() => {
+    const grouped = new Map<string, IntentCategory[]>();
+    for (const category of categories) {
+      if (!category.parentId) continue;
+      const list = grouped.get(category.parentId) ?? [];
+      list.push(category);
+      grouped.set(category.parentId, list);
+    }
+    return grouped;
+  }, [categories]);
+  const parentIds = useMemo(() => new Set(parents.map((category) => category.id)), [parents]);
+  const orphaned = useMemo(
+    () => categories.filter((category) => category.parentId && !parentIds.has(category.parentId)),
+    [categories, parentIds],
+  );
+
+  const toggle = (id: string, checked: boolean) => {
+    onChange(checked ? [...new Set([...values, id])] : values.filter((value) => value !== id));
+  };
+
+  const selectedCount = values.length;
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">
+        Categories
+        <span className="ml-1 text-destructive">*</span>
+      </Label>
+      <p className="text-[11px] text-muted-foreground">
+        Subcategories are nested inside their parent category. Select a category, a subcategory, or both.
+      </p>
+      {parents.length === 0 && orphaned.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+          Create a category first to use it in a rule.
+        </div>
+      ) : (
+        <div className="max-h-72 space-y-2 overflow-y-auto rounded-md border border-border p-2">
+          {parents.map((parent) => {
+            const children = childrenByParent.get(parent.id) ?? [];
+            return (
+              <div key={parent.id} className="overflow-hidden rounded-md border border-border bg-card">
+                <label className="flex cursor-pointer items-center gap-2 bg-muted/40 px-3 py-2">
+                  <Checkbox
+                    checked={values.includes(parent.id)}
+                    onCheckedChange={(checked) => toggle(parent.id, checked === true)}
+                  />
+                  <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium">{parent.name}</span>
+                  <Badge variant="outline" className="h-5 shrink-0 text-[10px] font-medium">
+                    Category
+                  </Badge>
+                </label>
+                {children.length > 0 ? (
+                  <div className="border-t border-border bg-background px-3 py-2">
+                    <p className="mb-2 pl-6 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Subcategories
+                    </p>
+                    <div className="space-y-1.5 border-l-2 border-border ml-2 pl-4">
+                      {children.map((child) => (
+                        <label key={child.id} className="flex min-w-0 cursor-pointer items-center gap-2 py-0.5">
+                          <Checkbox
+                            checked={values.includes(child.id)}
+                            onCheckedChange={(checked) => toggle(child.id, checked === true)}
+                          />
+                          <span className="min-w-0 flex-1 truncate text-xs">{child.name}</span>
+                          <Badge variant="secondary" className="h-5 shrink-0 text-[10px] font-normal">
+                            Subcategory
+                          </Badge>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="border-t border-border px-3 py-2 pl-9 text-[11px] text-muted-foreground">
+                    No subcategories in this category.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+          {orphaned.length > 0 ? (
+            <div className="overflow-hidden rounded-md border border-border bg-card">
+              <div className="bg-muted/40 px-3 py-2">
+                <p className="text-xs font-medium">Subcategories without a parent</p>
+              </div>
+              <div className="space-y-1.5 px-3 py-2">
+                {orphaned.map((child) => (
+                  <label key={child.id} className="flex min-w-0 cursor-pointer items-center gap-2">
+                    <Checkbox
+                      checked={values.includes(child.id)}
+                      onCheckedChange={(checked) => toggle(child.id, checked === true)}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-xs">{child.name}</span>
+                    <Badge variant="secondary" className="h-5 shrink-0 text-[10px] font-normal">
+                      Subcategory
+                    </Badge>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+      {selectedCount > 0 ? (
+        <p className="text-[11px] text-muted-foreground">{selectedCount} selected</p>
+      ) : null}
     </div>
   );
 }

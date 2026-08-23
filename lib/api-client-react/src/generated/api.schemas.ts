@@ -201,6 +201,10 @@ export interface OrchestratorLog {
   llmModel?: string;
   resolutionStatus: string;
   createdAt: string;
+  /** @nullable */
+  agentId?: string | null;
+  /** @nullable */
+  agentName?: string | null;
 }
 
 export interface IntentCategory {
@@ -565,7 +569,8 @@ export interface TargetInput {
   matchMode?: TargetMatchMode;
   isEnabled?: boolean;
   /**
-     * @minItems 1
+     * An empty list matches everyone and does not filter by any criteria.
+     * @minItems 0
      * @maxItems 20
      */
   conditions: TargetConditionInput[];
@@ -579,7 +584,8 @@ export interface TargetUpdate {
   matchMode?: TargetMatchMode;
   isEnabled?: boolean;
   /**
-     * @minItems 1
+     * An empty list matches everyone and does not filter by any criteria.
+     * @minItems 0
      * @maxItems 20
      */
   conditions?: TargetConditionInput[];

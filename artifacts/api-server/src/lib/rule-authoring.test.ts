@@ -302,9 +302,10 @@ describe("validateDraft", () => {
     expect(result.unresolvedFields).toContain("requiresClarificationPrompt");
   });
 
-  it("rejects fractional priorities before database persistence", () => {
+  it("does not ask the user to set priority", () => {
     const result = validateDraft({ ...validDraft, priority: 10.5 }, context);
-    expect(result.unresolvedFields).toContain("priority");
+    expect(result.unresolvedFields).not.toContain("priority");
+    expect(result.draft?.priority).toBe(0);
   });
 
   it("accepts drafts that omit audience targets and returns an empty array", () => {

@@ -4,11 +4,13 @@ import {
   agentsTable,
   appearanceSettingsTable,
   apiConnectorsTable,
+  audienceTargetsTable,
   conversationsTable,
   intentCategoriesTable,
   knowledgeSourcesTable,
   orchestratorRulesTable,
 } from "@workspace/db";
+import { EVERYONE_TARGET_DESCRIPTION, EVERYONE_TARGET_NAME } from "./targets";
 
 export async function getOwnedAgent(userId: string, agentId: string) {
   const [agent] = await db
@@ -100,6 +102,7 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
 
   if (existing[0]) {
     await attachUnscopedRows(userId, existing[0].id);
+    await Promise.all(existing.map((agent) => ensureEveryoneTarget(userId, agent.id)));
     return existing[0];
   }
 
@@ -115,7 +118,69 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
     .returning();
 
   await attachUnscopedRows(userId, created.id);
+  await ensureEveryoneTarget(userId, created.id);
   return created;
+}
+
+export async function ensureEveryoneTarget(userId: string, agentId: string) {
+  const [existing] = await db
+    .select({ id: audienceTargetsTable.id })
+    .from(audienceTargetsTable)
+    .where(
+      and(
+        eq(audienceTargetsTable.agentId, agentId),
+        eq(audienceTargetsTable.name, EVERYONE_TARGET_NAME),
+      ),
+    )
+    .limit(1);
+
+  if (existing) return existing.id;
+
+  const [created] = await db
+    .insert(audienceTargetsTable)
+    .values({
+      userId,
+      agentId,
+      name: EVERYONE_TARGET_NAME,
+      description: EVERYONE_TARGET_DESCRIPTION,
+      matchMode: "all",
+      isEnabled: true,
+    })
+    .returning({ id: audienceTargetsTable.id });
+
+  return created.id;
+}
+
+export async function ensureEveryoneTargetsForAllAgents() {
+  const agents = await db
+    .select({ id: agentsTable.id, userId: agentsTable.userId })
+    .from(agentsTable);
+
+  if (agents.length === 0) return 0;
+
+  const existing = await db
+    .select({ agentId: audienceTargetsTable.agentId })
+    .from(audienceTargetsTable)
+    .where(eq(audienceTargetsTable.name, EVERYONE_TARGET_NAME));
+
+  const hasEveryone = new Set(
+    existing.map((row) => row.agentId).filter((id): id is string => Boolean(id)),
+  );
+  const missing = agents.filter((agent) => !hasEveryone.has(agent.id));
+  if (missing.length === 0) return 0;
+
+  await db.insert(audienceTargetsTable).values(
+    missing.map((agent) => ({
+      userId: agent.userId,
+      agentId: agent.id,
+      name: EVERYONE_TARGET_NAME,
+      description: EVERYONE_TARGET_DESCRIPTION,
+      matchMode: "all",
+      isEnabled: true,
+    })),
+  );
+
+  return missing.length;
 }
 
 export function toAgent(row: typeof agentsTable.$inferSelect) {

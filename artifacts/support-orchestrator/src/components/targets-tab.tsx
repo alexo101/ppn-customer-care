@@ -55,6 +55,7 @@ import {
   coerceAttribute,
   defaultCondition,
   formatCondition,
+  isCatchAllTarget,
 } from "@/lib/targets";
 
 function emptyForm(): {
@@ -223,6 +224,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
             Name an audience, then describe it with operators such as{" "}
             <span className="font-medium text-foreground">user email contains mydomain.com</span> or{" "}
             <span className="font-medium text-foreground">lead phone number prefix starts with +34</span>.
+            Every agent starts with an <span className="font-medium text-foreground">Everyone</span> target that does not filter by any criteria.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -264,18 +266,28 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-medium text-sm truncate">{target.name}</span>
                     <Badge variant="outline" className="text-xs h-5 shrink-0">
-                      {target.matchMode === "all" ? "Match all" : "Match any"}
+                      {isCatchAllTarget(target)
+                        ? "No filters"
+                        : target.matchMode === "all"
+                          ? "Match all"
+                          : "Match any"}
                     </Badge>
                   </div>
                   {target.description ? (
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{target.description}</p>
                   ) : null}
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {target.conditions.map((condition) => (
-                      <Badge key={condition.id} variant="secondary" className="text-[10px] font-normal">
-                        {formatCondition(condition)}
+                    {isCatchAllTarget(target) ? (
+                      <Badge variant="secondary" className="text-[10px] font-normal">
+                        Matches everyone
                       </Badge>
-                    ))}
+                    ) : (
+                      target.conditions.map((condition) => (
+                        <Badge key={condition.id} variant="secondary" className="text-[10px] font-normal">
+                          {formatCondition(condition)}
+                        </Badge>
+                      ))
+                    )}
                   </div>
                 </button>
                 <div className="flex items-center gap-3 shrink-0 pt-0.5">
@@ -340,7 +352,11 @@ export function TargetsTab({ agentId }: { agentId: string }) {
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Match</Label>
-                <Select value={matchMode} onValueChange={(value) => setMatchMode(value as TargetMatchMode)}>
+                <Select
+                  value={matchMode}
+                  onValueChange={(value) => setMatchMode(value as TargetMatchMode)}
+                  disabled={conditions.length === 0}
+                >
                   <SelectTrigger className="h-9 text-sm">
                     <SelectValue />
                   </SelectTrigger>
@@ -377,6 +393,11 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                 </Button>
               </div>
               <div className="space-y-2">
+                {conditions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground rounded-md border border-dashed border-border p-4 text-center">
+                    No filters. This target matches everyone.
+                  </p>
+                ) : null}
                 {conditions.map((condition, index) => {
                   const attributes = ATTRIBUTES_BY_PERSON[condition.personType];
                   const needsValue = !VALUELESS_OPERATORS.has(condition.operator);
@@ -434,7 +455,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => setConditions((current) => current.filter((_, i) => i !== index))}
-                          disabled={conditions.length === 1}
                           aria-label="Remove condition"
                         >
                           <Trash className="w-3.5 h-3.5" />

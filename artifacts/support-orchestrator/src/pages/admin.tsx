@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Redirect } from 'wouter';
+import { Redirect, Link } from 'wouter';
 import { 
   useGetAnalyticsSummary,
   useListAnalyticsLogs,
@@ -15,7 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { 
   Activity, Users, MessageSquare, AlertTriangle, CheckCircle, 
   Search, Plus, Filter, MoreVertical, Edit2, Trash, ExternalLink,
-  Layers, FolderTree, Check, X, FolderInput,
+  Layers, FolderTree, FolderInput, X,
   ChevronRight, ArrowRightLeft, Folder
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from '@/components/ui/table';
@@ -46,6 +47,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
@@ -76,6 +84,7 @@ export function DashboardTab() {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-[100px] text-xs">Time</TableHead>
+                <TableHead className="text-xs">Agent</TableHead>
                 <TableHead className="text-xs">Intent</TableHead>
                 <TableHead className="text-xs">Confidence</TableHead>
                 <TableHead className="text-xs">Rule Applied</TableHead>
@@ -83,9 +92,31 @@ export function DashboardTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logs.map((log) => (
+              {logs.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="text-xs text-muted-foreground text-center py-8">
+                    No intent logs yet. Chat with an agent to generate classification telemetry.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                logs.map((log) => (
                 <TableRow key={log.id} className="text-xs">
                   <TableCell className="font-mono text-muted-foreground">{format(new Date(log.createdAt), 'HH:mm:ss')}</TableCell>
+                  <TableCell className="truncate max-w-[180px]">
+                    {log.agentId && log.agentName ? (
+                      <Link
+                        href={`/agents/${log.agentId}`}
+                        className="font-medium text-foreground hover:text-primary hover:underline underline-offset-2"
+                        title={log.agentName}
+                      >
+                        {log.agentName}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-muted-foreground" title={log.agentName ?? undefined}>
+                        {log.agentName || '—'}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium text-primary">{log.detectedCategory}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -103,7 +134,8 @@ export function DashboardTab() {
                     <Badge variant="outline" className="text-xs h-5 capitalize">{log.resolutionStatus}</Badge>
                   </TableCell>
                 </TableRow>
-              ))}
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -195,6 +227,231 @@ export function ConversationsTab({ agentId }: { agentId: string }) {
   );
 }
 
+type CategoryFormKind = 'category' | 'subcategory';
+type CategoryDialogState =
+  | { kind: 'add-category' }
+  | { kind: 'edit-category'; id: string }
+  | { kind: 'add-subcategory' }
+  | { kind: 'edit-subcategory'; id: string };
+
+function appendUniqueExample(list: string[], raw: string): string[] {
+  const next = raw.trim();
+  if (!next) return list;
+  if (list.some((item) => item.toLowerCase() === next.toLowerCase())) return list;
+  return [...list, next];
+}
+
+function ExampleQuestionsField({
+  examples,
+  draft,
+  onExamplesChange,
+  onDraftChange,
+  isSub,
+}: {
+  examples: string[];
+  draft: string;
+  onExamplesChange: (examples: string[]) => void;
+  onDraftChange: (value: string) => void;
+  isSub: boolean;
+}) {
+  const [exampleToRemove, setExampleToRemove] = useState<string | null>(null);
+
+  const addDraft = () => {
+    const next = appendUniqueExample(examples, draft);
+    onExamplesChange(next);
+    if (draft.trim()) onDraftChange('');
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="category-form-examples">Example questions</Label>
+      {examples.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {examples.map((example) => (
+            <span
+              key={example}
+              className="inline-flex items-start gap-2 rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-foreground"
+            >
+              <span className="min-w-0 flex-1 break-words">{example}</span>
+              <button
+                type="button"
+                onClick={() => setExampleToRemove(example)}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label={`Remove example: ${example}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <AlertDialog
+        open={exampleToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setExampleToRemove(null);
+        }}
+      >
+        <AlertDialogContent className="z-[70]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove example question</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove{' '}
+              <span className="font-semibold text-foreground">"{exampleToRemove}"</span>
+              ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!exampleToRemove) return;
+                onExamplesChange(examples.filter((item) => item !== exampleToRemove));
+                setExampleToRemove(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <div className="flex gap-2">
+        <Input
+          id="category-form-examples"
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addDraft();
+            }
+          }}
+          placeholder={isSub ? 'e.g. How do I request a refund?' : 'e.g. What is my current bill?'}
+        />
+        <Button type="button" variant="outline" className="shrink-0" onClick={addDraft} disabled={!draft.trim()}>
+          Add
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {isSub
+          ? 'Add sample questions a user might ask in this subcategory. These give the AI more context when classifying intents.'
+          : 'Add sample questions a user might ask in this category. These give the AI more context when classifying intents.'}
+      </p>
+    </div>
+  );
+}
+
+function CategoryFormDialog({
+  open,
+  onOpenChange,
+  kind,
+  mode,
+  name,
+  description,
+  examples,
+  exampleDraft,
+  onNameChange,
+  onDescriptionChange,
+  onExamplesChange,
+  onExampleDraftChange,
+  onSubmit,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  kind: CategoryFormKind;
+  mode: 'add' | 'edit';
+  name: string;
+  description: string;
+  examples: string[];
+  exampleDraft: string;
+  onNameChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  onExamplesChange: (examples: string[]) => void;
+  onExampleDraftChange: (value: string) => void;
+  onSubmit: () => void;
+  isPending: boolean;
+}) {
+  const isSub = kind === 'subcategory';
+  const title =
+    mode === 'add'
+      ? isSub
+        ? 'Add Subcategory'
+        : 'Add Category'
+      : isSub
+        ? 'Edit Subcategory'
+        : 'Edit Category';
+  const saveLabel = isSub ? 'Save Subcategory' : 'Save Category';
+  const namePlaceholder = isSub ? 'e.g. Refunds' : 'e.g. Billing';
+  const descriptionPlaceholder = isSub
+    ? 'Describe what intents belong in this subcategory...'
+    : 'Describe what intents belong in this category...';
+  const helpText = isSub
+    ? 'The description helps the AI system accurately classify user intents into this subcategory.'
+    : 'The description helps the AI system accurately classify user intents into this category.';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px]">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+          className="space-y-4"
+        >
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="category-form-name">Name</Label>
+              <Input
+                id="category-form-name"
+                autoFocus
+                value={name}
+                onChange={(event) => onNameChange(event.target.value)}
+                placeholder={namePlaceholder}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="category-form-description">Description</Label>
+              <Textarea
+                id="category-form-description"
+                value={description}
+                onChange={(event) => onDescriptionChange(event.target.value)}
+                placeholder={descriptionPlaceholder}
+                rows={4}
+                className="min-h-[96px] resize-y"
+              />
+              <p className="text-xs text-muted-foreground">{helpText}</p>
+            </div>
+            <ExampleQuestionsField
+              examples={examples}
+              draft={exampleDraft}
+              onExamplesChange={onExamplesChange}
+              onDraftChange={onExampleDraftChange}
+              isSub={isSub}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!name.trim() || isPending}
+              className={isSub ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : undefined}
+            >
+              {saveLabel}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function CategoriesTab({ agentId }: { agentId: string }) {
   const { data: categories = [] } = useListCategories({ agentId });
   const queryClient = useQueryClient();
@@ -205,24 +462,20 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-
-  // Category inline states
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [dialog, setDialog] = useState<CategoryDialogState | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formExamples, setFormExamples] = useState<string[]>([]);
+  const [exampleDraft, setExampleDraft] = useState('');
   const [categoryToDelete, setCategoryToDelete] = useState<IntentCategory | null>(null);
-
-  // Subcategory inline states
-  const [isAddingSubcategory, setIsAddingSubcategory] = useState(false);
-  const [newSubcategoryName, setNewSubcategoryName] = useState('');
-  const [editingSubId, setEditingSubId] = useState<string | null>(null);
-  const [editingSubName, setEditingSubName] = useState('');
 
   // Parent categories (items with no parentId)
   const parentCategories = categories.filter((c) => !c.parentId);
-  const filteredParents = parentCategories.filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const search = searchQuery.toLowerCase();
+  const filteredParents = parentCategories.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search) ||
+      (c.description ?? '').toLowerCase().includes(search)
   );
 
   // Active selected parent category
@@ -263,52 +516,138 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
     );
   };
 
-  const handleSaveNewCategory = () => {
-    const trimmed = newCategoryName.trim();
-    if (!trimmed) return;
-
-    createCategory.mutate(
-      {
-        data: {
-          name: trimmed,
-          agentId,
-          parentId: null,
-          description: '',
-          examples: [],
-          keywords: [],
-          confidenceThreshold: 0.7,
-          isEnabled: true,
-          sortOrder: 0,
-        },
-      },
-      {
-        onSuccess: (created) => {
-          setIsAddingCategory(false);
-          setNewCategoryName('');
-          setSelectedCategoryId(created.id);
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
-          toast({
-            title: 'Category created',
-            description: `Created "${created.name}"`,
-          });
-        },
-      }
-    );
+  const closeDialog = () => {
+    setDialog(null);
+    setFormName('');
+    setFormDescription('');
+    setFormExamples([]);
+    setExampleDraft('');
   };
 
-  const handleSaveEditCategory = (catId: string) => {
-    const trimmed = editingCategoryName.trim();
-    if (!trimmed) return;
+  const openAddCategory = () => {
+    setFormName('');
+    setFormDescription('');
+    setFormExamples([]);
+    setExampleDraft('');
+    setDialog({ kind: 'add-category' });
+  };
+
+  const openEditCategory = (cat: IntentCategory) => {
+    setFormName(cat.name);
+    setFormDescription(cat.description ?? '');
+    setFormExamples([...(cat.examples ?? [])]);
+    setExampleDraft('');
+    setDialog({ kind: 'edit-category', id: cat.id });
+  };
+
+  const openAddSubcategory = () => {
+    setFormName('');
+    setFormDescription('');
+    setFormExamples([]);
+    setExampleDraft('');
+    setDialog({ kind: 'add-subcategory' });
+  };
+
+  const openEditSubcategory = (sub: IntentCategory) => {
+    setFormName(sub.name);
+    setFormDescription(sub.description ?? '');
+    setFormExamples([...(sub.examples ?? [])]);
+    setExampleDraft('');
+    setDialog({ kind: 'edit-subcategory', id: sub.id });
+  };
+
+  const handleSaveForm = () => {
+    const trimmed = formName.trim();
+    if (!trimmed || !dialog) return;
+    const description = formDescription.trim();
+    const examples = appendUniqueExample(formExamples, exampleDraft);
+
+    if (dialog.kind === 'add-category') {
+      createCategory.mutate(
+        {
+          data: {
+            name: trimmed,
+            agentId,
+            parentId: null,
+            description,
+            examples,
+            keywords: [],
+            confidenceThreshold: 0.7,
+            isEnabled: true,
+            sortOrder: 0,
+          },
+        },
+        {
+          onSuccess: (created) => {
+            closeDialog();
+            setSelectedCategoryId(created.id);
+            queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
+            toast({
+              title: 'Category created',
+              description: `Created "${created.name}"`,
+            });
+          },
+        }
+      );
+      return;
+    }
+
+    if (dialog.kind === 'edit-category') {
+      updateCategory.mutate(
+        { id: dialog.id, data: { name: trimmed, description, examples } },
+        {
+          onSuccess: () => {
+            closeDialog();
+            queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
+            toast({
+              title: 'Category updated',
+              description: 'Category updated successfully',
+            });
+          },
+        }
+      );
+      return;
+    }
+
+    if (dialog.kind === 'add-subcategory') {
+      if (!activeSelectedCategory) return;
+      createCategory.mutate(
+        {
+          data: {
+            name: trimmed,
+            agentId,
+            parentId: activeSelectedCategory.id,
+            description,
+            examples,
+            keywords: [],
+            confidenceThreshold: 0.7,
+            isEnabled: true,
+            sortOrder: 0,
+          },
+        },
+        {
+          onSuccess: (created) => {
+            closeDialog();
+            queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
+            toast({
+              title: 'Subcategory created',
+              description: `Added "${created.name}" to ${activeSelectedCategory.name}`,
+            });
+          },
+        }
+      );
+      return;
+    }
 
     updateCategory.mutate(
-      { id: catId, data: { name: trimmed } },
+      { id: dialog.id, data: { name: trimmed, description, examples } },
       {
         onSuccess: () => {
-          setEditingCategoryId(null);
+          closeDialog();
           queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
           toast({
-            title: 'Category updated',
-            description: 'Name updated successfully',
+            title: 'Subcategory updated',
+            description: 'Subcategory updated successfully',
           });
         },
       }
@@ -331,57 +670,6 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
           toast({
             title: 'Category deleted',
             description: `Deleted "${cat.name}" and all its subcategories`,
-          });
-        },
-      }
-    );
-  };
-
-  const handleSaveNewSub = () => {
-    const trimmed = newSubcategoryName.trim();
-    if (!trimmed || !activeSelectedCategory) return;
-
-    createCategory.mutate(
-      {
-        data: {
-          name: trimmed,
-          agentId,
-          parentId: activeSelectedCategory.id,
-          description: '',
-          examples: [],
-          keywords: [],
-          confidenceThreshold: 0.7,
-          isEnabled: true,
-          sortOrder: 0,
-        },
-      },
-      {
-        onSuccess: (created) => {
-          setIsAddingSubcategory(false);
-          setNewSubcategoryName('');
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
-          toast({
-            title: 'Subcategory created',
-            description: `Added "${created.name}" to ${activeSelectedCategory.name}`,
-          });
-        },
-      }
-    );
-  };
-
-  const handleSaveEditSub = (subId: string) => {
-    const trimmed = editingSubName.trim();
-    if (!trimmed) return;
-
-    updateCategory.mutate(
-      { id: subId, data: { name: trimmed } },
-      {
-        onSuccess: () => {
-          setEditingSubId(null);
-          queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey({ agentId }) });
-          toast({
-            title: 'Subcategory updated',
-            description: 'Name updated successfully',
           });
         },
       }
@@ -432,10 +720,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
             </div>
             <Button
               size="sm"
-              onClick={() => {
-                setIsAddingCategory(true);
-                setNewCategoryName('');
-              }}
+              onClick={openAddCategory}
               className="h-8 text-xs flex items-center gap-1.5 px-3.5 rounded-md"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -454,97 +739,31 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
           </div>
 
           <div className="space-y-2.5">
-            {isAddingCategory && (
-              <div className="border border-blue-400/80 dark:border-blue-500/80 bg-blue-50/40 dark:bg-blue-950/20 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-blue-300 dark:ring-blue-800">
-                <Input
-                  autoFocus
-                  placeholder="New Category"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveNewCategory();
-                    if (e.key === 'Escape') setIsAddingCategory(false);
-                  }}
-                  className="h-8 text-xs font-medium bg-background border-blue-400 focus-visible:ring-1 focus-visible:ring-blue-400"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
-                  onClick={handleSaveNewCategory}
-                  disabled={!newCategoryName.trim() || createCategory.isPending}
-                >
-                  <Check className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                  onClick={() => setIsAddingCategory(false)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
-
             {filteredParents.map((cat) => {
               const isSelected = activeSelectedCategory?.id === cat.id;
               const subs = categories.filter((c) => c.parentId === cat.id);
-              const isEditing = editingCategoryId === cat.id;
-
-              if (isEditing) {
-                return (
-                  <div
-                    key={cat.id}
-                    className="border border-blue-400/80 dark:border-blue-500/80 bg-blue-50/40 dark:bg-blue-950/20 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-blue-300 dark:ring-blue-800"
-                  >
-                    <div className="w-8 h-8 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground font-mono text-[11px] font-bold shrink-0 border border-border/40">
-                      tg
-                    </div>
-                    <Input
-                      autoFocus
-                      value={editingCategoryName}
-                      onChange={(e) => setEditingCategoryName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSaveEditCategory(cat.id);
-                        if (e.key === 'Escape') setEditingCategoryId(null);
-                      }}
-                      className="h-8 text-xs font-medium bg-background border-blue-400 focus-visible:ring-1 focus-visible:ring-blue-400"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
-                      onClick={() => handleSaveEditCategory(cat.id)}
-                      disabled={!editingCategoryName.trim() || updateCategory.isPending}
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                      onClick={() => setEditingCategoryId(null)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                );
-              }
 
               return (
                 <div
                   key={cat.id}
                   onClick={() => setSelectedCategoryId(cat.id)}
                   className={cn(
-                    "group rounded-lg p-3 flex items-center justify-between cursor-pointer transition-all border shadow-sm select-none",
+                    "group rounded-lg p-3 flex items-start justify-between cursor-pointer transition-all border shadow-sm select-none",
                     isSelected
                       ? "border-blue-400/90 dark:border-blue-500/90 bg-blue-50/40 dark:bg-blue-950/20 ring-1 ring-blue-300 dark:ring-blue-800"
                       : "border-border/80 bg-card hover:border-blue-200 dark:hover:border-blue-900/50 hover:bg-accent/20"
                   )}
                 >
-                  <div className="flex items-center gap-3 min-w-0 pr-2">
-                    <span className="font-medium text-sm text-foreground truncate">{cat.name}</span>
+                  <div className="min-w-0 pr-2">
+                    <span className="font-medium text-sm text-foreground truncate block">{cat.name}</span>
+                    {cat.description ? (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{cat.description}</p>
+                    ) : null}
+                    {cat.examples?.length ? (
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        {cat.examples.length} example{cat.examples.length === 1 ? '' : 's'}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center gap-3 shrink-0">
@@ -571,12 +790,11 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                         <DropdownMenuItem
                           onClick={(e) => {
                             e.stopPropagation();
-                            setEditingCategoryId(cat.id);
-                            setEditingCategoryName(cat.name);
+                            openEditCategory(cat);
                           }}
                           className="gap-2 cursor-pointer"
                         >
-                          <Edit2 className="w-3.5 h-3.5" /> Edit Name
+                          <Edit2 className="w-3.5 h-3.5" /> Edit
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -595,7 +813,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
               );
             })}
 
-            {filteredParents.length === 0 && !isAddingCategory && (
+            {filteredParents.length === 0 && (
               <div className="border border-dashed border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
                 {searchQuery
                   ? 'No categories matching your search.'
@@ -629,10 +847,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => {
-                    setIsAddingSubcategory(true);
-                    setNewSubcategoryName('');
-                  }}
+                  onClick={openAddSubcategory}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium h-8 px-3.5 rounded-md flex items-center gap-1.5 shadow-sm transition-colors shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -642,59 +857,29 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
 
               <div className="space-y-2.5">
                 {currentSubcategories.map((sub) => {
-                  const isEditing = editingSubId === sub.id;
-
-                  if (isEditing) {
-                    return (
-                      <div
-                        key={sub.id}
-                        className="border border-emerald-400/80 dark:border-emerald-500/80 bg-emerald-50/30 dark:bg-emerald-950/15 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-800"
-                      >
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 ml-1 mr-2 shrink-0" />
-                        <Input
-                          autoFocus
-                          value={editingSubName}
-                          onChange={(e) => setEditingSubName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEditSub(sub.id);
-                            if (e.key === 'Escape') setEditingSubId(null);
-                          }}
-                          className="h-8 text-xs font-medium bg-background border-emerald-400 focus-visible:ring-1 focus-visible:ring-emerald-400"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
-                          onClick={() => handleSaveEditSub(sub.id)}
-                          disabled={!editingSubName.trim() || updateCategory.isPending}
-                        >
-                          <Check className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                          onClick={() => setEditingSubId(null)}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    );
-                  }
-
                   return (
                     <div
                       key={sub.id}
-                      className="group rounded-lg p-3 flex items-center justify-between border border-border/80 bg-card hover:border-border transition-all shadow-sm select-none"
+                      className="group rounded-lg p-3 flex items-start justify-between border border-border/80 bg-card hover:border-border transition-all shadow-sm select-none"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className="flex items-start gap-2.5 min-w-0 pr-2">
                         <div
                           className={cn(
-                            "w-2 h-2 rounded-full shrink-0 ml-1 mr-1",
+                            "w-2 h-2 rounded-full shrink-0 ml-1 mr-1 mt-1.5",
                             sub.isEnabled ? "bg-emerald-500" : "bg-muted-foreground/30"
                           )}
                         />
-                        <span className="font-medium text-sm text-foreground truncate">{sub.name}</span>
+                        <div className="min-w-0">
+                          <span className="font-medium text-sm text-foreground truncate block">{sub.name}</span>
+                          {sub.description ? (
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{sub.description}</p>
+                          ) : null}
+                          {sub.examples?.length ? (
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                              {sub.examples.length} example{sub.examples.length === 1 ? '' : 's'}
+                            </p>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">
@@ -752,13 +937,10 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="text-xs">
                             <DropdownMenuItem
-                              onClick={() => {
-                                setEditingSubId(sub.id);
-                                setEditingSubName(sub.name);
-                              }}
+                              onClick={() => openEditSubcategory(sub)}
                               className="gap-2 cursor-pointer"
                             >
-                              <Edit2 className="w-3.5 h-3.5" /> Edit Name
+                              <Edit2 className="w-3.5 h-3.5" /> Edit
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -774,41 +956,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                   );
                 })}
 
-                {isAddingSubcategory && (
-                  <div className="border border-emerald-400/80 dark:border-emerald-500/80 bg-emerald-50/30 dark:bg-emerald-950/15 rounded-lg p-3 flex items-center gap-2 shadow-sm ring-1 ring-emerald-300 dark:ring-emerald-800">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 ml-1 mr-2 shrink-0" />
-                    <Input
-                      autoFocus
-                      placeholder="New Subcategory"
-                      value={newSubcategoryName}
-                      onChange={(e) => setNewSubcategoryName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSaveNewSub();
-                        if (e.key === 'Escape') setIsAddingSubcategory(false);
-                      }}
-                      className="h-8 text-xs font-medium bg-background border-emerald-400 focus-visible:ring-1 focus-visible:ring-emerald-400"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0"
-                      onClick={handleSaveNewSub}
-                      disabled={!newSubcategoryName.trim() || createCategory.isPending}
-                    >
-                      <Check className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                      onClick={() => setIsAddingSubcategory(false)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
-
-                {currentSubcategories.length === 0 && !isAddingSubcategory && (
+                {currentSubcategories.length === 0 && (
                   <div className="border border-dashed border-border rounded-xl p-8 text-center text-sm text-muted-foreground space-y-1">
                     <p>
                       No subcategories in{' '}
@@ -831,6 +979,33 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
           )}
         </div>
       </div>
+
+      <CategoryFormDialog
+        open={dialog !== null}
+        onOpenChange={(open) => {
+          if (!open) closeDialog();
+        }}
+        kind={
+          dialog?.kind === 'add-subcategory' || dialog?.kind === 'edit-subcategory'
+            ? 'subcategory'
+            : 'category'
+        }
+        mode={
+          dialog?.kind === 'edit-category' || dialog?.kind === 'edit-subcategory'
+            ? 'edit'
+            : 'add'
+        }
+        name={formName}
+        description={formDescription}
+        examples={formExamples}
+        exampleDraft={exampleDraft}
+        onNameChange={setFormName}
+        onDescriptionChange={setFormDescription}
+        onExamplesChange={setFormExamples}
+        onExampleDraftChange={setExampleDraft}
+        onSubmit={handleSaveForm}
+        isPending={createCategory.isPending || updateCategory.isPending}
+      />
 
       {/* Delete Category Confirmation Modal */}
       <AlertDialog

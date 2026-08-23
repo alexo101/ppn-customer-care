@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { sql, desc, eq } from "drizzle-orm";
-import { db, orchestratorLogsTable, conversationsTable } from "@workspace/db";
+import { db, orchestratorLogsTable, conversationsTable, agentsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { ListAnalyticsLogsQueryParams } from "@workspace/api-zod";
 
@@ -83,15 +83,20 @@ router.get("/analytics/logs", requireAuth, async (req, res): Promise<void> => {
 
   // Scope logs to conversations owned by the authenticated user
   const rows = await db
-    .select({ log: orchestratorLogsTable })
+    .select({
+      log: orchestratorLogsTable,
+      agentId: conversationsTable.agentId,
+      agentName: agentsTable.name,
+    })
     .from(orchestratorLogsTable)
     .innerJoin(conversationsTable, eq(orchestratorLogsTable.conversationId, conversationsTable.id))
+    .leftJoin(agentsTable, eq(conversationsTable.agentId, agentsTable.id))
     .where(eq(conversationsTable.userId, userId))
     .orderBy(desc(orchestratorLogsTable.createdAt))
     .limit(limit);
 
   res.json(
-    rows.map(({ log: row }) => ({
+    rows.map(({ log: row, agentId, agentName }) => ({
       id: row.id,
       conversationId: row.conversationId,
       messageId: row.messageId ?? null,
@@ -107,6 +112,8 @@ router.get("/analytics/logs", requireAuth, async (req, res): Promise<void> => {
       llmModel: row.llmModel,
       resolutionStatus: row.resolutionStatus,
       createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+      agentId: agentId ?? null,
+      agentName: agentName ?? null,
     })),
   );
 });

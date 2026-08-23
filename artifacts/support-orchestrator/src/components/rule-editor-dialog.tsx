@@ -121,9 +121,13 @@ export function RuleEditorDialog({
     };
 
     if (rule) {
-      updateRule.mutate({ id: rule.id, data: payload }, { onSuccess, onError });
+      const { priority: _priority, ...updatePayload } = payload;
+      updateRule.mutate({ id: rule.id, data: updatePayload }, { onSuccess, onError });
     } else {
-      createRule.mutate({ data: { ...payload, agentId } }, { onSuccess, onError });
+      createRule.mutate(
+        { data: { ...payload, agentId, priority: suggestedPriority } },
+        { onSuccess, onError },
+      );
     }
   };
 

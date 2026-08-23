@@ -33,7 +33,7 @@ import {
   SendRuleAuthoringMessageBody,
 } from "@workspace/api-zod";
 
-import { getOwnedAgent } from "../lib/agents";
+import { ensureEveryoneTarget, getOwnedAgent } from "../lib/agents";
 import {
   createRuleAuthoringProvider,
   RuleAuthoringProviderError,
@@ -74,6 +74,7 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
+    await ensureEveryoneTarget(req.userId, agentId);
   }
 
   const where = agentId
@@ -167,6 +168,8 @@ router.post(
       res.status(404).json({ error: "Agent not found" });
       return;
     }
+
+    await ensureEveryoneTarget(req.userId, params.data.agentId);
 
     if (
       parsed.data.awaitingConfirmation &&

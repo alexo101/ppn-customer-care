@@ -362,7 +362,9 @@ export const ListConversationLogsResponseItem = zod.object({
   "latencyMs": zod.number().optional(),
   "llmModel": zod.string().optional(),
   "resolutionStatus": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish(),
+  "agentName": zod.string().nullish()
 })
 export const ListConversationLogsResponse = zod.array(ListConversationLogsResponseItem)
 
@@ -1130,7 +1132,7 @@ export const CreateTargetBody = zod.object({
   "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
   "operator": zod.enum(['is', 'is_not', 'contains', 'does_not_contain', 'starts_with', 'ends_with', 'is_known', 'is_unknown']),
   "value": zod.string().max(createTargetBodyConditionsItemValueMax).optional()
-})).min(1).max(createTargetBodyConditionsMax)
+})).max(createTargetBodyConditionsMax)
 })
 
 export const CreateTargetResponse = zod.object({
@@ -1178,7 +1180,7 @@ export const UpdateTargetBody = zod.object({
   "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
   "operator": zod.enum(['is', 'is_not', 'contains', 'does_not_contain', 'starts_with', 'ends_with', 'is_known', 'is_unknown']),
   "value": zod.string().max(updateTargetBodyConditionsItemValueMax).optional()
-})).min(1).max(updateTargetBodyConditionsMax).optional()
+})).max(updateTargetBodyConditionsMax).optional()
 })
 
 export const UpdateTargetResponse = zod.object({
@@ -1332,7 +1334,9 @@ export const ListAnalyticsLogsResponseItem = zod.object({
   "latencyMs": zod.number().optional(),
   "llmModel": zod.string().optional(),
   "resolutionStatus": zod.string(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish(),
+  "agentName": zod.string().nullish()
 })
 export const ListAnalyticsLogsResponse = zod.array(ListAnalyticsLogsResponseItem)
 

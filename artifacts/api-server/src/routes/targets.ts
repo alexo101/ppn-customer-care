@@ -9,7 +9,7 @@ import {
   UpdateTargetBody,
   DeleteTargetParams,
 } from "@workspace/api-zod";
-import { getOwnedAgent } from "../lib/agents";
+import { getOwnedAgent, ensureEveryoneTarget } from "../lib/agents";
 import {
   isMatchMode,
   validateTargetCondition,
@@ -48,7 +48,6 @@ function toTarget(row: TargetRow, conditions: ConditionRow[]) {
 }
 
 function validateConditions(conditions: TargetConditionDraft[]): string | null {
-  if (conditions.length === 0) return "Add at least one condition.";
   for (const [index, condition] of conditions.entries()) {
     const error = validateTargetCondition(condition);
     if (error) return `Condition ${index + 1}: ${error}`;
@@ -108,6 +107,8 @@ router.get("/targets", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Agent not found" });
     return;
   }
+
+  await ensureEveryoneTarget(req.userId, parsed.data.agentId);
 
   const rows = await db
     .select()

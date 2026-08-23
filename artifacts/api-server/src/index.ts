@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { ensureEveryoneTargetsForAllAgents } from "./lib/agents";
 import { startConversationLifecycleSweep } from "./lib/conversation-lifecycle";
 
 const rawPort = process.env["PORT"];
@@ -24,4 +25,13 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   startConversationLifecycleSweep();
+  void ensureEveryoneTargetsForAllAgents()
+    .then((created) => {
+      if (created > 0) {
+        logger.info({ created }, "Added Everyone target to existing agents");
+      }
+    })
+    .catch((error) => {
+      logger.error({ error }, "Failed to add Everyone target to existing agents");
+    });
 });

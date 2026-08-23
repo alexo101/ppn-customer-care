@@ -24,4 +24,8 @@ export interface OrchestratorLog {
   llmModel?: string;
   resolutionStatus: string;
   createdAt: string;
+  /** @nullable */
+  agentId?: string | null;
+  /** @nullable */
+  agentName?: string | null;
 }

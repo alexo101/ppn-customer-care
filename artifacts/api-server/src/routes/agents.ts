@@ -9,7 +9,7 @@ import {
   UpdateAgentBody,
   DeleteAgentParams,
 } from "@workspace/api-zod";
-import { ensureDefaultAgentIfNeeded, getOwnedAgent, toAgent } from "../lib/agents";
+import { ensureDefaultAgentIfNeeded, ensureEveryoneTarget, getOwnedAgent, toAgent } from "../lib/agents";
 
 const router: IRouter = Router();
 
@@ -40,6 +40,7 @@ router.post("/agents", requireAuth, async (req, res): Promise<void> => {
     })
     .returning();
 
+  await ensureEveryoneTarget(req.userId, row.id);
   res.status(201).json(toAgent(row));
 });
 
@@ -56,6 +57,7 @@ router.get("/agents/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  await ensureEveryoneTarget(req.userId, agent.id);
   res.json(toAgent(agent));
 });
 

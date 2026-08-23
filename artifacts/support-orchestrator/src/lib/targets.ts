@@ -78,6 +78,12 @@ export const OPERATORS: TargetOperator[] = [
 
 export const VALUELESS_OPERATORS = new Set<TargetOperator>(["is_known", "is_unknown"]);
 
+export const EVERYONE_TARGET_NAME = "Everyone";
+
+export function isCatchAllTarget(target: { conditions: unknown[] }): boolean {
+  return target.conditions.length === 0;
+}
+
 export function defaultCondition(personType: TargetPersonType = "user"): TargetConditionInput {
   const attributes = ATTRIBUTES_BY_PERSON[personType];
   const attribute = attributes.includes("email") ? "email" : attributes[0];

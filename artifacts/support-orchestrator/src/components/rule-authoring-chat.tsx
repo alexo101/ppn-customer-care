@@ -310,7 +310,6 @@ function RulePreview({
           Rule ready for confirmation
         </p>
         <div className="flex items-center gap-1.5">
-          <Badge variant="secondary">P{draft.priority}</Badge>
           <Badge variant={draft.isEnabled ? "default" : "outline"}>
             {draft.isEnabled ? "Enabled" : "Disabled"}
           </Badge>

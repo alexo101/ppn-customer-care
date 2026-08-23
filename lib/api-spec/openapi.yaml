@@ -1793,6 +1793,10 @@ components:
           type: string
         createdAt:
           type: string
+        agentId:
+          type: ["string", "null"]
+        agentName:
+          type: ["string", "null"]
 
     # ── Intent Category ───────────────────────────────────────────────────
     IntentCategory:
@@ -2372,8 +2376,9 @@ components:
           type: boolean
         conditions:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 20
+          description: An empty list matches everyone and does not filter by any criteria.
           items:
             $ref: "#/components/schemas/TargetConditionInput"
 
@@ -2392,8 +2397,9 @@ components:
           type: boolean
         conditions:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 20
+          description: An empty list matches everyone and does not filter by any criteria.
           items:
             $ref: "#/components/schemas/TargetConditionInput"
 

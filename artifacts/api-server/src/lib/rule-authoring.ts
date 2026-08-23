@@ -183,14 +183,10 @@ export function validateDraft(
     unresolvedFields.push("audienceTargetIds");
   }
 
-  if (
-    !Number.isFinite(normalized.priority) ||
-    !Number.isInteger(normalized.priority) ||
-    normalized.priority < 0 ||
-    normalized.priority > 100
-  ) {
-    unresolvedFields.push("priority");
-  }
+  const priority =
+    Number.isInteger(normalized.priority) && normalized.priority >= 0
+      ? normalized.priority
+      : 0;
 
   if (
     action &&
@@ -239,7 +235,7 @@ export function validateDraft(
       name: sentence,
       description: sentence,
       promptTemplate: normalized.promptTemplate.trim(),
-      priority: normalized.priority,
+      priority,
       requiresClarificationPrompt: normalized.requiresClarificationPrompt.trim(),
       escalationTrigger: normalizeAction(action.label) === "escalate",
       isEnabled: normalized.isEnabled,
@@ -334,7 +330,6 @@ function clarificationMessage(fields: string[]): string {
     action: "which action the rule should take",
     sourceIds: "which existing source the action should use",
     audienceTargetIds: "which existing audience target this rule should use",
-    priority: "a priority from 0 to 100",
     requiresClarificationPrompt:
       "the clarification question the agent should ask",
     promptTemplate: "the response template the agent should generate",

@@ -16,7 +16,8 @@ export interface TargetUpdate {
   matchMode?: TargetMatchMode;
   isEnabled?: boolean;
   /**
-     * @minItems 1
+     * An empty list matches everyone and does not filter by any criteria.
+     * @minItems 0
      * @maxItems 20
      */
   conditions?: TargetConditionInput[];
