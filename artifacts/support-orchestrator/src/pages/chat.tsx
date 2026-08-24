@@ -143,11 +143,7 @@ export default function Chat({ agentId }: { agentId?: string }) {
           className="flex-1 flex flex-col items-center justify-center text-muted-foreground"
           style={appearance?.backgroundColor ? { backgroundColor: appearance.backgroundColor } : undefined}
         >
-          {appearance?.logoUrl ? (
-            <img src={appearance.logoUrl} alt="Brand logo" className="w-16 h-16 mb-4 object-contain rounded-md bg-white/80 p-2 shadow-sm" />
-          ) : (
-            <MessageSquare className="w-12 h-12 mb-4 opacity-20" />
-          )}
+          <MessageSquare className="w-12 h-12 mb-4 opacity-20" />
           <p className="text-sm">Select a thread to view details</p>
         </div>
       )}
@@ -255,9 +251,6 @@ function ActiveChat({
       <div className={cn("flex flex-col h-full bg-background transition-all duration-300", debugOpen ? "w-2/3" : "w-full")}>
         <div className="h-14 flex items-center justify-between px-6 border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-3">
-            {appearance?.logoUrl && (
-              <img src={appearance.logoUrl} alt="Brand logo" className="h-7 w-7 rounded-md object-contain bg-white/90 p-0.5 border border-border" />
-            )}
             <h2 className="font-medium text-sm">{(convo?.metadata as any)?.subject || 'Conversation'}</h2>
             {convo && <StatusBadge status={convo.status} />}
           </div>

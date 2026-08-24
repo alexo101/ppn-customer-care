@@ -79,4 +79,22 @@ app.use(
 
 app.use("/api", router);
 
+app.use((req, res) => {
+  res.status(404).json({ error: "Not found" });
+});
+
+app.use((
+  err: unknown,
+  _req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) => {
+  logger.error({ err }, "Unhandled API error");
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+  res.status(500).json({ error: "Something went wrong. Please try again." });
+});
+
 export default app;

@@ -34,6 +34,12 @@ import {
 } from "@workspace/api-zod";
 
 import { ensureEveryoneTarget, getOwnedAgent } from "../lib/agents";
+import { logger } from "../lib/logger";
+import {
+  databaseErrorDetails,
+  replaceRuleLinks,
+  ruleSaveClientMessage,
+} from "../lib/rule-links";
 import {
   createRuleAuthoringProvider,
   RuleAuthoringProviderError,
@@ -86,7 +92,15 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
     .from(orchestratorRulesTable)
     .where(where)
     .orderBy(desc(orchestratorRulesTable.priority));
-  res.json(await toRules(rows));
+  try {
+    res.json(await toRules(rows));
+  } catch (error) {
+    logger.error(
+      { err: databaseErrorDetails(error) },
+      "Failed to list rules",
+    );
+    res.status(500).json({ error: "Could not load rules. Please try again." });
+  }
 });
 
 router.post("/rules", requireAuth, async (req, res): Promise<void> => {
@@ -116,35 +130,48 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
   );
   if (!allowed) return;
 
-  const [row] = await db
-    .insert(orchestratorRulesTable)
-    .values({
-      userId: req.userId,
-      agentId,
-      name: parsed.data.name,
-      description: parsed.data.description ?? "",
-      promptTemplate: parsed.data.promptTemplate ?? "",
-      priority: parsed.data.priority ?? 0,
-      requiresClarificationPrompt:
-        parsed.data.requiresClarificationPrompt ?? "",
-      escalationTrigger:
-        parsed.data.escalationTrigger ??
-        normalizeAction(parsed.data.action ?? "") === "escalate",
-      isEnabled: parsed.data.isEnabled ?? true,
-      conditionOperator: parsed.data.conditionOperator?.trim() || "is",
-      action: parsed.data.action?.trim() || "search answer",
-    })
-    .returning();
+  try {
+    const row = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(orchestratorRulesTable)
+        .values({
+          userId: req.userId,
+          agentId,
+          name: parsed.data.name,
+          description: parsed.data.description ?? "",
+          promptTemplate: parsed.data.promptTemplate ?? "",
+          priority: parsed.data.priority ?? 0,
+          requiresClarificationPrompt:
+            parsed.data.requiresClarificationPrompt ?? "",
+          escalationTrigger:
+            parsed.data.escalationTrigger ??
+            normalizeAction(parsed.data.action ?? "") === "escalate",
+          isEnabled: parsed.data.isEnabled ?? true,
+          conditionOperator: parsed.data.conditionOperator?.trim() || "is",
+          action: parsed.data.action?.trim() || "search answer",
+        })
+        .returning();
 
-  await replaceRuleLinks(
-    row.id,
-    parsed.data.categoryIds ?? [],
-    parsed.data.sourceIds ?? [],
-    parsed.data.connectorIds ?? [],
-    parsed.data.audienceTargetIds ?? [],
-  );
-  const [created] = await toRules([row]);
-  res.status(201).json(created);
+      await replaceRuleLinks(
+        tx,
+        created.id,
+        parsed.data.categoryIds,
+        parsed.data.sourceIds,
+        parsed.data.connectorIds,
+        parsed.data.audienceTargetIds,
+      );
+      return created;
+    });
+
+    const [created] = await toRules([row]);
+    res.status(201).json(created);
+  } catch (error) {
+    logger.error(
+      { err: databaseErrorDetails(error) },
+      "Failed to create rule",
+    );
+    res.status(500).json({ error: ruleSaveClientMessage(error) });
+  }
 });
 
 router.post(
@@ -358,40 +385,57 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  const [row] = await db
-    .update(orchestratorRulesTable)
-    .set(updates)
-    .where(
-      and(
-        eq(orchestratorRulesTable.id, params.data.id),
-        eq(orchestratorRulesTable.userId, req.userId),
-      ),
-    )
-    .returning();
+  try {
+    const shouldReplaceLinks =
+      parsed.data.categoryIds !== undefined ||
+      parsed.data.sourceIds !== undefined ||
+      parsed.data.connectorIds !== undefined ||
+      parsed.data.audienceTargetIds !== undefined;
 
-  if (!row) {
-    res.status(404).json({ error: "Rule not found" });
-    return;
-  }
+    const current = shouldReplaceLinks ? (await toRules([existing]))[0] : null;
 
-  if (
-    parsed.data.categoryIds !== undefined ||
-    parsed.data.sourceIds !== undefined ||
-    parsed.data.connectorIds !== undefined ||
-    parsed.data.audienceTargetIds !== undefined
-  ) {
-    const current = (await toRules([row]))[0];
-    await replaceRuleLinks(
-      row.id,
-      parsed.data.categoryIds ?? current.categoryIds,
-      parsed.data.sourceIds ?? current.sourceIds,
-      parsed.data.connectorIds ?? current.connectorIds,
-      parsed.data.audienceTargetIds ?? current.audienceTargetIds,
+    const row = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(orchestratorRulesTable)
+        .set(updates)
+        .where(
+          and(
+            eq(orchestratorRulesTable.id, params.data.id),
+            eq(orchestratorRulesTable.userId, req.userId),
+          ),
+        )
+        .returning();
+
+      if (!updated) return null;
+
+      if (shouldReplaceLinks && current) {
+        await replaceRuleLinks(
+          tx,
+          updated.id,
+          parsed.data.categoryIds ?? current.categoryIds,
+          parsed.data.sourceIds ?? current.sourceIds,
+          parsed.data.connectorIds ?? current.connectorIds,
+          parsed.data.audienceTargetIds ?? current.audienceTargetIds,
+        );
+      }
+
+      return updated;
+    });
+
+    if (!row) {
+      res.status(404).json({ error: "Rule not found" });
+      return;
+    }
+
+    const [updated] = await toRules([row]);
+    res.json(updated);
+  } catch (error) {
+    logger.error(
+      { err: databaseErrorDetails(error) },
+      "Failed to update rule",
     );
+    res.status(500).json({ error: ruleSaveClientMessage(error) });
   }
-
-  const [updated] = await toRules([row]);
-  res.json(updated);
 });
 
 router.delete("/rules/:id", requireAuth, async (req, res): Promise<void> => {
@@ -887,57 +931,6 @@ async function validateRuleTargets(
   }
 
   return true;
-}
-
-async function replaceRuleLinks(
-  ruleId: string,
-  categoryIds: string[],
-  sourceIds: string[],
-  connectorIds: string[],
-  audienceTargetIds: string[],
-) {
-  await Promise.all([
-    db
-      .delete(ruleCategoryLinksTable)
-      .where(eq(ruleCategoryLinksTable.ruleId, ruleId)),
-    db
-      .delete(ruleSourceLinksTable)
-      .where(eq(ruleSourceLinksTable.ruleId, ruleId)),
-    db
-      .delete(ruleConnectorLinksTable)
-      .where(eq(ruleConnectorLinksTable.ruleId, ruleId)),
-    db
-      .delete(ruleAudienceTargetLinksTable)
-      .where(eq(ruleAudienceTargetLinksTable.ruleId, ruleId)),
-  ]);
-
-  const uniqueCategories = [...new Set(categoryIds)];
-  const uniqueSources = [...new Set(sourceIds)];
-  const uniqueConnectors = [...new Set(connectorIds)];
-  const uniqueAudienceTargets = [...new Set(audienceTargetIds)];
-
-  await Promise.all([
-    uniqueCategories.length > 0
-      ? db
-          .insert(ruleCategoryLinksTable)
-          .values(uniqueCategories.map((categoryId) => ({ ruleId, categoryId })))
-      : Promise.resolve(),
-    uniqueSources.length > 0
-      ? db
-          .insert(ruleSourceLinksTable)
-          .values(uniqueSources.map((sourceId) => ({ ruleId, sourceId })))
-      : Promise.resolve(),
-    uniqueConnectors.length > 0
-      ? db
-          .insert(ruleConnectorLinksTable)
-          .values(uniqueConnectors.map((connectorId) => ({ ruleId, connectorId })))
-      : Promise.resolve(),
-    uniqueAudienceTargets.length > 0
-      ? db
-          .insert(ruleAudienceTargetLinksTable)
-          .values(uniqueAudienceTargets.map((targetId) => ({ ruleId, targetId })))
-      : Promise.resolve(),
-  ]);
 }
 
 async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {

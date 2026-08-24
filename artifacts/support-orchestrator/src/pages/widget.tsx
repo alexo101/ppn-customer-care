@@ -35,7 +35,6 @@ export default function Widget() {
 
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
   const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
-  const logoUrl = appearance?.logoUrl ?? null;
   const chatName = agent?.name?.trim() || DEFAULT_CHAT_NAME;
   const onCta = contrastHex(ctaColor);
   const onBackground = contrastHex(backgroundColor);
@@ -115,9 +114,6 @@ export default function Widget() {
     <div className="h-screen w-full relative flex flex-col font-sans" style={{ backgroundColor, color: onBackground }}>
       <div className="absolute inset-0 p-8">
         <div className="flex items-center gap-3">
-          {logoUrl && (
-            <img src={logoUrl} alt="Site logo" className="h-10 w-10 object-contain rounded-md bg-white/80 p-1" />
-          )}
           <h1 className="text-2xl font-bold">Your App Website</h1>
         </div>
         <p className="opacity-70 mt-2 max-w-lg">
@@ -131,11 +127,7 @@ export default function Widget() {
           className="absolute bottom-6 right-6 h-14 w-14 rounded-full shadow-xl flex items-center justify-center p-0 border-0"
           style={{ backgroundColor: ctaColor, color: onCta }}
         >
-          {logoUrl ? (
-            <img src={logoUrl} alt="Open chat" className="w-7 h-7 object-contain" />
-          ) : (
-            <MessageSquare className="w-6 h-6" />
-          )}
+          <MessageSquare className="w-6 h-6" />
         </Button>
       )}
 
@@ -144,11 +136,7 @@ export default function Widget() {
           {/* Header */}
           <div className="h-14 px-4 flex items-center justify-between shrink-0" style={{ backgroundColor: ctaColor, color: onCta }}>
             <div className="flex items-center gap-2 min-w-0">
-              {logoUrl ? (
-                <img src={logoUrl} alt="Chat logo" className="w-7 h-7 rounded-md object-contain bg-white/90 p-0.5" />
-              ) : (
-                <Bot className="w-5 h-5" />
-              )}
+              <Bot className="w-5 h-5" />
               <div className="font-medium truncate">{chatName}</div>
             </div>
             <div className="flex gap-1">

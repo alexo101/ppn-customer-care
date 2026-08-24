@@ -105,5 +105,16 @@ function joinNames(names: string[], fallback: string): string {
 
 export function apiErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
-  return error.message.replace(/^HTTP \d+\s[^:]+:\s*/, "") || fallback;
+  const stripped = error.message.replace(/^HTTP \d+\s[^:]+:\s*/, "").trim();
+  if (!stripped) return fallback;
+  const sample = stripped.slice(0, 200).toLowerCase();
+  if (
+    sample.startsWith("<!doctype") ||
+    sample.startsWith("<html") ||
+    sample.includes("<pre>") ||
+    /<[a-z][\s\S]*>/i.test(stripped)
+  ) {
+    return fallback;
+  }
+  return stripped;
 }

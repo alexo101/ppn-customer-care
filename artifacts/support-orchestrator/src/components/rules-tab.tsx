@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RuleEditorDialog } from "@/components/rule-editor-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { formatCategoryPath, formatRuleSentence } from "@/lib/rules";
+import { formatCategoryPath, formatRuleSentence, apiErrorMessage } from "@/lib/rules";
 import { cn } from "@/lib/utils";
 
 export function RulesTab({ agentId }: { agentId: string }) {
@@ -467,7 +467,3 @@ function ReorderRuleRow(props: ReorderRowProps) {
   );
 }
 
-function apiErrorMessage(error: unknown, fallback: string) {
-  if (!(error instanceof Error)) return fallback;
-  return error.message.replace(/^HTTP \d+\s[^:]+:\s*/, "") || fallback;
-}

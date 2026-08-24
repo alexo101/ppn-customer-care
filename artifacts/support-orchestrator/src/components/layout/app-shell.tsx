@@ -21,21 +21,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { useAppearance } from '@/components/appearance-provider';
 import { useListAgents } from '@workspace/api-client-react';
 import { agentConfigHref, parseAgentConfigLocation } from '@/lib/agent-config';
 import { AgentConfigSidebar } from '@/components/layout/agent-config-sidebar';
 
-function BrandMark({ logoUrl }: { logoUrl?: string | null }) {
+function BrandMark() {
   return (
     <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
-      {logoUrl ? (
-        <img src={logoUrl} alt="Brand logo" className="w-6 h-6 rounded-md object-contain bg-white/90 p-px shrink-0" />
-      ) : (
-        <span className="flex items-center justify-center w-6 h-6 rounded-md bg-sidebar-primary/15 text-sidebar-primary shrink-0">
-          <Network className="w-3.5 h-3.5" />
-        </span>
-      )}
+      <span className="flex items-center justify-center w-6 h-6 rounded-md bg-sidebar-primary/15 text-sidebar-primary shrink-0">
+        <Network className="w-3.5 h-3.5" />
+      </span>
       <span className="font-semibold text-sm tracking-tight truncate">Orchestrator</span>
     </Link>
   );
@@ -125,7 +120,6 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { data: agents = [] } = useListAgents();
 
-  const { appearance } = useAppearance();
   const agentConfig = parseAgentConfigLocation(location);
 
   const userInitial = user?.primaryEmailAddress?.emailAddress.charAt(0).toUpperCase() || 'U';
@@ -137,14 +131,14 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation">
           <Menu className="w-4 h-4" />
         </Button>
-        <BrandMark logoUrl={appearance?.logoUrl} />
+         <BrandMark />
       </div>
 
       <div className="flex flex-1 w-full overflow-hidden">
         {/* Desktop sidebar */}
         <aside className="hidden md:flex w-60 bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex-col flex-shrink-0 relative z-20">
           <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
-            <BrandMark logoUrl={appearance?.logoUrl} />
+             <BrandMark />
           </div>
 
           <NavLinks location={location} agents={agents} agentConfigHrefFn={agentConfigHref} />
@@ -176,7 +170,7 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
           <SheetContent side="left" className="p-0 w-64 bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
-              <BrandMark logoUrl={appearance?.logoUrl} />
+              <BrandMark />
             </div>
             <NavLinks
               location={location}
