@@ -12,7 +12,12 @@ declare global {
   }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  res.setHeader("Cache-Control", "private, no-store");
   const auth = getAuth(req);
   const userId = auth?.userId;
   if (!userId) {
@@ -20,7 +25,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   req.userId = userId;
-  const claims = (auth as unknown as { sessionClaims?: Record<string, unknown> })?.sessionClaims;
+  const claims = (
+    auth as unknown as { sessionClaims?: Record<string, unknown> }
+  )?.sessionClaims;
   if (typeof claims?.email === "string") {
     req.userEmail = claims.email;
   }

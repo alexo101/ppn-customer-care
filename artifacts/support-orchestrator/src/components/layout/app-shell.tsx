@@ -1,15 +1,9 @@
-import { useState } from 'react';
-import { Link, useLocation } from 'wouter';
-import { useClerk, useUser } from '@clerk/react';
-import {
-  LayoutDashboard,
-  Network,
-  Bot,
-  LogOutIcon,
-  Menu
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useAuth, useClerk, useUser } from "@clerk/react";
+import { LayoutDashboard, Network, Bot, LogOutIcon, Menu } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,11 +13,12 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { useListAgents } from '@workspace/api-client-react';
-import { agentConfigHref, parseAgentConfigLocation } from '@/lib/agent-config';
-import { AgentConfigSidebar } from '@/components/layout/agent-config-sidebar';
+} from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useListAgents } from "@workspace/api-client-react";
+import { agentConfigHref, parseAgentConfigLocation } from "@/lib/agent-config";
+import { AgentConfigSidebar } from "@/components/layout/agent-config-sidebar";
+import { getUserAgentsQueryKey } from "@/lib/agents-query";
 
 function BrandMark() {
   return (
@@ -31,7 +26,9 @@ function BrandMark() {
       <span className="flex items-center justify-center w-6 h-6 rounded-md bg-sidebar-primary/15 text-sidebar-primary shrink-0">
         <Network className="w-3.5 h-3.5" />
       </span>
-      <span className="font-semibold text-sm tracking-tight truncate">Orchestrator</span>
+      <span className="font-semibold text-sm tracking-tight truncate">
+        Orchestrator
+      </span>
     </Link>
   );
 }
@@ -57,28 +54,34 @@ function NavLinks({
         onClick={onNavigate}
         className={cn(
           "relative flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-colors",
-          location.startsWith('/dashboard')
+          location.startsWith("/dashboard")
             ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
         )}
       >
-        {location.startsWith('/dashboard') && (
+        {location.startsWith("/dashboard") && (
           <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-sidebar-primary" />
         )}
         <LayoutDashboard className="w-4 h-4 shrink-0" />
         Dashboard
       </Link>
       <div>
-        <div className={cn(
-          "relative flex items-center rounded-lg transition-colors",
-          location === '/agents' || location.startsWith('/agents/new')
-            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-        )}>
-          {(location === '/agents' || location.startsWith('/agents/new')) && (
+        <div
+          className={cn(
+            "relative flex items-center rounded-lg transition-colors",
+            location === "/agents" || location.startsWith("/agents/new")
+              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+          )}
+        >
+          {(location === "/agents" || location.startsWith("/agents/new")) && (
             <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-sidebar-primary" />
           )}
-          <Link href="/agents" onClick={onNavigate} className="flex items-center gap-3 px-2.5 py-2.5 flex-1 min-w-0">
+          <Link
+            href="/agents"
+            onClick={onNavigate}
+            className="flex items-center gap-3 px-2.5 py-2.5 flex-1 min-w-0"
+          >
             <Bot className="w-4 h-4 shrink-0" />
             Agents
           </Link>
@@ -87,7 +90,9 @@ function NavLinks({
           <div className="mt-1 space-y-0.5">
             {agents.map((agent) => {
               const href = agentConfigHrefFn(agent.id);
-              const isActive = location === `/agents/${agent.id}` || location.startsWith(`/agents/${agent.id}/`);
+              const isActive =
+                location === `/agents/${agent.id}` ||
+                location.startsWith(`/agents/${agent.id}/`);
               return (
                 <Link
                   key={agent.id}
@@ -97,7 +102,7 @@ function NavLinks({
                     "flex items-center gap-2.5 ml-4 pl-2.5 pr-2.5 py-2 rounded-lg transition-colors text-sm",
                     isActive
                       ? "bg-sidebar-primary/15 text-sidebar-primary font-medium"
-                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                      : "text-sidebar-foreground/60 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
                   )}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-70" />
@@ -112,36 +117,61 @@ function NavLinks({
   );
 }
 
-export function AppShell({ children, activeTab = 'chat' }: { children: React.ReactNode; activeTab?: string }) {
+export function AppShell({
+  children,
+  activeTab = "chat",
+}: {
+  children: React.ReactNode;
+  activeTab?: string;
+}) {
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { data: agents = [] } = useListAgents();
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { data: agents = [] } = useListAgents({
+    query: {
+      enabled: isLoaded && isSignedIn && Boolean(userId),
+      queryKey: getUserAgentsQueryKey(userId),
+      refetchOnMount: "always",
+      staleTime: 0,
+    },
+  });
 
   const agentConfig = parseAgentConfigLocation(location);
 
-  const userInitial = user?.primaryEmailAddress?.emailAddress.charAt(0).toUpperCase() || 'U';
+  const userInitial =
+    user?.primaryEmailAddress?.emailAddress.charAt(0).toUpperCase() || "U";
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden text-sm">
       {/* Mobile top bar */}
       <div className="md:hidden h-14 flex items-center gap-2 px-3 border-b border-border bg-card shrink-0 z-30">
-        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setMobileNavOpen(true)} aria-label="Open navigation">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9"
+          onClick={() => setMobileNavOpen(true)}
+          aria-label="Open navigation"
+        >
           <Menu className="w-4 h-4" />
         </Button>
-         <BrandMark />
+        <BrandMark />
       </div>
 
       <div className="flex flex-1 w-full overflow-hidden">
         {/* Desktop sidebar */}
         <aside className="hidden md:flex w-60 bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex-col flex-shrink-0 relative z-20">
           <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
-             <BrandMark />
+            <BrandMark />
           </div>
 
-          <NavLinks location={location} agents={agents} agentConfigHrefFn={agentConfigHref} />
+          <NavLinks
+            location={location}
+            agents={agents}
+            agentConfigHrefFn={agentConfigHref}
+          />
 
           <div className="p-3 border-t border-sidebar-border flex items-center justify-between gap-1">
             <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
@@ -149,7 +179,9 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
                 {userInitial}
               </div>
               <div className="truncate text-xs min-w-0">
-                <div className="font-medium truncate">{user?.primaryEmailAddress?.emailAddress || 'User'}</div>
+                <div className="font-medium truncate">
+                  {user?.primaryEmailAddress?.emailAddress || "User"}
+                </div>
               </div>
             </div>
             <Button
@@ -167,7 +199,10 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
 
         {/* Mobile nav drawer */}
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-          <SheetContent side="left" className="p-0 w-64 bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col">
+          <SheetContent
+            side="left"
+            className="p-0 w-64 bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col"
+          >
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
               <BrandMark />
@@ -184,7 +219,9 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
                   {userInitial}
                 </div>
                 <div className="truncate text-xs min-w-0">
-                  <div className="font-medium truncate">{user?.primaryEmailAddress?.emailAddress || 'User'}</div>
+                  <div className="font-medium truncate">
+                    {user?.primaryEmailAddress?.emailAddress || "User"}
+                  </div>
                 </div>
               </div>
               <Button
@@ -204,9 +241,15 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
         {agentConfig && (
           <AgentConfigSidebar
             agentId={agentConfig.agentId}
-            agentName={agents.find((agent) => agent.id === agentConfig.agentId)?.name || 'Agent'}
+            agentName={
+              agents.find((agent) => agent.id === agentConfig.agentId)?.name ||
+              "Agent"
+            }
             activeStep={agentConfig.step}
-            isEnabled={agents.find((agent) => agent.id === agentConfig.agentId)?.isEnabled ?? false}
+            isEnabled={
+              agents.find((agent) => agent.id === agentConfig.agentId)
+                ?.isEnabled ?? false
+            }
           />
         )}
 
@@ -221,7 +264,8 @@ export function AppShell({ children, activeTab = 'chat' }: { children: React.Rea
           <AlertDialogHeader>
             <AlertDialogTitle>Sign out</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to sign out? You will need to sign in again to continue.
+              Are you sure you want to sign out? You will need to sign in again
+              to continue.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
