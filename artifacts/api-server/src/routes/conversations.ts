@@ -516,6 +516,33 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
       guardrails: guardrailResult.actions,
     };
   } catch (error) {
+    // #region agent log
+    const runningStage = stages.find((stage) => stage.status === "running");
+    fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Debug-Session-Id": "65a883",
+      },
+      body: JSON.stringify({
+        sessionId: "65a883",
+        runId: "pre-fix",
+        hypothesisId: "B",
+        location: "conversations.ts:send-catch",
+        message: "orchestrator send failed",
+        data: {
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          runningStage: runningStage?.name ?? null,
+          runningStageNumber: runningStage?.stage ?? null,
+          completedStages: stages
+            .filter((stage) => stage.status === "completed")
+            .map((stage) => stage.name),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     const message = workflowProviderErrorMessage(error);
     res.status(503).json({ error: message });
     return;

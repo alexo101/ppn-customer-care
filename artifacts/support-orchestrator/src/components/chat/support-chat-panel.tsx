@@ -166,6 +166,30 @@ export function SupportChatPanel({
                 if (runId !== runIdRef.current) return;
                 queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(data.id) });
               },
+              onError: (error) => {
+                // #region agent log
+                fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "X-Debug-Session-Id": "65a883",
+                  },
+                  body: JSON.stringify({
+                    sessionId: "65a883",
+                    runId: "pre-fix",
+                    hypothesisId: "C",
+                    location: "support-chat-panel.tsx:seed-send-error",
+                    message: "training seed send failed",
+                    data: {
+                      status: "status" in error ? error.status : null,
+                      errorMessage: error instanceof Error ? error.message : String(error),
+                      hasOnErrorHandler: true,
+                    },
+                    timestamp: Date.now(),
+                  }),
+                }).catch(() => {});
+                // #endregion
+              },
             },
           );
         },
@@ -183,6 +207,30 @@ export function SupportChatPanel({
         onSuccess: () => {
           setInput("");
           refetch();
+        },
+        onError: (error) => {
+          // #region agent log
+          fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "65a883",
+            },
+            body: JSON.stringify({
+              sessionId: "65a883",
+              runId: "pre-fix",
+              hypothesisId: "C",
+              location: "support-chat-panel.tsx:manual-send-error",
+              message: "training/widget send failed",
+              data: {
+                status: "status" in error ? error.status : null,
+                errorMessage: error instanceof Error ? error.message : String(error),
+                hasOnErrorHandler: true,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+          // #endregion
         },
       },
     );

@@ -65,6 +65,39 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
         },
         "OpenAI embedding request failed",
       );
+      // #region agent log
+      let accessibleEmbeddingModels: string[] = [];
+      try {
+        const listed = await this.client.models.list();
+        accessibleEmbeddingModels = listed.data
+          .map((item) => item.id)
+          .filter((id) => /embed/i.test(id));
+      } catch {
+        accessibleEmbeddingModels = ["__list_failed__"];
+      }
+      fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "65a883",
+        },
+        body: JSON.stringify({
+          sessionId: "65a883",
+          runId: "pre-fix",
+          hypothesisId: "A",
+          location: "openai-embedding-provider.ts:embed-catch",
+          message: "OpenAI embedding request failed",
+          data: {
+            configuredModel: this.model,
+            status: providerError.status,
+            code: providerError.code,
+            message: providerError.message,
+            accessibleEmbeddingModels,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       throw new EmbeddingProviderError(
         `The embedding model request failed (${providerError.code ?? "unknown"}).`,
         { cause: error },

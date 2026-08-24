@@ -15,6 +15,24 @@ export async function retrieveRelevantChunks(
   if (sourceIds.length === 0 || !queryText.trim()) {
     return { chunks: [], totalTokens: 0, model: "none" };
   }
+  // #region agent log
+  fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "65a883",
+    },
+    body: JSON.stringify({
+      sessionId: "65a883",
+      runId: "pre-fix",
+      hypothesisId: "B",
+      location: "retrieval.ts:before-embed",
+      message: "retrieveRelevantChunks calling embed",
+      data: { sourceCount: sourceIds.length, queryLen: queryText.length },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
   const embeddingResult = await embeddingProvider.embed([queryText]);
   const queryEmbedding = embeddingResult.embeddings[0];
   if (!queryEmbedding) {
