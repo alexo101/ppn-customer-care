@@ -322,13 +322,26 @@ function CategoryHierarchyPicker({
     return grouped;
   }, [categories]);
   const parentIds = useMemo(() => new Set(parents.map((category) => category.id)), [parents]);
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories],
+  );
   const orphaned = useMemo(
     () => categories.filter((category) => category.parentId && !parentIds.has(category.parentId)),
     [categories, parentIds],
   );
 
   const toggle = (id: string, checked: boolean) => {
-    onChange(checked ? [...new Set([...values, id])] : values.filter((value) => value !== id));
+    if (!checked) {
+      onChange(values.filter((value) => value !== id));
+      return;
+    }
+
+    const category = categoryById.get(id);
+    const nextValues = category?.parentId
+      ? [...values, category.parentId, id]
+      : [...values, id];
+    onChange([...new Set(nextValues)]);
   };
 
   const selectedCount = values.length;
