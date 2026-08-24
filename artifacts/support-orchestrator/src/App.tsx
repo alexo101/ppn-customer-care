@@ -21,6 +21,8 @@ import CreateAgentPage from '@/pages/agent-new';
 import EditAgentPage from '@/pages/agent-edit';
 import Widget from '@/pages/widget';
 import NotFound from '@/pages/not-found';
+import ConnectionsPage from '@/pages/connections';
+import { TenantProvider } from '@/components/tenant-context';
 
 // REQUIRED — resolves key from hostname so same build serves multiple Clerk domains.
 const clerkPubKey = publishableKeyFromHost(
@@ -83,6 +85,13 @@ function Router() {
           <ProtectedRoute>
             <AppShell activeTab="dashboard">
               <Dashboard />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/connections">
+          <ProtectedRoute>
+            <AppShell activeTab="connections">
+              <ConnectionsPage />
             </AppShell>
           </ProtectedRoute>
         </Route>
@@ -162,12 +171,14 @@ function ClerkProviderWithRoutes() {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
-        <TooltipProvider>
-          <AppearanceProvider>
-            <Router />
-            <Toaster />
-          </AppearanceProvider>
-        </TooltipProvider>
+        <TenantProvider>
+          <TooltipProvider>
+            <AppearanceProvider>
+              <Router />
+              <Toaster />
+            </AppearanceProvider>
+          </TooltipProvider>
+        </TenantProvider>
       </QueryClientProvider>
     </ClerkProvider>
   );

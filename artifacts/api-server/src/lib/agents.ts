@@ -11,12 +11,17 @@ import {
   orchestratorRulesTable,
 } from "@workspace/db";
 import { EVERYONE_TARGET_DESCRIPTION, EVERYONE_TARGET_NAME } from "./targets";
+import { ensureDefaultTenant } from "./tenant";
 
-export async function getOwnedAgent(userId: string, agentId: string) {
+export async function getOwnedAgent(userId: string, agentId: string, teamId?: string) {
   const [agent] = await db
     .select()
     .from(agentsTable)
-    .where(and(eq(agentsTable.id, agentId), eq(agentsTable.userId, userId)))
+    .where(and(
+      eq(agentsTable.id, agentId),
+      eq(agentsTable.userId, userId),
+      teamId ? eq(agentsTable.teamId, teamId) : undefined,
+    ))
     .limit(1);
   return agent ?? null;
 }
@@ -94,6 +99,7 @@ async function attachUnscopedRows(userId: string, agentId: string) {
 }
 
 export async function ensureDefaultAgentIfNeeded(userId: string) {
+  const tenant = await ensureDefaultTenant(userId);
   const existing = await db
     .select()
     .from(agentsTable)
@@ -101,6 +107,7 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
     .orderBy(agentsTable.createdAt);
 
   if (existing[0]) {
+    await db.update(agentsTable).set({ teamId: tenant.teamId }).where(and(eq(agentsTable.userId, userId), isNull(agentsTable.teamId)));
     await attachUnscopedRows(userId, existing[0].id);
     await Promise.all(existing.map((agent) => ensureEveryoneTarget(userId, agent.id)));
     return existing[0];
@@ -112,6 +119,7 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
     .insert(agentsTable)
     .values({
       userId,
+      teamId: tenant.teamId,
       name: "Default agent",
       description: "Migrated from previous global configuration",
     })
@@ -186,6 +194,7 @@ export async function ensureEveryoneTargetsForAllAgents() {
 export function toAgent(row: typeof agentsTable.$inferSelect) {
   return {
     id: row.id,
+    teamId: row.teamId,
     name: row.name,
     description: row.description,
     isEnabled: row.isEnabled,

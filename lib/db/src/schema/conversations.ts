@@ -2,10 +2,13 @@ import { pgTable, text, timestamp, jsonb, uuid, integer, numeric } from "drizzle
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { agentsTable } from "./agents";
+import { organizationsTable, teamsTable } from "./tenancy";
 
 export const conversationsTable = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id"), // Clerk user ID of the owner; nullable for legacy seeded rows
+  organizationId: uuid("organization_id").references(() => organizationsTable.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").references(() => teamsTable.id, { onDelete: "cascade" }),
   agentId: uuid("agent_id").references(() => agentsTable.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("active"),
   metadata: jsonb("metadata").notNull().default({}),

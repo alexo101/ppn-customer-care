@@ -5,11 +5,13 @@ import {
   useUpdateSource,
   useDeleteSource,
   useListSourceIntegrations,
+  useListTeamConnections,
   useUploadSourceDocument,
   useRefreshSource,
   browseSourceIntegration,
   getListSourcesQueryKey,
   getListSourceIntegrationsQueryKey,
+  getListTeamConnectionsQueryKey,
   type KnowledgeSource,
   type SourceBrowseItem,
   type SourceIntegration,
@@ -64,12 +66,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useTenantContext } from "@/components/tenant-context";
 
 const REPLIT_INTEGRATIONS_URL =
   "https://replit.com/~?settings.show=true&settings.tab=integrations";
 
 type SourceKind = "article" | "document" | "spreadsheet" | "notion" | "confluence";
-type DialogKind = SourceKind | "edit-article" | null;
+type AddKind = SourceKind | "document-or-spreadsheet";
+type DialogKind = AddKind | "edit-article" | null;
 
 const SOURCE_LABELS: Record<string, string> = {
   article: "Article",
@@ -185,6 +189,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
   const { data: sources = [] } = useListSources({ agentId });
   const { data: integrations = [], refetch: refetchIntegrations } = useListSourceIntegrations();
+  const { teamId } = useTenantContext();
+  const { data: teamConnections = [] } = useListTeamConnections(teamId ?? "", {
+    query: { enabled: Boolean(teamId), queryKey: getListTeamConnectionsQueryKey(teamId ?? "") },
+  });
   const createSource = useCreateSource();
   const updateSource = useUpdateSource();
   const deleteSource = useDeleteSource();
@@ -240,7 +248,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const openAdd = (kind: SourceKind) => {
+  const openAdd = (kind: AddKind) => {
     setEditing(null);
     setTitle("");
     setBody("");
@@ -372,7 +380,8 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     selectedItems: SourceBrowseItem[],
   ) => {
     const integration = integrationFor(integrations, connectorName);
-    if (!integration?.connected) {
+    const managedConnection = teamConnections.find((connection) => connection.provider === connectorName);
+    if (!integration?.connected && !managedConnection) {
       toast({
         title: `Connect ${integration?.displayName ?? connectorName} first`,
         description: "Open Replit Integrations, sign in, then come back here.",
@@ -389,15 +398,16 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       title.trim() ||
       (selectedItems.length === 1
         ? selectedItems[0].title
-        : `${integration.displayName} (${selectedItems.length})`);
+        : `${managedConnection?.provider ?? integration?.displayName ?? connectorName} (${selectedItems.length})`);
     const connectionConfig = {
       connectorName,
-      connectionId: integration.connectionId,
+      connectionId: integration?.connectionId,
+      ...(managedConnection ? { organizationConnectionId: managedConnection.id } : {}),
       selectedItems,
     };
     const onSuccess = () => {
       invalidateSources();
-      toast({ title: editing ? `${integration.displayName} updated` : `${integration.displayName} linked` });
+      toast({ title: editing ? `${managedConnection?.provider ?? integration?.displayName ?? connectorName} updated` : `${managedConnection?.provider ?? integration?.displayName ?? connectorName} linked` });
       resetDialog();
     };
 
@@ -496,16 +506,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         icon: FileText,
       },
       {
-        kind: "document" as const,
-        title: "Upload a document",
-        description: "Add a Word (.docx) file.",
+        kind: "document-or-spreadsheet" as const,
+        title: "Add a file or spreadsheet",
+        description: "Upload a Word document or paste a spreadsheet link.",
         icon: FileUp,
-      },
-      {
-        kind: "spreadsheet" as const,
-        title: "Paste a spreadsheet link",
-        description: "Point at Google Sheets or Excel Online.",
-        icon: Table2,
       },
       {
         kind: "notion" as const,
@@ -524,6 +528,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   );
 
   const articleOpen = dialog === "article" || dialog === "edit-article";
+  const chooserOpen = dialog === "document-or-spreadsheet";
   const documentOpen = dialog === "document";
   const spreadsheetOpen = dialog === "spreadsheet";
   const notionOpen = dialog === "notion";
@@ -538,7 +543,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
             Articles, documents, spreadsheets, and Replit Integrations this agent can use.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {addOptions.map((option) => {
             const Icon = option.icon;
             const integration =
@@ -603,7 +608,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
 
         {sources.length === 0 ? (
           <p className="text-xs text-muted-foreground py-6 text-center">
-            No sources yet. Write an article, upload a document, paste a spreadsheet link, or connect Notion or Confluence.
+            No sources yet. Write an article, add a file or spreadsheet, or connect Notion or Confluence.
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -724,6 +729,42 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={chooserOpen}
+        onOpenChange={(open) => {
+          if (!open && dialog === "document-or-spreadsheet") resetDialog();
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Add a file or spreadsheet</DialogTitle>
+            <DialogDescription>How would you like to add it?</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => openAdd("document")}
+              className="rounded-lg border border-border bg-card p-4 text-left hover:border-blue-200 dark:hover:border-blue-900/50 hover:bg-accent/20 transition-colors"
+            >
+              <FileUp className="w-4 h-4 text-primary mb-2" />
+              <div className="text-sm font-medium">Upload a Word document</div>
+              <p className="text-xs text-muted-foreground mt-1">Accepts .docx</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => openAdd("spreadsheet")}
+              className="rounded-lg border border-border bg-card p-4 text-left hover:border-blue-200 dark:hover:border-blue-900/50 hover:bg-accent/20 transition-colors"
+            >
+              <Table2 className="w-4 h-4 text-primary mb-2" />
+              <div className="text-sm font-medium">Paste a spreadsheet link</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Supports Google Sheets, Excel Online, or another published spreadsheet URL
+              </p>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={documentOpen} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent>
           <DialogHeader>
@@ -809,6 +850,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         open={notionOpen}
         connectorName="notion"
         integration={integrationFor(integrations, "notion")}
+        managedConnectionId={teamConnections.find((connection) => connection.provider === "notion")?.id}
         saving={saving}
         selectedItems={editing?.sourceType === "notion" ? selectedKnowledgeItems(editing.connectionConfig) : []}
         sourceName={title}
@@ -821,6 +863,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         open={confluenceOpen}
         connectorName="confluence"
         integration={integrationFor(integrations, "confluence")}
+        managedConnectionId={teamConnections.find((connection) => connection.provider === "confluence")?.id}
         saving={saving}
         selectedItems={editing?.sourceType === "confluence" ? selectedKnowledgeItems(editing.connectionConfig) : []}
         sourceName={title}
@@ -861,6 +904,7 @@ function IntegrationDialog({
   open,
   connectorName,
   integration,
+  managedConnectionId,
   saving,
   selectedItems,
   sourceName,
@@ -872,6 +916,7 @@ function IntegrationDialog({
   open: boolean;
   connectorName: "notion" | "confluence";
   integration?: SourceIntegration;
+  managedConnectionId?: string;
   saving: boolean;
   selectedItems: SourceBrowseItem[];
   sourceName: string;
@@ -881,7 +926,7 @@ function IntegrationDialog({
   onLink: (items: SourceBrowseItem[]) => void;
 }) {
   const name = integration?.displayName ?? (connectorName === "notion" ? "Notion" : "Confluence");
-  const connected = Boolean(integration?.connected);
+  const connected = Boolean(integration?.connected || managedConnectionId);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [items, setItems] = useState<SourceBrowseItem[]>([]);
@@ -917,6 +962,8 @@ function IntegrationDialog({
       try {
         const result = await browseSourceIntegration({
           connectorName,
+          organizationConnectionId: managedConnectionId,
+          teamId: localStorage.getItem("orchestrator.teamId") ?? undefined,
           query: debouncedSearch || undefined,
           spaceId: space?.id,
         });
@@ -944,6 +991,8 @@ function IntegrationDialog({
     try {
       const result = await browseSourceIntegration({
         connectorName,
+        organizationConnectionId: managedConnectionId,
+        teamId: localStorage.getItem("orchestrator.teamId") ?? undefined,
         query: debouncedSearch || undefined,
         cursor,
         spaceId: space?.id,

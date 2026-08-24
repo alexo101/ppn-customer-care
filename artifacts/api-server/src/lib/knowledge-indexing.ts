@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   knowledgeChunksTable,
@@ -24,6 +24,7 @@ import {
   type ConnectorProxy,
   type SourceIntegrationName,
 } from "./replit-integrations";
+import { createManagedIntegrationProxy } from "./managed-integrations";
 
 const DEFAULT_MAX_CHARS = 1_200;
 const DEFAULT_OVERLAP = 150;
@@ -122,7 +123,12 @@ async function resolveSourceText(
   if (source.sourceType === "notion" || source.sourceType === "confluence") {
     const selected = parseSelectedKnowledgeItems(config.selectedItems);
     if (selected.length === 0) return { text: "", itemCount: 0 };
-    const proxy = createReplitConnectorProxy(source.sourceType);
+    const managedConnectionId = typeof config.organizationConnectionId === "string"
+      ? config.organizationConnectionId
+      : null;
+    const proxy = managedConnectionId && source.organizationId && source.teamId
+      ? await createManagedIntegrationProxy(managedConnectionId, source.organizationId, source.teamId)
+      : createReplitConnectorProxy(source.sourceType);
     const documents =
       source.sourceType === "notion"
         ? await fetchNotionDocuments(proxy, selected)
@@ -158,6 +164,7 @@ async function replaceSourceChunks(
   sourceId: string,
   chunks: string[],
   embeddings: number[][],
+  scope?: { organizationId?: string | null; teamId?: string | null },
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
@@ -167,6 +174,8 @@ async function replaceSourceChunks(
       await tx.insert(knowledgeChunksTable).values(
         chunks.map((content, index) => ({
           sourceId,
+          organizationId: scope?.organizationId ?? null,
+          teamId: scope?.teamId ?? null,
           chunkIndex: index,
           content,
           embedding: embeddings[index],
@@ -204,11 +213,16 @@ async function deleteSourceChunks(sourceIds: string[]): Promise<void> {
 export async function indexSource(
   sourceId: string,
   embeddingProvider: EmbeddingProvider,
+  scope?: { organizationId?: string; teamId?: string },
 ): Promise<void> {
   const [source] = await db
     .select()
     .from(knowledgeSourcesTable)
-    .where(eq(knowledgeSourcesTable.id, sourceId))
+    .where(and(
+      eq(knowledgeSourcesTable.id, sourceId),
+      scope?.organizationId ? eq(knowledgeSourcesTable.organizationId, scope.organizationId) : undefined,
+      scope?.teamId ? eq(knowledgeSourcesTable.teamId, scope.teamId) : undefined,
+    ))
     .limit(1);
   if (!source) throw new Error(`Knowledge source ${sourceId} was not found.`);
   if (!isIndexableSourceType(source.sourceType)) {
@@ -225,7 +239,7 @@ export async function indexSource(
     const model = await embeddingProvider.resolveModel();
     const { text, itemCount } = await resolveSourceText(source);
     if (!text) {
-      await replaceSourceChunks(sourceId, [], []);
+      await replaceSourceChunks(sourceId, [], [], source);
       await markSync(sourceId, "empty", {
         itemCount: 0,
         chunkCount: 0,
@@ -251,7 +265,7 @@ export async function indexSource(
       throw new Error("Embedding count did not match knowledge chunk count.");
     }
 
-    await replaceSourceChunks(sourceId, chunks, embeddings);
+    await replaceSourceChunks(sourceId, chunks, embeddings, source);
     await markSync(sourceId, "ready", {
       itemCount,
       chunkCount: chunks.length,

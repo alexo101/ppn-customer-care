@@ -5,10 +5,13 @@ import { intentCategoriesTable } from "./categories";
 import { apiConnectorsTable, knowledgeSourcesTable } from "./sources";
 import { agentsTable } from "./agents";
 import { audienceTargetsTable } from "./targets";
+import { organizationsTable, teamsTable } from "./tenancy";
 
 export const orchestratorRulesTable = pgTable("orchestrator_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id"), // Clerk user ID of the owner; nullable for legacy seeded rows
+  organizationId: uuid("organization_id").references(() => organizationsTable.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").references(() => teamsTable.id, { onDelete: "cascade" }),
   agentId: uuid("agent_id").references(() => agentsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),

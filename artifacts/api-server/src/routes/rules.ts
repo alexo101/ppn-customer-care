@@ -35,6 +35,7 @@ import {
 
 import { ensureEveryoneTarget, getOwnedAgent } from "../lib/agents";
 import { logger } from "../lib/logger";
+import { getTenantContext, ensureDefaultTenant } from "../lib/tenant";
 import {
   databaseErrorDetails,
   replaceRuleLinks,
@@ -60,11 +61,12 @@ import {
 const router: IRouter = Router();
 let builtinVocabulariesReady = false;
 
+function activeTeamId(req: { headers: Record<string, string | string[] | undefined> }): string | undefined {
+  return typeof req.headers["x-team-id"] === "string" ? req.headers["x-team-id"] : undefined;
+}
+
 const ownerFilter = (userId: string) =>
-  or(
-    eq(orchestratorRulesTable.userId, userId),
-    isNull(orchestratorRulesTable.userId),
-  );
+  eq(orchestratorRulesTable.userId, userId);
 
 router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   const parsed = ListRulesQueryParams.safeParse(req.query);
@@ -74,8 +76,9 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   }
 
   const agentId = parsed.data.agentId;
+  let agent: Awaited<ReturnType<typeof getOwnedAgent>> | null = null;
   if (agentId) {
-    const agent = await getOwnedAgent(req.userId, agentId);
+    agent = await getOwnedAgent(req.userId, agentId, activeTeamId(req));
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
@@ -84,7 +87,7 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   }
 
   const where = agentId
-    ? and(ownerFilter(req.userId), eq(orchestratorRulesTable.agentId, agentId))
+    ? and(ownerFilter(req.userId), eq(orchestratorRulesTable.agentId, agentId), eq(orchestratorRulesTable.teamId, agent?.teamId ?? ""))
     : ownerFilter(req.userId);
 
   const rows = await db
@@ -111,12 +114,21 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
   }
 
   let agentId = parsed.data.agentId ?? null;
-  if (agentId) {
-    const agent = await getOwnedAgent(req.userId, agentId);
-    if (!agent) {
-      res.status(404).json({ error: "Agent not found" });
-      return;
-    }
+  if (!agentId) {
+    res.status(400).json({ error: "agentId is required." });
+    return;
+  }
+  const agent = await getOwnedAgent(req.userId, agentId, activeTeamId(req));
+  if (!agent) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+  const tenant = activeTeamId(req)
+    ? await getTenantContext(req.userId, activeTeamId(req))
+    : agent.teamId ? await getTenantContext(req.userId, agent.teamId) : await ensureDefaultTenant(req.userId);
+  if (!tenant) {
+    res.status(403).json({ error: "Invalid team context." });
+    return;
   }
 
   const allowed = await validateRuleTargets(
@@ -136,6 +148,8 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
         .insert(orchestratorRulesTable)
         .values({
           userId: req.userId,
+          organizationId: tenant.organizationId,
+          teamId: tenant.teamId,
           agentId,
           name: parsed.data.name,
           description: parsed.data.description ?? "",

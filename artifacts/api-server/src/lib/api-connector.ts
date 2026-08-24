@@ -1,10 +1,14 @@
 import { logger } from "./logger";
+import { eq } from "drizzle-orm";
+import { db, organizationConnectionsTable } from "@workspace/db";
+import { decryptSecret } from "./connection-secrets";
 
 type Connector = {
   name: string;
   endpointPattern: string;
   authType: string;
   authConfig: unknown;
+  connectionId?: string | null;
 };
 
 export type ConnectorCallResult = {
@@ -52,7 +56,7 @@ export async function callConnector(
   }
 
   const headers = new Headers({ accept: "application/json" });
-  applyAuthentication(headers, connector, config);
+  await applyAuthentication(headers, connector, config);
 
   try {
     const response = await fetch(url, {
@@ -78,7 +82,7 @@ export async function callConnector(
   }
 }
 
-function applyAuthentication(
+async function applyAuthentication(
   headers: Headers,
   connector: Connector,
   config: Record<string, unknown>,
@@ -86,8 +90,9 @@ function applyAuthentication(
   const authType = connector.authType.trim().toLowerCase();
   if (!authType || authType === "none") return;
   if (authType === "bearer" || authType === "api_key") {
-    const envVar = readRequiredString(config.envVar, "envVar", connector.name);
-    const token = readSecret(envVar, connector.name);
+    const token = connector.connectionId
+      ? await connectionAccessToken(connector.connectionId, connector.name)
+      : readSecret(readRequiredString(config.envVar, "envVar", connector.name), connector.name);
     const headerName = typeof config.headerName === "string" && config.headerName
       ? config.headerName
       : authType === "bearer" ? "Authorization" : "X-API-Key";
@@ -101,6 +106,18 @@ function applyAuthentication(
     return;
   }
   throw new ApiConnectorError(`Connector "${connector.name}" uses unsupported auth type "${connector.authType}".`);
+}
+
+async function connectionAccessToken(connectionId: string, connectorName: string): Promise<string> {
+  const [connection] = await db
+    .select({ token: organizationConnectionsTable.encryptedAccessToken, status: organizationConnectionsTable.status })
+    .from(organizationConnectionsTable)
+    .where(eq(organizationConnectionsTable.id, connectionId))
+    .limit(1);
+  if (!connection || connection.status !== "connected" || !connection.token) {
+    throw new ApiConnectorError(`Connection for connector "${connectorName}" is unavailable.`);
+  }
+  return decryptSecret(connection.token);
 }
 
 function readSecret(envVar: string, connectorName: string): string {

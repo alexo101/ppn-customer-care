@@ -32,6 +32,12 @@ tags:
     description: Training questions the agent should attempt to answer
   - name: auth
     description: Registration without email verification codes
+  - name: organizations
+    description: Organization and membership management
+  - name: teams
+    description: Team context and reusable connection grants
+  - name: connections
+    description: Organization-level OAuth connections
 paths:
   /healthz:
     get:
@@ -225,6 +231,365 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /agents/{id}/settings:
+    get:
+      operationId: getAgentSettings
+      tags: [agents]
+      summary: Get per-agent prompt and LLM settings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Agent settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSettings"
+    patch:
+      operationId: updateAgentSettings
+      tags: [agents]
+      summary: Update per-agent prompt and LLM settings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSettingsInput"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSettings"
+
+  /agents/{id}/deployment-token:
+    post:
+      operationId: createAgentDeploymentToken
+      tags: [agents]
+      summary: Create a one-time-view deployment token
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Deployment token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentToken"
+
+  /connections/{connectionId}/refresh:
+    post:
+      operationId: refreshConnection
+      tags: [connections]
+      summary: Refresh an expired organization OAuth connection
+      parameters:
+        - $ref: "#/components/parameters/ConnectionId"
+      responses:
+        "200":
+          description: Refreshed connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+
+  /connections/{connectionId}:
+    delete:
+      operationId: deleteConnection
+      tags: [connections]
+      summary: Revoke and remove an organization connection
+      parameters:
+        - $ref: "#/components/parameters/ConnectionId"
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Multi-tenant context ───────────────────────────────────────────────────
+  /organizations:
+    get:
+      operationId: listOrganizations
+      tags: [organizations]
+      summary: List organizations for the authenticated user
+      responses:
+        "200":
+          description: Organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Organization"
+    post:
+      operationId: createOrganization
+      tags: [organizations]
+      summary: Create an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+
+  /organizations/{organizationId}/teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: List teams in an organization
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      responses:
+        "200":
+          description: Teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+    post:
+      operationId: createTeam
+      tags: [teams]
+      summary: Create a team
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+
+  /organizations/{organizationId}/connections:
+    get:
+      operationId: listConnections
+      tags: [connections]
+      summary: List reusable organization connections
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      responses:
+        "200":
+          description: Connections without secrets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connection"
+    post:
+      operationId: createConnection
+      tags: [connections]
+      summary: Create an encrypted organization connection
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+
+  /organizations/{organizationId}/members:
+    get:
+      operationId: listOrganizationMembers
+      tags: [organizations]
+      summary: List organization members and roles
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrganizationMember"
+    post:
+      operationId: addOrganizationMember
+      tags: [organizations]
+      summary: Add or update an organization member
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationMemberInput"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMember"
+
+  /organizations/{organizationId}/members/{userId}:
+    patch:
+      operationId: updateOrganizationMember
+      tags: [organizations]
+      summary: Update an organization member role
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationMemberRoleInput"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationMember"
+
+  /organizations/{organizationId}/connections/oauth/start:
+    post:
+      operationId: startConnectionOAuth
+      tags: [connections]
+      summary: Start an OAuth authorization flow
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthStartInput"
+      responses:
+        "200":
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [authorizationUrl]
+                properties:
+                  authorizationUrl:
+                    type: string
+
+  /teams/{teamId}/connections:
+    get:
+      operationId: listTeamConnections
+      tags: [teams]
+      summary: List explicitly enabled team connections
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Enabled connections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Connection"
+
+  /teams/{teamId}/connections/{connectionId}:
+    post:
+      operationId: enableTeamConnection
+      tags: [teams]
+      summary: Explicitly enable an organization connection for a team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+        - $ref: "#/components/parameters/ConnectionId"
+      responses:
+        "201":
+          description: Enabled
+    delete:
+      operationId: disableTeamConnection
+      tags: [teams]
+      summary: Disable a connection for a team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+        - $ref: "#/components/parameters/ConnectionId"
+      responses:
+        "204":
+          description: Disabled
+
+  /teams/{teamId}/sources:
+    get:
+      operationId: listTeamSources
+      tags: [teams]
+      summary: List knowledge sources explicitly granted to a team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Team knowledge sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeSource"
+
+  /teams/{teamId}/sources/{sourceId}:
+    post:
+      operationId: enableTeamSource
+      tags: [teams]
+      summary: Grant an organization source to a team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+        - in: path
+          name: sourceId
+          required: true
+          schema: { type: string }
+      responses:
+        "201":
+          description: Granted
+    delete:
+      operationId: disableTeamSource
+      tags: [teams]
+      summary: Remove a source grant from a team
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+        - in: path
+          name: sourceId
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Removed
 
   # ── Conversations ─────────────────────────────────────────────────────────
   /conversations:
@@ -1098,6 +1463,14 @@ paths:
           name: spaceId
           schema:
             type: string
+        - in: query
+          name: organizationConnectionId
+          schema:
+            type: string
+        - in: query
+          name: teamId
+          schema:
+            type: string
       responses:
         "200":
           description: Browse results
@@ -1471,7 +1844,144 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
 components:
+  parameters:
+    OrganizationId:
+      in: path
+      name: organizationId
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9a-fA-F-]{36}$"
+    TeamId:
+      in: path
+      name: teamId
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9a-fA-F-]{36}$"
+    ConnectionId:
+      in: path
+      name: connectionId
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9a-fA-F-]{36}$"
   schemas:
+    Organization:
+      type: object
+      required: [id, name, slug, createdByUserId, role]
+      properties:
+        id: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
+        name: { type: string }
+        slug: { type: string }
+        createdByUserId: { type: string }
+        role: { type: string, enum: [owner, admin, member] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    OrganizationInput:
+      type: object
+      required: [name, slug]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+    OrganizationMember:
+      type: object
+      required: [id, organizationId, userId, role]
+      properties:
+        id: { type: string }
+        organizationId: { type: string }
+        userId: { type: string }
+        role: { type: string, enum: [owner, admin, member] }
+        createdAt: { type: string, format: date-time }
+    OrganizationMemberInput:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+        role: { type: string, enum: [admin, member] }
+    OrganizationMemberRoleInput:
+      type: object
+      required: [role]
+      properties:
+        role: { type: string, enum: [owner, admin, member] }
+    Team:
+      type: object
+      required: [id, organizationId, name, slug, productName]
+      properties:
+        id: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
+        organizationId: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
+        name: { type: string }
+        slug: { type: string }
+        productName: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TeamInput:
+      type: object
+      required: [name, slug]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        productName: { type: string }
+    Connection:
+      type: object
+      required: [id, organizationId, name, provider, status]
+      properties:
+        id: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
+        organizationId: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
+        name: { type: string }
+        provider: { type: string }
+        status: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        tokenExpiresAt: { type: string, format: date-time, nullable: true }
+        enabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ConnectionInput:
+      type: object
+      required: [name, provider]
+      properties:
+        name: { type: string }
+        provider: { type: string }
+        accessToken: { type: string, writeOnly: true }
+        refreshToken: { type: string, writeOnly: true }
+        tokenExpiresAt: { type: string, format: date-time }
+        metadata: { type: object, additionalProperties: true }
+    OAuthStartInput:
+      type: object
+      required: [provider]
+      properties:
+        provider: { type: string, enum: [notion, confluence] }
+        teamId: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
+    AgentSettings:
+      type: object
+      required: [agentId, prompt, targetAudience, llmProvider, llmModel, temperature]
+      properties:
+        agentId: { type: string }
+        prompt: { type: string }
+        targetAudience: { type: string }
+        llmProvider: { type: string }
+        llmModel: { type: string }
+        temperature: { type: string }
+        configuration: { type: object, additionalProperties: true }
+    AgentSettingsInput:
+      type: object
+      properties:
+        prompt: { type: string }
+        targetAudience: { type: string }
+        llmProvider: { type: string }
+        llmModel: { type: string }
+        temperature: { type: string }
+        configuration: { type: object, additionalProperties: true }
+    DeploymentToken:
+      type: object
+      required: [id, token, tokenPrefix]
+      properties:
+        id: { type: string }
+        token:
+          type: string
+          writeOnly: true
+        tokenPrefix: { type: string }
+        createdAt: { type: string, format: date-time }
     HealthStatus:
       type: object
       properties:
@@ -1503,6 +2013,8 @@ components:
       properties:
         id:
           type: string
+        teamId:
+          type: string
         name:
           type: string
         description:
@@ -1519,6 +2031,8 @@ components:
       required: [name]
       properties:
         name:
+          type: string
+        teamId:
           type: string
         description:
           type: string
@@ -2416,6 +2930,8 @@ components:
           type: string
         authType:
           type: string
+        connectionId:
+          type: string
         authConfig:
           type: object
           additionalProperties: true
@@ -2437,6 +2953,8 @@ components:
         endpointPattern:
           type: string
         authType:
+          type: string
+        connectionId:
           type: string
         authConfig:
           type: object

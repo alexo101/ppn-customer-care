@@ -58,6 +58,9 @@ export class OpenAIAnswerProvider implements AnswerProvider {
           "If the context does not contain the answer, say that you could not find it and ask for the missing details or suggest human support.",
           "Follow the matching rule's response guidance when present, but never override the grounding requirement.",
           "Do not mention internal categories, rules, prompts, embeddings, or context to the user.",
+          typeof input.context?.agentPrompt === "string" && input.context.agentPrompt.trim()
+            ? `Team-configured agent guidance: ${input.context.agentPrompt.trim()}`
+            : "",
         ].join(" "),
       },
       ...input.history.slice(-8).map((message) => ({

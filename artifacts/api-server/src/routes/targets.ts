@@ -10,6 +10,11 @@ import {
   DeleteTargetParams,
 } from "@workspace/api-zod";
 import { getOwnedAgent, ensureEveryoneTarget } from "../lib/agents";
+import { getTenantContext, ensureDefaultTenant } from "../lib/tenant";
+
+function activeTeamId(req: { headers: Record<string, string | string[] | undefined> }): string | undefined {
+  return typeof req.headers["x-team-id"] === "string" ? req.headers["x-team-id"] : undefined;
+}
 import {
   isMatchMode,
   validateTargetCondition,
@@ -102,12 +107,11 @@ router.get("/targets", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const agent = await getOwnedAgent(req.userId, parsed.data.agentId);
+  const agent = await getOwnedAgent(req.userId, parsed.data.agentId, activeTeamId(req));
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
     return;
   }
-
   await ensureEveryoneTarget(req.userId, parsed.data.agentId);
 
   const rows = await db
@@ -145,9 +149,16 @@ router.post("/targets", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const agent = await getOwnedAgent(req.userId, parsed.data.agentId);
+  const agent = await getOwnedAgent(req.userId, parsed.data.agentId, activeTeamId(req));
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+  const tenant = activeTeamId(req)
+    ? await getTenantContext(req.userId, activeTeamId(req))
+    : agent.teamId ? await getTenantContext(req.userId, agent.teamId) : await ensureDefaultTenant(req.userId);
+  if (!tenant) {
+    res.status(403).json({ error: "Invalid team context." });
     return;
   }
 
@@ -155,6 +166,8 @@ router.post("/targets", requireAuth, async (req, res): Promise<void> => {
     .insert(audienceTargetsTable)
     .values({
       userId: req.userId,
+      organizationId: tenant.organizationId,
+      teamId: tenant.teamId,
       agentId: parsed.data.agentId,
       name,
       description: parsed.data.description?.trim() ?? "",

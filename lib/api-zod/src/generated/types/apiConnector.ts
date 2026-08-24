@@ -12,6 +12,7 @@ export interface ApiConnector {
   name: string;
   endpointPattern: string;
   authType: string;
+  connectionId?: string;
   authConfig: ApiConnectorAuthConfig;
   isEnabled: boolean;
   createdAt: string;

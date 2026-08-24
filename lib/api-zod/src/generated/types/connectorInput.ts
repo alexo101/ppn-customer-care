@@ -12,6 +12,7 @@ export interface ConnectorInput {
   agentId?: string;
   endpointPattern: string;
   authType: string;
+  connectionId?: string;
   authConfig?: ConnectorInputAuthConfig;
   isEnabled?: boolean;
 }

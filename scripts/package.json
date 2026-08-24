@@ -11,6 +11,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "reindex-knowledge-sources": "tsx ./reindex-knowledge-sources.ts",
+    "migrate-tenancy": "tsx ./migrate-tenancy.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

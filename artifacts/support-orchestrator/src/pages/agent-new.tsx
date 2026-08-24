@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CategoriesTab, RulesTab, SourcesTab, TargetsTab } from "@/pages/admin";
 import { AppearanceEditor } from "@/components/appearance-editor";
 import { cn } from "@/lib/utils";
+import { useTenantContext } from "@/components/tenant-context";
 
 const STEPS = [
   { id: "appearance", label: "Appearance" },
@@ -23,6 +24,7 @@ export default function CreateAgentPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const createAgent = useCreateAgent();
+  const { teamId } = useTenantContext();
   const [step, setStep] = useState(0);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -36,7 +38,7 @@ export default function CreateAgentPage() {
     if (step === 0 && !agentId) {
       try {
         const created = await createAgent.mutateAsync({
-          data: { name: name.trim(), description: description.trim() },
+          data: { name: name.trim(), description: description.trim(), teamId: teamId ?? undefined },
         });
         setAgentId(created.id);
         queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });

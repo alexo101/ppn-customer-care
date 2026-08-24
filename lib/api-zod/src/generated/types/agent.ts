@@ -8,6 +8,7 @@
 
 export interface Agent {
   id: string;
+  teamId?: string;
   name: string;
   description: string;
   isEnabled: boolean;

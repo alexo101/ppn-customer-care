@@ -2,10 +2,13 @@ import { pgTable, text, timestamp, boolean, integer, uuid } from "drizzle-orm/pg
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { agentsTable } from "./agents";
+import { organizationsTable, teamsTable } from "./tenancy";
 
 export const audienceTargetsTable = pgTable("audience_targets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id"),
+  organizationId: uuid("organization_id").references(() => organizationsTable.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").references(() => teamsTable.id, { onDelete: "cascade" }),
   agentId: uuid("agent_id").references(() => agentsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
