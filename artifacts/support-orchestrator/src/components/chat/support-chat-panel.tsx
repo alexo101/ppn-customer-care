@@ -58,6 +58,7 @@ export function SupportChatPanel({
 
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
   const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
+  const logoUrl = source === "training" ? appearance?.logoUrl ?? null : null;
   const chatName = agent?.name?.trim() || DEFAULT_CHAT_NAME;
   const onCta = contrastHex(ctaColor);
 
@@ -169,7 +170,11 @@ export function SupportChatPanel({
         style={{ backgroundColor: ctaColor, color: onCta }}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <Bot className="w-5 h-5" />
+          {logoUrl ? (
+            <img src={logoUrl} alt="Chat logo" className="w-7 h-7 rounded-md object-contain bg-white/90 p-0.5" />
+          ) : (
+            <Bot className="w-5 h-5" />
+          )}
           <div className="min-w-0">
             <div className="font-medium truncate text-sm">{chatName}</div>
             <div className="text-[10px] opacity-80 truncate">
