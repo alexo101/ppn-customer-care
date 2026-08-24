@@ -203,7 +203,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
               onClick={() => openAuthoring(null, "manual")}
             >
               <PenLine className="h-3.5 w-3.5" />
-              Write manually
+              Set the rule manually
             </Button>
             <Button
               size="sm"
