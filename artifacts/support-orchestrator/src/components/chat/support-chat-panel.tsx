@@ -92,6 +92,7 @@ export function SupportChatPanel({
 
   const [convoId, setConvoId] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runIdRef = useRef(0);
 
@@ -137,12 +138,14 @@ export function SupportChatPanel({
     if (!seedKey || !seedMessage?.trim()) {
       setConvoId(null);
       setInput("");
+      setSendError(null);
       return;
     }
 
     const runId = ++runIdRef.current;
     setConvoId(null);
     setInput("");
+    setSendError(null);
 
     createConversation(
       {
@@ -164,9 +167,12 @@ export function SupportChatPanel({
             {
               onSuccess: () => {
                 if (runId !== runIdRef.current) return;
+                setSendError(null);
                 queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(data.id) });
               },
               onError: (error) => {
+                if (runId !== runIdRef.current) return;
+                setSendError(error instanceof Error ? error.message : "The training preview could not complete.");
                 // #region agent log
                 fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
                   method: "POST",
@@ -201,6 +207,7 @@ export function SupportChatPanel({
     e.preventDefault();
     if (!input.trim() || !convoId || sendingMessage) return;
 
+    setSendError(null);
     sendChatMessage(
       { id: convoId, data: { content: input } },
       {
@@ -209,6 +216,7 @@ export function SupportChatPanel({
           refetch();
         },
         onError: (error) => {
+          setSendError(error instanceof Error ? error.message : "The training preview could not complete.");
           // #region agent log
           fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
             method: "POST",
@@ -335,6 +343,23 @@ export function SupportChatPanel({
                     </div>
                   </div>
                 ))}
+
+              {source === "training" && sendError && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                >
+                  <p className="font-medium">Training could not complete</p>
+                  <p className="mt-1">{sendError.replace(/^HTTP \d+\s[^:]+:\s*/, "")}</p>
+                  <button
+                    type="button"
+                    className="mt-2 font-medium underline underline-offset-2"
+                    onClick={() => setSendError(null)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
