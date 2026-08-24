@@ -112,18 +112,27 @@ function syncStatus(config: Record<string, unknown> | undefined) {
 
 function syncBadge(config: Record<string, unknown> | undefined) {
   const status = syncStatus(config);
-  if (status === "ready") return { label: "Synced", className: "text-emerald-500" };
-  if (status === "syncing" || status === "idle") return { label: status === "syncing" ? "Syncing" : "Pending", className: "text-amber-500" };
+  if (status === "ready") return { label: "Indexed", className: "text-emerald-500" };
+  if (status === "syncing") return { label: "Indexing", className: "text-amber-500" };
+  if (status === "idle") return { label: "Pending", className: "text-amber-500" };
   if (status === "empty") return { label: "No content", className: "text-muted-foreground" };
-  if (status === "error") return { label: "Sync failed", className: "text-destructive" };
+  if (status === "error") return { label: "Index failed", className: "text-destructive" };
   return { label: "Pending", className: "text-muted-foreground" };
 }
 
-function sourceSummary(source: KnowledgeSource) {
+function isIndexableSourceType(sourceType: string) {
+  return sourceType === "article" || sourceType === "document" || sourceType === "notion" || sourceType === "confluence";
+}
+
+function chunkCount(config: Record<string, unknown> | undefined) {
+  const value = configValue(config, "chunkCount");
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function sourceScope(source: KnowledgeSource) {
   const config = source.connectionConfig;
   if (source.sourceType === "article") {
-    const body = configString(config, "body");
-    return body || "Written article";
+    return configString(config, "body") || "Written article";
   }
   if (source.sourceType === "document") {
     return configString(config, "fileName") || "Word document";
@@ -134,16 +143,26 @@ function sourceSummary(source: KnowledgeSource) {
   if (source.sourceType === "notion" || source.sourceType === "confluence") {
     const items = selectedKnowledgeItems(config);
     const titles = items.map((item) => item.title);
-    const scope =
-      titles.length === 0
-        ? "No content selected"
-        : titles.length <= 2
-          ? titles.join(", ")
-          : `${titles.slice(0, 2).join(", ")} +${titles.length - 2} more`;
-    const error = configString(config, "lastError");
-    return error ? `${scope} · ${error}` : scope;
+    if (titles.length === 0) return "No content selected";
+    if (titles.length <= 2) return titles.join(", ");
+    return `${titles.slice(0, 2).join(", ")} +${titles.length - 2} more`;
   }
   return source.sourceType;
+}
+
+function sourceSummary(source: KnowledgeSource) {
+  const scope = sourceScope(source);
+  if (!isIndexableSourceType(source.sourceType)) return scope;
+  const error = configString(source.connectionConfig, "lastError");
+  if (error) return `${scope} · ${error}`;
+  const status = syncStatus(source.connectionConfig);
+  const chunks = chunkCount(source.connectionConfig);
+  if (status === "ready") {
+    return chunks === 1 ? `${scope} · 1 chunk indexed` : `${scope} · ${chunks} chunks indexed`;
+  }
+  if (status === "empty") return `${scope} · No indexable text`;
+  if (status === "syncing") return `${scope} · Indexing…`;
+  return `${scope} · Waiting to index`;
 }
 
 function SourceTypeIcon({ type, className }: { type: string; className?: string }) {
@@ -192,7 +211,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     const pending = sources.some((source) => {
-      if (source.sourceType !== "notion" && source.sourceType !== "confluence") return false;
+      if (!isIndexableSourceType(source.sourceType)) return false;
       const status = syncStatus(source.connectionConfig);
       return status === "idle" || status === "syncing";
     });
@@ -407,14 +426,41 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     refreshSource.mutate(
       { id: source.id },
       {
-        onSuccess: () => {
+        onSuccess: (updated) => {
           invalidateSources();
-          toast({ title: "Source refreshed" });
+          const status = syncStatus(updated.connectionConfig);
+          const error = configString(updated.connectionConfig, "lastError");
+          if (status === "error" || error) {
+            toast({
+              title: "Indexing failed",
+              description: error || "The source could not be indexed.",
+              variant: "destructive",
+            });
+            return;
+          }
+          const chunks = chunkCount(updated.connectionConfig);
+          toast({
+            title: status === "empty" ? "No content to index" : "Source indexed",
+            description:
+              status === "empty"
+                ? "This source has no indexable text."
+                : chunks === 1
+                  ? "1 chunk indexed."
+                  : `${chunks} chunks indexed.`,
+          });
         },
         onError: handleCreateError,
       },
     );
   };
+
+  const indexingError = sources.find((source) => {
+    if (!isIndexableSourceType(source.sourceType)) return false;
+    return syncStatus(source.connectionConfig) === "error" && Boolean(configString(source.connectionConfig, "lastError"));
+  });
+  const indexingErrorMessage = indexingError
+    ? configString(indexingError.connectionConfig, "lastError")
+    : "";
 
   const handleToggle = (source: KnowledgeSource, isEnabled: boolean) => {
     updateSource.mutate(
@@ -535,6 +581,25 @@ export function SourcesTab({ agentId }: { agentId: string }) {
             {sources.length}
           </span>
         </div>
+        {indexingErrorMessage ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          >
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <div className="min-w-0 space-y-1">
+              <p>{indexingErrorMessage}</p>
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2"
+                onClick={() => handleRefreshSource(indexingError!)}
+                disabled={refreshSource.isPending}
+              >
+                Retry indexing
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {sources.length === 0 ? (
           <p className="text-xs text-muted-foreground py-6 text-center">
@@ -561,7 +626,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                       <Badge variant="outline" className="text-xs h-5 shrink-0">
                         {SOURCE_LABELS[source.sourceType] ?? source.sourceType}
                       </Badge>
-                      {(source.sourceType === "notion" || source.sourceType === "confluence") && (
+                      {isIndexableSourceType(source.sourceType) && (
                         <Badge
                           variant="outline"
                           className={cn("text-xs h-5 shrink-0", syncBadge(source.connectionConfig).className)}
@@ -595,13 +660,14 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                           Edit
                         </DropdownMenuItem>
                       )}
-                      {(source.sourceType === "notion" || source.sourceType === "confluence") && (
+                      {isIndexableSourceType(source.sourceType) && (
                         <DropdownMenuItem
                           className="gap-2 cursor-pointer"
                           onClick={() => handleRefreshSource(source)}
                           disabled={refreshSource.isPending}
                         >
-                          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          {syncStatus(source.connectionConfig) === "error" ? "Retry indexing" : "Refresh"}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem

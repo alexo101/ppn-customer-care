@@ -6,6 +6,7 @@ export type EmbeddingProviderResult = {
 
 export interface EmbeddingProvider {
   embed(texts: string[]): Promise<EmbeddingProviderResult>;
+  resolveModel(): Promise<string>;
 }
 
 export class EmbeddingProviderError extends Error {

@@ -1,81 +1,31 @@
-import OpenAI from "openai";
-import { eq } from "drizzle-orm";
+import { OpenAIEmbeddingProvider } from "../artifacts/api-server/src/lib/llm/openai-embedding-provider";
 import {
-  db,
-  knowledgeChunksTable,
-  knowledgeSourcesTable,
-  pool,
-} from "@workspace/db";
-
-const maxChars = 1_200;
-const overlap = 150;
+  markAllIndexableSourcesError,
+  reindexAllIndexableSources,
+} from "../artifacts/api-server/src/lib/knowledge-indexing";
+import { pool } from "@workspace/db";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY must be set.");
 }
 
-function chunkText(text: string): string[] {
-  const paragraphs = text
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
-    .filter(Boolean);
-  const chunks: string[] = [];
-  for (const paragraph of paragraphs) {
-    if (paragraph.length <= maxChars) {
-      const previous = chunks.at(-1);
-      if (previous && previous.length + paragraph.length + 1 <= maxChars) {
-        chunks[chunks.length - 1] = `${previous} ${paragraph}`;
-      } else {
-        chunks.push(paragraph);
-      }
-      continue;
-    }
-    for (let start = 0; start < paragraph.length; start += maxChars - overlap) {
-      chunks.push(paragraph.slice(start, start + maxChars).trim());
-      if (start + maxChars >= paragraph.length) break;
-    }
+try {
+  const provider = new OpenAIEmbeddingProvider();
+  const model = await provider.resolveModel();
+  console.log(`Verified embedding model: ${model}`);
+  const result = await reindexAllIndexableSources(provider);
+  console.log(
+    `Indexed ${result.indexed} sources, skipped ${result.skipped}, failed ${result.failed}`,
+  );
+  if (result.failed > 0) {
+    process.exitCode = 1;
   }
-  return chunks.filter(Boolean);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  const updated = await markAllIndexableSourcesError(message);
+  console.error(message);
+  console.error(`Marked ${updated} sources as failed.`);
+  process.exitCode = 1;
+} finally {
+  await pool.end();
 }
-
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const model = process.env.EMBEDDING_MODEL ?? "text-embedding-3-small";
-const sources = await db.select().from(knowledgeSourcesTable);
-
-for (const source of sources) {
-  const config = source.connectionConfig as Record<string, unknown>;
-  if (source.sourceType !== "document" || typeof config.text !== "string") {
-    continue;
-  }
-  const chunks = chunkText(config.text);
-  if (chunks.length === 0) {
-    await db
-      .delete(knowledgeChunksTable)
-      .where(eq(knowledgeChunksTable.sourceId, source.id));
-    console.log(`Cleared ${source.name}: no text to index`);
-    continue;
-  }
-  const response = await client.embeddings.create({
-    model,
-    input: chunks,
-  });
-  const embeddings = response.data
-    .sort((a, b) => a.index - b.index)
-    .map((item) => item.embedding);
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(knowledgeChunksTable)
-      .where(eq(knowledgeChunksTable.sourceId, source.id));
-    await tx.insert(knowledgeChunksTable).values(
-      chunks.map((content, index) => ({
-        sourceId: source.id,
-        chunkIndex: index,
-        content,
-        embedding: embeddings[index],
-      })),
-    );
-  });
-  console.log(`Indexed ${source.name}: ${chunks.length} chunks`);
-}
-
-await pool.end();

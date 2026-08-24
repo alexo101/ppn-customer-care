@@ -1122,7 +1122,7 @@ paths:
     post:
       operationId: refreshSource
       tags: [sources]
-      summary: Re-fetch and re-index an integration knowledge source
+      summary: Re-index a knowledge source
       parameters:
         - in: path
           name: id

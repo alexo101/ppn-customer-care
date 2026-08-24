@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkText } from "./knowledge-indexing";
+import { chunkText, isIndexableSourceType, sourceNeedsReindex } from "./knowledge-indexing";
 
 describe("chunkText", () => {
   it("combines short paragraphs without exceeding the configured size", () => {
@@ -25,5 +25,21 @@ describe("chunkText", () => {
     expect(chunkText("\n\n  \n\nSupport is available.")).toEqual([
       "Support is available.",
     ]);
+  });
+});
+
+describe("sourceNeedsReindex", () => {
+  it("reindexes when the stored model differs or indexing is not ready", () => {
+    expect(sourceNeedsReindex({ embeddingModel: "old", syncStatus: "ready" }, "new")).toBe(true);
+    expect(sourceNeedsReindex({ embeddingModel: "new", syncStatus: "error" }, "new")).toBe(true);
+    expect(sourceNeedsReindex({ embeddingModel: "new", syncStatus: "idle" }, "new")).toBe(true);
+    expect(sourceNeedsReindex({ embeddingModel: "new", syncStatus: "ready" }, "new")).toBe(false);
+    expect(sourceNeedsReindex({ embeddingModel: "new", syncStatus: "empty" }, "new")).toBe(false);
+  });
+
+  it("treats documents and articles as indexable", () => {
+    expect(isIndexableSourceType("document")).toBe(true);
+    expect(isIndexableSourceType("article")).toBe(true);
+    expect(isIndexableSourceType("spreadsheet")).toBe(false);
   });
 });

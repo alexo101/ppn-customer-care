@@ -26,9 +26,13 @@ import {
   isSourceIntegrationName,
   listSourceIntegrations,
 } from "../lib/replit-integrations";
-import { browseIntegrationContent, indexSource } from "../lib/knowledge-indexing";
+import {
+  browseIntegrationContent,
+  indexSource,
+  isIndexableSourceType,
+} from "../lib/knowledge-indexing";
 import { parseSelectedKnowledgeItems } from "../lib/integration-knowledge";
-import { createEmbeddingProvider } from "../lib/llm";
+import { createEmbeddingProvider, EmbeddingProviderError } from "../lib/llm";
 import { logger } from "../lib/logger";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -113,7 +117,7 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
       agentId: parsed.data.agentId ?? null,
       name: parsed.data.name,
       sourceType: parsed.data.sourceType,
-      connectionConfig,
+      connectionConfig: withIndexingState(parsed.data.sourceType, connectionConfig),
       isEnabled: parsed.data.isEnabled ?? true,
     })
     .returning();
@@ -175,24 +179,26 @@ router.post("/sources/:id/refresh", requireAuth, async (req, res): Promise<void>
     res.status(404).json({ error: "Source not found" });
     return;
   }
-  if (existing.sourceType !== "notion" && existing.sourceType !== "confluence") {
-    res.status(400).json({ error: "Only Notion and Confluence sources can be refreshed." });
+  if (!isIndexableSourceType(existing.sourceType)) {
+    res.status(400).json({ error: "This source type cannot be indexed." });
     return;
   }
 
-  const integration = await getSourceIntegration(existing.sourceType);
-  if (!integration?.connected) {
-    res.status(403).json({
-      error: `Connect ${existing.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
-    });
-    return;
+  if (existing.sourceType === "notion" || existing.sourceType === "confluence") {
+    const integration = await getSourceIntegration(existing.sourceType);
+    if (!integration?.connected) {
+      res.status(403).json({
+        error: `Connect ${existing.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
+      });
+      return;
+    }
   }
 
   try {
     await indexSource(existing.id, createEmbeddingProvider());
   } catch (error) {
-    const mapped = integrationErrorResponse(error);
-    res.status(mapped.status === 403 ? 403 : 502).json({ error: mapped.error });
+    const mapped = indexErrorResponse(error);
+    res.status(mapped.status).json({ error: mapped.error });
     return;
   }
 
@@ -246,11 +252,11 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
       agentId,
       name: sourceName,
       sourceType: "document",
-      connectionConfig: {
+      connectionConfig: withIndexingState("document", {
         fileName: file.originalname,
         mimeType: file.mimetype || DOCX_MIME,
         text,
-      },
+      }),
       isEnabled: true,
     })
     .returning();
@@ -297,6 +303,8 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
         return;
       }
       updates.connectionConfig = integrationConfig.config;
+    } else if (isIndexableSourceType(sourceType)) {
+      updates.connectionConfig = withIndexingState(sourceType, incoming);
     } else {
       updates.connectionConfig = incoming;
     }
@@ -484,12 +492,38 @@ async function integrationConnectionConfig(
       connectorName: integration.connectorName,
       connectionId: integration.connectionId,
       selectedItems,
-      syncStatus: "idle",
-      lastSyncedAt: null,
-      lastError: null,
-      itemCount: 0,
-      chunkCount: 0,
+      ...indexingState(),
     },
+  };
+}
+
+function indexingState(): Record<string, unknown> {
+  return {
+    syncStatus: "idle",
+    lastSyncedAt: null,
+    lastError: null,
+    itemCount: 0,
+    chunkCount: 0,
+    embeddingModel: null,
+  };
+}
+
+function withIndexingState(
+  sourceType: string,
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!isIndexableSourceType(sourceType)) return config;
+  return { ...config, ...indexingState() };
+}
+
+function indexErrorResponse(error: unknown): { status: number; error: string } {
+  if (error instanceof EmbeddingProviderError) {
+    return { status: 503, error: error.message };
+  }
+  const mapped = integrationErrorResponse(error);
+  return {
+    status: mapped.status === 403 ? 403 : 502,
+    error: mapped.error,
   };
 }
 

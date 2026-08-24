@@ -12,6 +12,8 @@ import {
 const COST_PER_TOKEN: Record<string, number> = {
   "gpt-5-nano": 0.0000001,
   "text-embedding-3-small": 0.00000002,
+  "text-embedding-ada-002": 0.0000001,
+  "text-embedding-3-large": 0.00000013,
 };
 const DEFAULT_COST_PER_TOKEN = 0.000001;
 

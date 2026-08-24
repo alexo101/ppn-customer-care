@@ -6,31 +6,149 @@ import {
   type EmbeddingProviderResult,
 } from "./embedding-provider";
 
-export class OpenAIEmbeddingProvider implements EmbeddingProvider {
-  private readonly client: OpenAI;
-  private model: string;
+export const REQUIRED_EMBEDDING_DIMENSIONS = 1536;
 
-  constructor(options?: { apiKey?: string; model?: string }) {
-    const apiKey = options?.apiKey ?? process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new EmbeddingProviderError(
-        "Knowledge retrieval is not configured. Set OPENAI_API_KEY to enable it.",
-      );
+export const COMPATIBLE_EMBEDDING_MODELS = [
+  "text-embedding-3-small",
+  "text-embedding-ada-002",
+  "text-embedding-3-large",
+] as const;
+
+export const NO_ACCESSIBLE_EMBEDDING_MODEL_MESSAGE =
+  "This OpenAI project has no accessible embedding model that produces 1,536-dimensional vectors. Grant the project access to text-embedding-3-small, text-embedding-ada-002, or text-embedding-3-large, then retry indexing.";
+
+type EmbeddingClient = {
+  models: {
+    list: () => AsyncIterable<{ id: string }> | Promise<{ data: Array<{ id: string }> }>;
+  };
+  embeddings: {
+    create: (body: {
+      model: string;
+      input: string | string[];
+      dimensions?: number;
+    }) => Promise<{
+      data: Array<{ index: number; embedding: number[] }>;
+      model?: string;
+      usage?: { total_tokens?: number };
+    }>;
+  };
+};
+
+export function isEmbeddingModelId(id: string): boolean {
+  return /embed/i.test(id);
+}
+
+export function embeddingRequestOptions(model: string): {
+  model: string;
+  dimensions?: number;
+} {
+  if (model === "text-embedding-3-large" || /embedding-3-large/i.test(model)) {
+    return { model, dimensions: REQUIRED_EMBEDDING_DIMENSIONS };
+  }
+  return { model };
+}
+
+export function selectEmbeddingCandidates(options: {
+  configuredModel?: string | null;
+  listedModelIds: string[] | null;
+}): string[] {
+  const configured = options.configuredModel?.trim() || "";
+  const compatible: string[] = [...COMPATIBLE_EMBEDDING_MODELS];
+
+  if (options.listedModelIds === null) {
+    return uniqueNonEmpty([configured, ...compatible]);
+  }
+
+  const listedEmbedding = options.listedModelIds.filter(isEmbeddingModelId);
+  if (listedEmbedding.length === 0) {
+    return configured ? [configured] : [];
+  }
+
+  const listedCompatible = compatible.filter((model) =>
+    listedEmbedding.includes(model),
+  );
+  return uniqueNonEmpty([
+    configured,
+    ...listedCompatible,
+    ...listedEmbedding.filter((id) => !compatible.includes(id)),
+  ]);
+}
+
+function uniqueNonEmpty(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const value of values) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    unique.push(value);
+  }
+  return unique;
+}
+
+function readProviderError(error: unknown): {
+  status?: number;
+  code?: string;
+  message?: string;
+  requestId?: string;
+} {
+  const providerError = error as {
+    status?: number;
+    code?: string;
+    message?: string;
+    request_id?: string;
+    error?: { code?: string; message?: string };
+  };
+  return {
+    status: providerError.status,
+    code: providerError.error?.code ?? providerError.code,
+    message: providerError.error?.message ?? providerError.message,
+    requestId: providerError.request_id,
+  };
+}
+
+export class OpenAIEmbeddingProvider implements EmbeddingProvider {
+  private readonly client: EmbeddingClient;
+  private readonly configuredModel: string | null;
+  private verifiedModel: string | null = null;
+  private resolvePromise: Promise<string> | null = null;
+
+  constructor(options?: { apiKey?: string; model?: string; client?: EmbeddingClient }) {
+    if (options?.client) {
+      this.client = options.client;
+    } else {
+      const apiKey = options?.apiKey ?? process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        throw new EmbeddingProviderError(
+          "Knowledge retrieval is not configured. Set OPENAI_API_KEY to enable it.",
+        );
+      }
+      this.client = new OpenAI({ apiKey }) as EmbeddingClient;
     }
-    this.client = new OpenAI({ apiKey });
-    this.model =
-      options?.model ??
-      process.env.EMBEDDING_MODEL ??
-      "text-embedding-3-small";
+    this.configuredModel =
+      options?.model?.trim() || process.env.EMBEDDING_MODEL?.trim() || null;
+  }
+
+  async resolveModel(): Promise<string> {
+    if (this.verifiedModel) return this.verifiedModel;
+    this.resolvePromise ??= this.discoverAndVerifyModel();
+    try {
+      const model = await this.resolvePromise;
+      this.verifiedModel = model;
+      return model;
+    } catch (error) {
+      this.resolvePromise = null;
+      throw error;
+    }
   }
 
   async embed(texts: string[]): Promise<EmbeddingProviderResult> {
+    const model = await this.resolveModel();
     if (texts.length === 0) {
-      return { embeddings: [], model: this.model, totalTokens: 0 };
+      return { embeddings: [], model, totalTokens: 0 };
     }
 
     try {
-      const response = await this.createEmbedding(texts, this.model);
+      const response = await this.createEmbedding(texts, model);
       const embeddings = response.data
         .sort((a, b) => a.index - b.index)
         .map((item) => item.embedding);
@@ -39,112 +157,36 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
           "The embedding model returned an incomplete response.",
         );
       }
+      if (embeddings.some((embedding) => embedding.length !== REQUIRED_EMBEDDING_DIMENSIONS)) {
+        throw new EmbeddingProviderError(
+          `The embedding model returned vectors that are not ${REQUIRED_EMBEDDING_DIMENSIONS} dimensions.`,
+        );
+      }
       return {
         embeddings,
-        model: response.model || this.model,
+        model,
         totalTokens: response.usage?.total_tokens ?? 0,
       };
     } catch (error) {
       if (error instanceof EmbeddingProviderError) throw error;
-      const providerError = error as {
-        status?: number;
-        code?: string;
-        message?: string;
-        request_id?: string;
-      };
-      const fallbackModel = await this.findFallbackModel(providerError);
-      if (fallbackModel) {
-        logger.warn(
-          {
-            configuredModel: this.model,
-            fallbackModel,
-            status: providerError.status,
-            code: providerError.code,
-          },
-          "Configured OpenAI embedding model is unavailable; retrying with accessible model",
-        );
-        let response;
-        try {
-          response = await this.createEmbedding(texts, fallbackModel);
-        } catch (fallbackError) {
-          const fallbackProviderError = fallbackError as {
-            status?: number;
-            code?: string;
-            message?: string;
-          };
-          logger.error(
-            {
-              model: fallbackModel,
-              status: fallbackProviderError.status,
-              code: fallbackProviderError.code,
-              message: fallbackProviderError.message,
-            },
-            "OpenAI fallback embedding request failed",
-          );
-          throw new EmbeddingProviderError(
-            `The fallback embedding model request failed (${fallbackProviderError.code ?? "unknown"}).`,
-            { cause: fallbackError },
-          );
-        }
-        const embeddings = response.data
-          .sort((a, b) => a.index - b.index)
-          .map((item) => item.embedding);
-        if (embeddings.length !== texts.length) {
-          throw new EmbeddingProviderError(
-            "The fallback embedding model returned an incomplete response.",
-          );
-        }
-        this.model = fallbackModel;
-        return {
-          embeddings,
-          model: response.model || fallbackModel,
-          totalTokens: response.usage?.total_tokens ?? 0,
-        };
-      }
-
+      const providerError = readProviderError(error);
       logger.error(
         {
-          model: this.model,
+          model,
           status: providerError.status,
           code: providerError.code,
-          requestId: providerError.request_id,
+          requestId: providerError.requestId,
           message: providerError.message,
         },
         "OpenAI embedding request failed",
       );
-      // #region agent log
-      let accessibleEmbeddingModels: string[] = [];
-      try {
-        const listed = await this.client.models.list();
-        accessibleEmbeddingModels = listed.data
-          .map((item) => item.id)
-          .filter((id) => /embed/i.test(id));
-      } catch {
-        accessibleEmbeddingModels = ["__list_failed__"];
+      if (providerError.status === 403 || providerError.code === "model_not_found") {
+        this.verifiedModel = null;
+        this.resolvePromise = null;
+        throw new EmbeddingProviderError(NO_ACCESSIBLE_EMBEDDING_MODEL_MESSAGE, {
+          cause: error,
+        });
       }
-      fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "65a883",
-        },
-        body: JSON.stringify({
-          sessionId: "65a883",
-          runId: "pre-fix",
-          hypothesisId: "A",
-          location: "openai-embedding-provider.ts:embed-catch",
-          message: "OpenAI embedding request failed",
-          data: {
-            configuredModel: this.model,
-            status: providerError.status,
-            code: providerError.code,
-            message: providerError.message,
-            accessibleEmbeddingModels,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       throw new EmbeddingProviderError(
         `The embedding model request failed (${providerError.code ?? "unknown"}).`,
         { cause: error },
@@ -152,41 +194,94 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     }
   }
 
-  private async createEmbedding(texts: string[], model: string) {
-    return this.client.embeddings.create({
-      model,
-      input: texts,
-      ...(model === "text-embedding-3-large" ? { dimensions: 1536 } : {}),
+  private async discoverAndVerifyModel(): Promise<string> {
+    const listedModelIds = await this.listModelIds();
+    const candidates = selectEmbeddingCandidates({
+      configuredModel: this.configuredModel,
+      listedModelIds,
     });
-  }
 
-  private async findFallbackModel(providerError: {
-    status?: number;
-    code?: string;
-  }): Promise<string | null> {
-    if (providerError.status !== 403 || providerError.code !== "model_not_found") {
-      return null;
+    if (candidates.length === 0) {
+      logger.error(
+        { listedModelCount: listedModelIds?.length ?? null },
+        "OpenAI project has no accessible embedding model",
+      );
+      throw new EmbeddingProviderError(NO_ACCESSIBLE_EMBEDDING_MODEL_MESSAGE);
     }
 
+    const failures: Array<{ model: string; reason: string }> = [];
+    for (const model of candidates) {
+      try {
+        const response = await this.createEmbedding(["ok"], model);
+        const embedding = response.data[0]?.embedding;
+        if (embedding?.length === REQUIRED_EMBEDDING_DIMENSIONS) {
+          if (this.configuredModel && model !== this.configuredModel) {
+            logger.warn(
+              { configuredModel: this.configuredModel, verifiedModel: model },
+              "Configured OpenAI embedding model is unavailable; using verified accessible model",
+            );
+          } else {
+            logger.info(
+              { model, dimensions: embedding.length },
+              "Verified OpenAI embedding model",
+            );
+          }
+          return model;
+        }
+        failures.push({
+          model,
+          reason: `returned ${embedding?.length ?? 0} dimensions`,
+        });
+      } catch (error) {
+        const providerError = readProviderError(error);
+        failures.push({
+          model,
+          reason: providerError.code ?? providerError.message ?? "request failed",
+        });
+        if (
+          providerError.status === 401 ||
+          providerError.code === "invalid_api_key"
+        ) {
+          throw new EmbeddingProviderError(
+            "The embedding model request failed (invalid_api_key).",
+            { cause: error },
+          );
+        }
+      }
+    }
+
+    logger.error(
+      { candidates, failures },
+      "Could not verify an accessible OpenAI embedding model",
+    );
+    throw new EmbeddingProviderError(NO_ACCESSIBLE_EMBEDDING_MODEL_MESSAGE);
+  }
+
+  private async listModelIds(): Promise<string[] | null> {
     try {
-      const listed = await this.client.models.list();
-      const accessible = new Set(
-        listed.data
-          .map((item) => item.id)
-          .filter((id) => /embed/i.test(id)),
-      );
-      const candidates = [
-        "text-embedding-ada-002",
-        "text-embedding-3-large",
-        "text-embedding-3-small",
-      ];
-      return candidates.find((candidate) => candidate !== this.model && accessible.has(candidate)) ?? null;
+      const listed = this.client.models.list();
+      const ids: string[] = [];
+      if (listed && typeof listed === "object" && Symbol.asyncIterator in listed) {
+        for await (const model of listed as AsyncIterable<{ id: string }>) {
+          ids.push(model.id);
+        }
+        return ids;
+      }
+      const page = await (listed as Promise<{ data: Array<{ id: string }> }>);
+      return page.data.map((item) => item.id);
     } catch (error) {
       logger.warn(
         { error: error instanceof Error ? error.message : String(error) },
-        "Could not discover accessible OpenAI embedding models",
+        "Could not list OpenAI models; probing compatible embedding models",
       );
       return null;
     }
+  }
+
+  private async createEmbedding(texts: string[], model: string) {
+    return this.client.embeddings.create({
+      ...embeddingRequestOptions(model),
+      input: texts,
+    });
   }
 }

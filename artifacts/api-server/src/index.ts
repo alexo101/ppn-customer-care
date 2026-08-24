@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureEveryoneTargetsForAllAgents } from "./lib/agents";
 import { startConversationLifecycleSweep } from "./lib/conversation-lifecycle";
+import { prepareKnowledgeEmbeddings } from "./lib/knowledge-indexing";
 
 const rawPort = process.env["PORT"];
 
@@ -25,6 +26,7 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   startConversationLifecycleSweep();
+  void prepareKnowledgeEmbeddings();
   void ensureEveryoneTargetsForAllAgents()
     .then((created) => {
       if (created > 0) {

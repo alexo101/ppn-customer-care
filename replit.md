@@ -11,7 +11,7 @@ An authenticated support assistant that classifies questions, selects configured
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required for live orchestration and indexing: `OPENAI_API_KEY`
-- Optional LLM configuration: `CLASSIFICATION_MODEL` and `ANSWER_MODEL` (default `gpt-5-nano`), `EMBEDDING_MODEL` (default `text-embedding-3-small`)
+- Optional LLM configuration: `CLASSIFICATION_MODEL` and `ANSWER_MODEL` (default `gpt-5-nano`), `EMBEDDING_MODEL` (verified against the OpenAI project; must produce 1,536-dimensional vectors)
 - Optional provider selectors: `CLASSIFICATION_LLM_PROVIDER`, `ANSWER_LLM_PROVIDER`, and `EMBEDDING_LLM_PROVIDER` (default `openai`)
 - API connector credentials are configured with environment variables referenced by each connector's `authConfig` (for example `CONNECTOR_ACME_TOKEN`); secret values are never stored in the database.
 - Before pushing the schema, enable pgvector once: `CREATE EXTENSION IF NOT EXISTS vector;`
@@ -42,7 +42,7 @@ An authenticated support assistant that classifies questions, selects configured
 
 - Runtime classification and answer generation fail with HTTP 503 when the LLM is unavailable; they do not silently fall back to heuristics.
 - Greeting and resolution messages use deterministic shortcuts and do not require an LLM call.
-- Uploaded `.docx` files, Notion pages/databases, and Confluence spaces/pages are chunked and indexed with `text-embedding-3-small`. Notion and Confluence use Replit Integrations rather than stored API keys; an explicit refresh re-fetches and replaces chunks.
+- Uploaded `.docx` files, Notion pages/databases, and Confluence spaces/pages are chunked and indexed with a project-verified embedding model that produces 1,536-dimensional vectors. Notion and Confluence use Replit Integrations rather than stored API keys; an explicit refresh re-fetches and replaces chunks.
 - The orchestrator chooses the highest probability category returned by the classifier, then applies the highest-priority matching rule.
 - Conversation statuses follow active, pending clarification, escalated, resolved, and closed states; resolved/closed conversations receive analytics rollups and inactive conversations are closed after one hour.
 - `query_live_data` rules call their linked enabled API connectors with environment-backed authentication; missing credentials fail the workflow rather than silently sending ungrounded data.
@@ -60,7 +60,7 @@ The runtime answer and classification models should use `gpt-5-nano` in Replit b
 ## Gotchas
 
 - Run `CREATE EXTENSION IF NOT EXISTS vector;` before `pnpm --filter @workspace/db run push`.
-- Existing document sources need `pnpm --filter @workspace/scripts run reindex-knowledge-sources` after the vector schema is applied.
+- Existing document and integration sources are re-indexed on API startup when the verified embedding model changes. You can also run `pnpm --filter @workspace/scripts run reindex-knowledge-sources`.
 - Source indexing is queued after source creation/update; an indexing failure is logged and does not roll back the source save.
 - New connector and conversation analytics tables require the database schema push before deploying the API.
 - The API server runs the inactivity sweep every five minutes in non-test environments.
