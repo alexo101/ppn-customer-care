@@ -211,7 +211,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
               onClick={() => openAuthoring(null, "ai")}
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Describe to AI
+              Chat with AI to create a rule
             </Button>
           </div>
         </div>
