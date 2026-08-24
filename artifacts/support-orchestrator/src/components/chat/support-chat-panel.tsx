@@ -19,6 +19,34 @@ import { cn } from "@/lib/utils";
 import { useAppearance } from "@/components/appearance-provider";
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
 
+const TRAINING_LOADER_STEPS = [
+  "Classifying...",
+  "Checking sources",
+  "Checking target settled",
+  "Checking the rules",
+  "Shaping the response...",
+] as const;
+
+function TrainingThinkingStatus() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setStep((current) => (current + 1) % TRAINING_LOADER_STEPS.length);
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <div className="flex justify-start">
+      <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        {TRAINING_LOADER_STEPS[step]}
+      </div>
+    </div>
+  );
+}
+
 type SupportChatPanelProps = {
   agentId?: string;
   source: "widget" | "training";
@@ -248,14 +276,17 @@ export function SupportChatPanel({
                 );
               })}
 
-              {sendingMessage && (
-                <div className="flex justify-start">
-                  <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Typing...
+              {sendingMessage &&
+                (source === "training" ? (
+                  <TrainingThinkingStatus />
+                ) : (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Typing...
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
             </>
           )}
         </div>
