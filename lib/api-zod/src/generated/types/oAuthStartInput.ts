@@ -9,6 +9,4 @@ import type { OAuthStartInputProvider } from './oAuthStartInputProvider';
 
 export interface OAuthStartInput {
   provider: OAuthStartInputProvider;
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  teamId?: string;
 }

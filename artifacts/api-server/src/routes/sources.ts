@@ -6,12 +6,9 @@ import {
   db,
   knowledgeSourcesTable,
   apiConnectorsTable,
-  teamSourceGrantsTable,
-  teamConnectorGrantsTable,
   agentSourceAssignmentsTable,
   agentConnectorAssignmentsTable,
-  organizationConnectionsTable,
-  teamConnectionsTable,
+  connectionsTable,
 } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -44,7 +41,6 @@ import {
 import { parseSelectedKnowledgeItems } from "../lib/integration-knowledge";
 import { createEmbeddingProvider, EmbeddingProviderError } from "../lib/llm";
 import { logger } from "../lib/logger";
-import { ensureDefaultTenant, getTenantContext } from "../lib/tenant";
 import { createManagedIntegrationProxy } from "../lib/managed-integrations";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -65,31 +61,18 @@ const upload = multer({
 
 const router: IRouter = Router();
 
-const ownerOrSystem = (table: typeof knowledgeSourcesTable | typeof apiConnectorsTable, userId: string) =>
-  eq(table.userId, userId);
-
-async function requireAgent(userId: string, agentId: string | undefined, res: { status: (n: number) => { json: (b: unknown) => void } }, teamId?: string) {
+async function requireAgent(
+  userId: string,
+  agentId: string | undefined,
+  res: { status: (n: number) => { json: (b: unknown) => void } },
+) {
   if (!agentId) return true;
-  const agent = await getOwnedAgent(userId, agentId, teamId);
+  const agent = await getOwnedAgent(userId, agentId);
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
     return false;
   }
   return true;
-}
-
-async function tenantForAgent(userId: string, agentId: string, teamId?: string) {
-  const agent = await getOwnedAgent(userId, agentId, teamId);
-  if (!agent) return null;
-  const tenant = teamId
-    ? await getTenantContext(userId, teamId)
-    : await ensureDefaultTenant(userId);
-  if (!tenant || (agent.teamId && agent.teamId !== tenant.teamId)) return null;
-  return tenant;
-}
-
-function activeTeamId(req: { headers: Record<string, string | string[] | undefined> }): string | undefined {
-  return typeof req.headers["x-team-id"] === "string" ? req.headers["x-team-id"] : undefined;
 }
 
 router.get("/sources", requireAuth, async (req, res): Promise<void> => {
@@ -98,11 +81,11 @@ router.get("/sources", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (!(await requireAgent(req.userId, parsed.data.agentId, res, activeTeamId(req)))) return;
+  if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
 
   const where = parsed.data.agentId
-    ? and(ownerOrSystem(knowledgeSourcesTable, req.userId), eq(knowledgeSourcesTable.agentId, parsed.data.agentId), eq(knowledgeSourcesTable.teamId, activeTeamId(req) ?? ""))
-    : and(ownerOrSystem(knowledgeSourcesTable, req.userId), eq(knowledgeSourcesTable.teamId, activeTeamId(req) ?? ""));
+    ? eq(knowledgeSourcesTable.agentId, parsed.data.agentId)
+    : undefined;
 
   const rows = await db.select().from(knowledgeSourcesTable)
     .where(where)
@@ -121,12 +104,7 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "agentId is required." });
     return;
   }
-  if (!(await requireAgent(req.userId, parsed.data.agentId, res, activeTeamId(req)))) return;
-  const tenant = await tenantForAgent(req.userId, parsed.data.agentId, activeTeamId(req));
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
-    return;
-  }
+  if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
 
   let connectionConfig: Record<string, unknown> =
     (parsed.data.connectionConfig as Record<string, unknown> | undefined) ?? {};
@@ -135,7 +113,6 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     const integrationConfig = await integrationConnectionConfig(
       parsed.data.sourceType,
       connectionConfig,
-      tenant,
     );
     if ("error" in integrationConfig) {
       res.status(400).json({ error: integrationConfig.error });
@@ -148,8 +125,6 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     .insert(knowledgeSourcesTable)
     .values({
       userId: req.userId,
-      organizationId: tenant.organizationId,
-      teamId: tenant.teamId,
       agentId: parsed.data.agentId,
       name: parsed.data.name,
       sourceType: parsed.data.sourceType,
@@ -159,9 +134,8 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(toSource(row));
-  await db.insert(teamSourceGrantsTable).values({ teamId: tenant.teamId, sourceId: row.id }).onConflictDoNothing();
   await db.insert(agentSourceAssignmentsTable).values({ agentId: parsed.data.agentId, sourceId: row.id }).onConflictDoNothing();
-  queueSourceIndex(row.id, { organizationId: tenant.organizationId, teamId: tenant.teamId });
+  queueSourceIndex(row.id);
 });
 
 router.get("/sources/integrations", requireAuth, async (_req, res): Promise<void> => {
@@ -180,18 +154,10 @@ router.get("/sources/integrations/browse", requireAuth, async (req, res): Promis
     return;
   }
 
-  if (parsed.data.organizationConnectionId) {
-    const teamId = parsed.data.teamId;
-    const tenant = teamId ? await getTenantContext(req.userId, teamId) : await ensureDefaultTenant(req.userId);
-    if (!tenant) {
-      res.status(403).json({ error: "Invalid team context." });
-      return;
-    }
+  if (parsed.data.connectionId) {
     try {
       const proxy = await createManagedIntegrationProxy(
-        parsed.data.organizationConnectionId,
-        tenant.organizationId,
-        tenant.teamId,
+        parsed.data.connectionId,
       );
       const result = await browseIntegrationContent(parsed.data.connectorName, {
         query: parsed.data.query,
@@ -237,7 +203,7 @@ router.post("/sources/:id/refresh", requireAuth, async (req, res): Promise<void>
   const [existing] = await db
     .select()
     .from(knowledgeSourcesTable)
-    .where(and(eq(knowledgeSourcesTable.id, params.data.id), eq(knowledgeSourcesTable.userId, req.userId), eq(knowledgeSourcesTable.teamId, activeTeamId(req) ?? "")))
+    .where(eq(knowledgeSourcesTable.id, params.data.id))
     .limit(1);
   if (!existing) {
     res.status(404).json({ error: "Source not found" });
@@ -249,20 +215,21 @@ router.post("/sources/:id/refresh", requireAuth, async (req, res): Promise<void>
   }
 
   if (existing.sourceType === "notion" || existing.sourceType === "confluence") {
-    const integration = await getSourceIntegration(existing.sourceType);
-    if (!integration?.connected) {
-      res.status(403).json({
-        error: `Connect ${existing.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
-      });
-      return;
+    const config = (existing.connectionConfig ?? {}) as Record<string, unknown>;
+    const hasManaged = typeof config.connectionId === "string" || typeof config.organizationConnectionId === "string";
+    if (!hasManaged) {
+      const integration = await getSourceIntegration(existing.sourceType);
+      if (!integration?.connected) {
+        res.status(403).json({
+          error: `Connect ${existing.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
+        });
+        return;
+      }
     }
   }
 
   try {
-    await indexSource(existing.id, createEmbeddingProvider(), {
-      organizationId: existing.organizationId ?? undefined,
-      teamId: existing.teamId ?? undefined,
-    });
+    await indexSource(existing.id, createEmbeddingProvider());
   } catch (error) {
     const mapped = indexErrorResponse(error);
     res.status(mapped.status).json({ error: mapped.error });
@@ -300,12 +267,7 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
     res.status(400).json({ error: "agentId is required." });
     return;
   }
-  if (!(await requireAgent(req.userId, agentId, res, activeTeamId(req)))) return;
-  const tenant = await tenantForAgent(req.userId, agentId, activeTeamId(req));
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
-    return;
-  }
+  if (!(await requireAgent(req.userId, agentId, res))) return;
 
   let text = "";
   try {
@@ -321,8 +283,6 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
     .insert(knowledgeSourcesTable)
     .values({
       userId: req.userId,
-      organizationId: tenant.organizationId,
-      teamId: tenant.teamId,
       agentId,
       name: sourceName,
       sourceType: "document",
@@ -336,9 +296,8 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
     .returning();
 
   res.status(201).json(toSource(row));
-  await db.insert(teamSourceGrantsTable).values({ teamId: tenant.teamId, sourceId: row.id }).onConflictDoNothing();
   await db.insert(agentSourceAssignmentsTable).values({ agentId, sourceId: row.id }).onConflictDoNothing();
-  queueSourceIndex(row.id, { organizationId: tenant.organizationId, teamId: tenant.teamId });
+  queueSourceIndex(row.id);
 });
 
 router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
@@ -357,7 +316,7 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(knowledgeSourcesTable)
-    .where(and(eq(knowledgeSourcesTable.id, params.data.id), eq(knowledgeSourcesTable.userId, req.userId), eq(knowledgeSourcesTable.teamId, activeTeamId(req) ?? "")))
+    .where(eq(knowledgeSourcesTable.id, params.data.id))
     .limit(1);
   if (!existing) {
     res.status(404).json({ error: "Source not found" });
@@ -373,10 +332,7 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
     const incoming = (d.connectionConfig as Record<string, unknown>) ?? {};
     const sourceType = typeof d.sourceType === "string" ? d.sourceType : existing.sourceType;
     if (sourceType === "notion" || sourceType === "confluence") {
-      const integrationConfig = await integrationConnectionConfig(sourceType, incoming, {
-        organizationId: existing.organizationId ?? undefined,
-        teamId: existing.teamId ?? undefined,
-      });
+      const integrationConfig = await integrationConnectionConfig(sourceType, incoming);
       if ("error" in integrationConfig) {
         res.status(400).json({ error: integrationConfig.error });
         return;
@@ -392,7 +348,7 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
   const [row] = await db
     .update(knowledgeSourcesTable)
     .set(updates)
-    .where(and(eq(knowledgeSourcesTable.id, params.data.id), eq(knowledgeSourcesTable.userId, req.userId), eq(knowledgeSourcesTable.teamId, activeTeamId(req) ?? "")))
+    .where(eq(knowledgeSourcesTable.id, params.data.id))
     .returning();
 
   if (!row) {
@@ -402,10 +358,7 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
 
   res.json(toSource(row));
   if (d.sourceType !== undefined || d.connectionConfig !== undefined) {
-    queueSourceIndex(row.id, {
-      organizationId: row.organizationId ?? undefined,
-      teamId: row.teamId ?? undefined,
-    });
+    queueSourceIndex(row.id);
   }
 });
 
@@ -418,7 +371,7 @@ router.delete("/sources/:id", requireAuth, async (req, res): Promise<void> => {
 
   const deleted = await db
     .delete(knowledgeSourcesTable)
-    .where(and(eq(knowledgeSourcesTable.id, params.data.id), eq(knowledgeSourcesTable.userId, req.userId), eq(knowledgeSourcesTable.teamId, activeTeamId(req) ?? "")))
+    .where(eq(knowledgeSourcesTable.id, params.data.id))
     .returning({ id: knowledgeSourcesTable.id });
 
   if (deleted.length === 0) {
@@ -436,11 +389,11 @@ router.get("/connectors", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (!(await requireAgent(req.userId, parsed.data.agentId, res, activeTeamId(req)))) return;
+  if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
 
   const where = parsed.data.agentId
-    ? and(ownerOrSystem(apiConnectorsTable, req.userId), eq(apiConnectorsTable.agentId, parsed.data.agentId), eq(apiConnectorsTable.teamId, activeTeamId(req) ?? ""))
-    : and(ownerOrSystem(apiConnectorsTable, req.userId), eq(apiConnectorsTable.teamId, activeTeamId(req) ?? ""));
+    ? eq(apiConnectorsTable.agentId, parsed.data.agentId)
+    : undefined;
 
   const rows = await db.select().from(apiConnectorsTable)
     .where(where)
@@ -459,19 +412,12 @@ router.post("/connectors", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "agentId is required." });
     return;
   }
-  if (!(await requireAgent(req.userId, parsed.data.agentId, res, activeTeamId(req)))) return;
-  const tenant = await tenantForAgent(req.userId, parsed.data.agentId, activeTeamId(req));
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
-    return;
-  }
+  if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
 
   const [row] = await db
     .insert(apiConnectorsTable)
     .values({
       userId: req.userId,
-      organizationId: tenant.organizationId,
-      teamId: tenant.teamId,
       agentId: parsed.data.agentId,
       name: parsed.data.name,
       endpointPattern: parsed.data.endpointPattern,
@@ -483,7 +429,6 @@ router.post("/connectors", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(toConnector(row));
-  await db.insert(teamConnectorGrantsTable).values({ teamId: tenant.teamId, connectorId: row.id }).onConflictDoNothing();
   await db.insert(agentConnectorAssignmentsTable).values({ agentId: parsed.data.agentId, connectorId: row.id }).onConflictDoNothing();
 });
 
@@ -512,7 +457,7 @@ router.patch("/connectors/:id", requireAuth, async (req, res): Promise<void> => 
   const [row] = await db
     .update(apiConnectorsTable)
     .set(updates)
-    .where(and(eq(apiConnectorsTable.id, params.data.id), eq(apiConnectorsTable.userId, req.userId), eq(apiConnectorsTable.teamId, activeTeamId(req) ?? "")))
+    .where(eq(apiConnectorsTable.id, params.data.id))
     .returning();
 
   if (!row) {
@@ -532,7 +477,7 @@ router.delete("/connectors/:id", requireAuth, async (req, res): Promise<void> =>
 
   const deleted = await db
     .delete(apiConnectorsTable)
-    .where(and(eq(apiConnectorsTable.id, params.data.id), eq(apiConnectorsTable.userId, req.userId), eq(apiConnectorsTable.teamId, activeTeamId(req) ?? "")))
+    .where(eq(apiConnectorsTable.id, params.data.id))
     .returning({ id: apiConnectorsTable.id });
 
   if (deleted.length === 0) {
@@ -572,36 +517,29 @@ function toConnector(row: typeof apiConnectorsTable.$inferSelect) {
 async function integrationConnectionConfig(
   sourceType: "notion" | "confluence",
   incoming: Record<string, unknown>,
-  tenant?: { organizationId?: string; teamId?: string },
 ): Promise<{ config: Record<string, unknown> } | { error: string }> {
-  const managedConnectionId = typeof incoming.organizationConnectionId === "string"
-    ? incoming.organizationConnectionId
-    : null;
-  if (managedConnectionId && tenant?.organizationId && tenant.teamId) {
+  const managedConnectionId =
+    typeof incoming.connectionId === "string"
+      ? incoming.connectionId
+      : typeof incoming.organizationConnectionId === "string"
+        ? incoming.organizationConnectionId
+        : null;
+  if (managedConnectionId) {
     const [managed] = await db
-      .select({ connection: organizationConnectionsTable })
-      .from(organizationConnectionsTable)
-      .innerJoin(
-        teamConnectionsTable,
-        and(
-          eq(teamConnectionsTable.connectionId, organizationConnectionsTable.id),
-          eq(teamConnectionsTable.teamId, tenant.teamId),
-          eq(teamConnectionsTable.enabled, true),
-        ),
-      )
+      .select()
+      .from(connectionsTable)
       .where(and(
-        eq(organizationConnectionsTable.id, managedConnectionId),
-        eq(organizationConnectionsTable.organizationId, tenant.organizationId),
-        eq(organizationConnectionsTable.provider, sourceType),
-        eq(organizationConnectionsTable.status, "connected"),
+        eq(connectionsTable.id, managedConnectionId),
+        eq(connectionsTable.provider, sourceType),
+        eq(connectionsTable.status, "connected"),
       ))
       .limit(1);
-    if (!managed) return { error: "Connection is not enabled for this team." };
+    if (!managed) return { error: "Connection is not available." };
     const selectedItems = parseSelectedKnowledgeItems(incoming.selectedItems);
     if (selectedItems.length === 0) return { error: "Select at least one page, database, or space." };
     return {
       config: {
-        organizationConnectionId: managedConnectionId,
+        connectionId: managedConnectionId,
         selectedItems,
         ...indexingState(),
       },
@@ -675,10 +613,10 @@ function integrationErrorResponse(error: unknown): { status: number; error: stri
   };
 }
 
-function queueSourceIndex(sourceId: string, scope?: { organizationId?: string; teamId?: string }): void {
+function queueSourceIndex(sourceId: string): void {
   void (async () => {
     try {
-      await indexSource(sourceId, createEmbeddingProvider(), scope);
+      await indexSource(sourceId, createEmbeddingProvider());
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.error({ sourceId, error: message }, "Could not index knowledge source");

@@ -350,13 +350,6 @@ export async function customFetch<T = unknown>(
     headersInit,
   );
 
-  // The active team is an explicit request boundary. The server validates that
-  // the authenticated user belongs to this team before serving team data.
-  if (!headers.has("x-team-id") && typeof window !== "undefined") {
-    const teamId = window.localStorage.getItem("orchestrator.teamId");
-    if (teamId) headers.set("x-team-id", teamId);
-  }
-
   if (
     typeof init.body === "string" &&
     !headers.has("content-type") &&

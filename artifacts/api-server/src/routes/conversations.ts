@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { requireAuthOrDeployment as requireAuth, requireTenant } from "../middlewares/requireAuth";
+import { requireAuthOrDeployment as requireAuth } from "../middlewares/requireAuth";
 import { eq, desc, sql, and, gte, lte, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
@@ -59,7 +59,7 @@ import {
 
 const router: IRouter = Router();
 
-router.use(requireAuth, requireTenant);
+router.use(requireAuth);
 
 // All conversation endpoints require authentication and are scoped to the authenticated user.
 // ── List conversations ────────────────────────────────────────────────────
@@ -74,17 +74,14 @@ router.get("/conversations", requireAuth, async (req, res): Promise<void> => {
   const userId = req.userId;
 
   if (agentId) {
-    const agent = await getOwnedAgent(userId, agentId, req.tenant?.teamId);
+    const agent = await getOwnedAgent(userId, agentId);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
   }
 
-  const ownerFilter = and(
-    eq(conversationsTable.userId, userId),
-    eq(conversationsTable.teamId, req.tenant?.teamId ?? ""),
-  );
+  const ownerFilter = eq(conversationsTable.userId, userId);
   const statusFilter = status ? eq(conversationsTable.status, status) : undefined;
   const agentFilter = agentId ? eq(conversationsTable.agentId, agentId) : undefined;
   const sourceFilter = conversationSourceFilter(source);
@@ -111,7 +108,7 @@ router.post("/conversations", requireAuth, async (req, res): Promise<void> => {
 
   let agentId = parsed.data.agentId ?? null;
   if (agentId) {
-    const agent = await getOwnedAgent(req.userId, agentId, req.tenant?.teamId);
+    const agent = await getOwnedAgent(req.userId, agentId);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
@@ -140,8 +137,6 @@ router.post("/conversations", requireAuth, async (req, res): Promise<void> => {
     .insert(conversationsTable)
     .values({
       userId: req.userId,
-      organizationId: req.tenant?.organizationId,
-      teamId: req.tenant?.teamId,
       agentId,
       metadata,
     })
@@ -161,7 +156,7 @@ router.get("/conversations/:id", requireAuth, async (req, res): Promise<void> =>
   const [row] = await db
     .select()
     .from(conversationsTable)
-    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId), eq(conversationsTable.teamId, req.tenant?.teamId ?? "")));
+    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId)));
 
   if (!row) {
     res.status(404).json({ error: "Conversation not found" });
@@ -197,7 +192,7 @@ router.patch("/conversations/:id", requireAuth, async (req, res): Promise<void> 
   const [row] = await db
     .update(conversationsTable)
     .set(updates)
-    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId), eq(conversationsTable.teamId, req.tenant?.teamId ?? "")))
+    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId)))
     .returning();
 
   if (!row) {
@@ -220,7 +215,7 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res): Promise
   const [conv] = await db
     .select({ id: conversationsTable.id })
     .from(conversationsTable)
-    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId), eq(conversationsTable.teamId, req.tenant?.teamId ?? "")));
+    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId)));
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -253,7 +248,7 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
   const [conv] = await db
     .select()
     .from(conversationsTable)
-    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId), eq(conversationsTable.teamId, req.tenant?.teamId ?? "")));
+    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId)));
 
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
@@ -308,7 +303,6 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
       and(
         eq(intentCategoriesTable.isEnabled, true),
         conv.agentId ? eq(intentCategoriesTable.agentId, conv.agentId) : undefined,
-        eq(intentCategoriesTable.teamId, conv.teamId ?? ""),
       ),
     );
   stages[1].status = "completed";
@@ -378,7 +372,7 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
       : classification.primaryCategory
         ? { id: "", name: classification.primaryCategory }
         : null;
-    rule = await matchRuleForAgent(conv.agentId, classifiedCategory, person, conv.teamId, conv.organizationId);
+    rule = await matchRuleForAgent(conv.agentId, classifiedCategory, person);
     stages[3].status = "completed";
     stages[3].details = {
       rule_used: rule?.name ?? "None",
@@ -407,7 +401,7 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
           parsed.data.content,
           createEmbeddingProvider(),
           5,
-          { teamId: conv.teamId ?? undefined, agentId: conv.agentId ?? undefined },
+          { agentId: conv.agentId ?? undefined },
         );
         retrievedChunks = retrieval.chunks;
         retrievalModel = retrieval.model;
@@ -435,8 +429,6 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
             and(
               eq(ruleConnectorLinksTable.ruleId, rule.id),
               eq(apiConnectorsTable.isEnabled, true),
-              eq(apiConnectorsTable.teamId, conv.teamId ?? ""),
-              eq(apiConnectorsTable.organizationId, conv.organizationId ?? ""),
             ),
           );
         for (const connector of connectorLinks) {
@@ -640,7 +632,7 @@ router.post("/conversations/:id/feedback", requireAuth, async (req, res): Promis
   const [conv] = await db
     .select({ id: conversationsTable.id })
     .from(conversationsTable)
-    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId), eq(conversationsTable.teamId, req.tenant?.teamId ?? "")));
+    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId)));
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -690,7 +682,7 @@ router.get("/conversations/:id/logs", requireAuth, async (req, res): Promise<voi
   const [conv] = await db
     .select({ id: conversationsTable.id })
     .from(conversationsTable)
-    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId), eq(conversationsTable.teamId, req.tenant?.teamId ?? "")));
+    .where(and(eq(conversationsTable.id, params.data.id), eq(conversationsTable.userId, req.userId)));
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
@@ -714,7 +706,7 @@ router.get("/questions", requireAuth, async (req, res): Promise<void> => {
   }
 
   const { agentId, type, fromDate, toDate, limit = 200 } = parsed.data;
-  const agent = await getOwnedAgent(req.userId, agentId, req.tenant?.teamId);
+  const agent = await getOwnedAgent(req.userId, agentId);
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
     return;
@@ -726,7 +718,6 @@ router.get("/questions", requireAuth, async (req, res): Promise<void> => {
     .where(
       and(
         eq(conversationsTable.userId, req.userId),
-        eq(conversationsTable.teamId, req.tenant?.teamId ?? ""),
         eq(conversationsTable.agentId, agentId),
         conversationSourceFilter("widget"),
       ),
@@ -844,8 +835,6 @@ async function matchRuleForAgent(
   agentId: string | null,
   classified: { id: string; name: string } | null,
   person: PersonAttributes,
-  teamId: string | null,
-  organizationId: string | null,
 ): Promise<Rule | null> {
   const rules = await db
     .select()
@@ -854,8 +843,6 @@ async function matchRuleForAgent(
       and(
         eq(orchestratorRulesTable.isEnabled, true),
         agentId ? eq(orchestratorRulesTable.agentId, agentId) : undefined,
-        eq(orchestratorRulesTable.teamId, teamId ?? ""),
-        eq(orchestratorRulesTable.organizationId, organizationId ?? ""),
       ),
     )
     .orderBy(desc(orchestratorRulesTable.priority));
@@ -866,9 +853,9 @@ async function matchRuleForAgent(
   const [categoryLinks, categoryRows, audienceLinks, audienceRows, conditionRows] = await Promise.all([
     db.select().from(ruleCategoryLinksTable).where(inArray(ruleCategoryLinksTable.ruleId, ruleIds)),
     db.select({ id: intentCategoriesTable.id, name: intentCategoriesTable.name }).from(intentCategoriesTable)
-      .where(eq(intentCategoriesTable.teamId, teamId ?? "")),
+      .where(agentId ? eq(intentCategoriesTable.agentId, agentId) : undefined),
     db.select().from(ruleAudienceTargetLinksTable).where(inArray(ruleAudienceTargetLinksTable.ruleId, ruleIds)),
-    db.select().from(audienceTargetsTable).where(eq(audienceTargetsTable.teamId, teamId ?? "")),
+    db.select().from(audienceTargetsTable).where(agentId ? eq(audienceTargetsTable.agentId, agentId) : undefined),
     db.select().from(targetConditionsTable),
   ]);
 

@@ -5,13 +5,13 @@ import {
   useUpdateSource,
   useDeleteSource,
   useListSourceIntegrations,
-  useListTeamConnections,
+  useListConnections,
   useUploadSourceDocument,
   useRefreshSource,
   browseSourceIntegration,
   getListSourcesQueryKey,
   getListSourceIntegrationsQueryKey,
-  getListTeamConnectionsQueryKey,
+  getListConnectionsQueryKey,
   type KnowledgeSource,
   type SourceBrowseItem,
   type SourceIntegration,
@@ -66,7 +66,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useTenantContext } from "@/components/tenant-context";
 
 const REPLIT_INTEGRATIONS_URL =
   "https://replit.com/~?settings.show=true&settings.tab=integrations";
@@ -189,9 +188,8 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
   const { data: sources = [] } = useListSources({ agentId });
   const { data: integrations = [], refetch: refetchIntegrations } = useListSourceIntegrations();
-  const { teamId } = useTenantContext();
-  const { data: teamConnections = [] } = useListTeamConnections(teamId ?? "", {
-    query: { enabled: Boolean(teamId), queryKey: getListTeamConnectionsQueryKey(teamId ?? "") },
+  const { data: companyConnections = [] } = useListConnections({
+    query: { queryKey: getListConnectionsQueryKey() },
   });
   const createSource = useCreateSource();
   const updateSource = useUpdateSource();
@@ -380,7 +378,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     selectedItems: SourceBrowseItem[],
   ) => {
     const integration = integrationFor(integrations, connectorName);
-    const managedConnection = teamConnections.find((connection) => connection.provider === connectorName);
+    const managedConnection = companyConnections.find((connection) => connection.provider === connectorName);
     if (!integration?.connected && !managedConnection) {
       toast({
         title: `Connect ${integration?.displayName ?? connectorName} first`,
@@ -402,7 +400,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     const connectionConfig = {
       connectorName,
       connectionId: integration?.connectionId,
-      ...(managedConnection ? { organizationConnectionId: managedConnection.id } : {}),
+      ...(managedConnection ? { connectionId: managedConnection.id } : {}),
       selectedItems,
     };
     const onSuccess = () => {
@@ -850,7 +848,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         open={notionOpen}
         connectorName="notion"
         integration={integrationFor(integrations, "notion")}
-        managedConnectionId={teamConnections.find((connection) => connection.provider === "notion")?.id}
+        managedConnectionId={companyConnections.find((connection) => connection.provider === "notion")?.id}
         saving={saving}
         selectedItems={editing?.sourceType === "notion" ? selectedKnowledgeItems(editing.connectionConfig) : []}
         sourceName={title}
@@ -863,7 +861,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         open={confluenceOpen}
         connectorName="confluence"
         integration={integrationFor(integrations, "confluence")}
-        managedConnectionId={teamConnections.find((connection) => connection.provider === "confluence")?.id}
+        managedConnectionId={companyConnections.find((connection) => connection.provider === "confluence")?.id}
         saving={saving}
         selectedItems={editing?.sourceType === "confluence" ? selectedKnowledgeItems(editing.connectionConfig) : []}
         sourceName={title}
@@ -962,8 +960,7 @@ function IntegrationDialog({
       try {
         const result = await browseSourceIntegration({
           connectorName,
-          organizationConnectionId: managedConnectionId,
-          teamId: localStorage.getItem("orchestrator.teamId") ?? undefined,
+          connectionId: managedConnectionId,
           query: debouncedSearch || undefined,
           spaceId: space?.id,
         });
@@ -983,7 +980,7 @@ function IntegrationDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, connected, connectorName, debouncedSearch, space?.id]);
+  }, [open, connected, connectorName, debouncedSearch, space?.id, managedConnectionId]);
 
   const loadMore = async () => {
     if (!cursor || loadingMore) return;
@@ -991,8 +988,7 @@ function IntegrationDialog({
     try {
       const result = await browseSourceIntegration({
         connectorName,
-        organizationConnectionId: managedConnectionId,
-        teamId: localStorage.getItem("orchestrator.teamId") ?? undefined,
+        connectionId: managedConnectionId,
         query: debouncedSearch || undefined,
         cursor,
         spaceId: space?.id,

@@ -12,6 +12,5 @@ connectorName: BrowseSourceIntegrationConnectorName;
 query?: string;
 cursor?: string;
 spaceId?: string;
-organizationConnectionId?: string;
-teamId?: string;
+connectionId?: string;
 };

@@ -1,6 +1,6 @@
 import { logger } from "./logger";
 import { eq } from "drizzle-orm";
-import { db, organizationConnectionsTable } from "@workspace/db";
+import { db, connectionsTable } from "@workspace/db";
 import { decryptSecret } from "./connection-secrets";
 
 type Connector = {
@@ -110,9 +110,9 @@ async function applyAuthentication(
 
 async function connectionAccessToken(connectionId: string, connectorName: string): Promise<string> {
   const [connection] = await db
-    .select({ token: organizationConnectionsTable.encryptedAccessToken, status: organizationConnectionsTable.status })
-    .from(organizationConnectionsTable)
-    .where(eq(organizationConnectionsTable.id, connectionId))
+    .select({ token: connectionsTable.encryptedAccessToken, status: connectionsTable.status })
+    .from(connectionsTable)
+    .where(eq(connectionsTable.id, connectionId))
     .limit(1);
   if (!connection || connection.status !== "connected" || !connection.token) {
     throw new ApiConnectorError(`Connection for connector "${connectorName}" is unavailable.`);

@@ -1,42 +1,31 @@
 import { and, eq } from "drizzle-orm";
-import { db, organizationConnectionsTable, teamConnectionsTable } from "@workspace/db";
+import { db, connectionsTable } from "@workspace/db";
 import { decryptSecret } from "./connection-secrets";
 import { IntegrationProviderError, type ConnectorProxy } from "./replit-integrations";
 
 export async function createManagedIntegrationProxy(
   connectionId: string,
-  organizationId: string,
-  teamId: string,
 ): Promise<ConnectorProxy> {
-  const [row] = await db
-    .select({ connection: organizationConnectionsTable })
-    .from(organizationConnectionsTable)
-    .innerJoin(
-      teamConnectionsTable,
-      and(
-        eq(teamConnectionsTable.connectionId, organizationConnectionsTable.id),
-        eq(teamConnectionsTable.teamId, teamId),
-        eq(teamConnectionsTable.enabled, true),
-      ),
-    )
+  const [connection] = await db
+    .select()
+    .from(connectionsTable)
     .where(and(
-      eq(organizationConnectionsTable.id, connectionId),
-      eq(organizationConnectionsTable.organizationId, organizationId),
-      eq(organizationConnectionsTable.status, "connected"),
+      eq(connectionsTable.id, connectionId),
+      eq(connectionsTable.status, "connected"),
     ))
     .limit(1);
-  if (!row?.connection.encryptedAccessToken) {
-    throw new IntegrationProviderError("Connection is not enabled for this team.", {
+  if (!connection?.encryptedAccessToken) {
+    throw new IntegrationProviderError("Connection is not available.", {
       code: "permission",
       status: 403,
     });
   }
 
-  const token = decryptSecret(row.connection.encryptedAccessToken);
-  const provider = row.connection.provider.toLowerCase();
+  const token = decryptSecret(connection.encryptedAccessToken);
+  const provider = connection.provider.toLowerCase();
   const baseUrl =
-    typeof (row.connection.metadata as Record<string, unknown>)?.baseUrl === "string"
-      ? (row.connection.metadata as Record<string, string>).baseUrl
+    typeof (connection.metadata as Record<string, unknown>)?.baseUrl === "string"
+      ? (connection.metadata as Record<string, string>).baseUrl
       : provider === "notion"
         ? "https://api.notion.com"
         : "https://api.atlassian.com";

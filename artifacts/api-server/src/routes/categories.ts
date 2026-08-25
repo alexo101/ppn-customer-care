@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, intentCategoriesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -10,16 +10,8 @@ import {
   DeleteCategoryParams,
 } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
-import { getTenantContext, ensureDefaultTenant } from "../lib/tenant";
 
 const router: IRouter = Router();
-
-function activeTeamId(req: { headers: Record<string, string | string[] | undefined> }): string | undefined {
-  return typeof req.headers["x-team-id"] === "string" ? req.headers["x-team-id"] : undefined;
-}
-
-const ownerFilter = (userId: string) =>
-  eq(intentCategoriesTable.userId, userId);
 
 router.get("/categories", requireAuth, async (req, res): Promise<void> => {
   const parsed = ListCategoriesQueryParams.safeParse(req.query);
@@ -29,9 +21,8 @@ router.get("/categories", requireAuth, async (req, res): Promise<void> => {
   }
 
   const agentId = parsed.data.agentId;
-  let agent: Awaited<ReturnType<typeof getOwnedAgent>> | null = null;
   if (agentId) {
-    agent = await getOwnedAgent(req.userId, agentId, activeTeamId(req));
+    const agent = await getOwnedAgent(req.userId, agentId);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
@@ -39,8 +30,8 @@ router.get("/categories", requireAuth, async (req, res): Promise<void> => {
   }
 
   const where = agentId
-    ? and(ownerFilter(req.userId), eq(intentCategoriesTable.agentId, agentId), eq(intentCategoriesTable.teamId, agent?.teamId ?? ""))
-    : ownerFilter(req.userId);
+    ? eq(intentCategoriesTable.agentId, agentId)
+    : undefined;
 
   const rows = await db
     .select()
@@ -62,16 +53,9 @@ router.post("/categories", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "agentId is required." });
     return;
   }
-  const agent = await getOwnedAgent(req.userId, agentId, activeTeamId(req));
+  const agent = await getOwnedAgent(req.userId, agentId);
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
-    return;
-  }
-  const tenant = activeTeamId(req)
-    ? await getTenantContext(req.userId, activeTeamId(req))
-    : agent.teamId ? await getTenantContext(req.userId, agent.teamId) : await ensureDefaultTenant(req.userId);
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
     return;
   }
 
@@ -79,8 +63,6 @@ router.post("/categories", requireAuth, async (req, res): Promise<void> => {
     .insert(intentCategoriesTable)
     .values({
       userId: req.userId,
-      organizationId: tenant.organizationId,
-      teamId: tenant.teamId,
       agentId,
       name: parsed.data.name,
       parentId: parsed.data.parentId ?? null,
@@ -108,12 +90,6 @@ router.patch("/categories/:id", requireAuth, async (req, res): Promise<void> => 
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const requestedTeamId = activeTeamId(req) ?? (typeof req.query.teamId === "string" ? req.query.teamId : undefined);
-  const tenant = requestedTeamId ? await getTenantContext(req.userId, requestedTeamId) : await ensureDefaultTenant(req.userId);
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
-    return;
-  }
 
   const updates: Record<string, unknown> = {};
   if (parsed.data.name !== undefined) updates.name = parsed.data.name;
@@ -128,17 +104,10 @@ router.patch("/categories/:id", requireAuth, async (req, res): Promise<void> => 
   if (parsed.data.sortOrder !== undefined) updates.sortOrder = parsed.data.sortOrder;
   updates.updatedAt = new Date();
 
-  // Only allow editing categories the user owns or system defaults
   const [row] = await db
     .update(intentCategoriesTable)
     .set(updates)
-    .where(
-      and(
-        eq(intentCategoriesTable.id, params.data.id),
-        eq(intentCategoriesTable.userId, req.userId),
-        eq(intentCategoriesTable.teamId, tenant.teamId),
-      )
-    )
+    .where(eq(intentCategoriesTable.id, params.data.id))
     .returning();
 
   if (!row) {
@@ -155,34 +124,14 @@ router.delete("/categories/:id", requireAuth, async (req, res): Promise<void> =>
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const requestedTeamId = activeTeamId(req) ?? (typeof req.query.teamId === "string" ? req.query.teamId : undefined);
-  const tenant = requestedTeamId ? await getTenantContext(req.userId, requestedTeamId) : await ensureDefaultTenant(req.userId);
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
-    return;
-  }
 
-  // Delete all nested subcategories of this category first
   await db
     .delete(intentCategoriesTable)
-    .where(
-      and(
-        eq(intentCategoriesTable.parentId, params.data.id),
-        eq(intentCategoriesTable.userId, req.userId),
-        eq(intentCategoriesTable.teamId, tenant.teamId),
-      )
-    );
+    .where(eq(intentCategoriesTable.parentId, params.data.id));
 
-  // Only allow deleting categories the user owns or system defaults
   const deleted = await db
     .delete(intentCategoriesTable)
-    .where(
-      and(
-        eq(intentCategoriesTable.id, params.data.id),
-        eq(intentCategoriesTable.userId, req.userId),
-        eq(intentCategoriesTable.teamId, tenant.teamId),
-      )
-    )
+    .where(eq(intentCategoriesTable.id, params.data.id))
     .returning({ id: intentCategoriesTable.id });
 
   if (deleted.length === 0) {

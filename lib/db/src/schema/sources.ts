@@ -2,14 +2,11 @@ import { pgTable, text, timestamp, boolean, uuid, jsonb } from "drizzle-orm/pg-c
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { agentsTable } from "./agents";
-import { organizationsTable, teamsTable } from "./tenancy";
-import { organizationConnectionsTable } from "./connections";
+import { connectionsTable } from "./connections";
 
 export const knowledgeSourcesTable = pgTable("knowledge_sources", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id"), // Clerk user ID of the owner; nullable for legacy seeded rows
-  organizationId: uuid("organization_id").references(() => organizationsTable.id, { onDelete: "cascade" }),
-  teamId: uuid("team_id").references(() => teamsTable.id, { onDelete: "cascade" }),
   agentId: uuid("agent_id").references(() => agentsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   sourceType: text("source_type").notNull(),
@@ -22,13 +19,11 @@ export const knowledgeSourcesTable = pgTable("knowledge_sources", {
 export const apiConnectorsTable = pgTable("api_connectors", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id"), // Clerk user ID of the owner; nullable for legacy seeded rows
-  organizationId: uuid("organization_id").references(() => organizationsTable.id, { onDelete: "cascade" }),
-  teamId: uuid("team_id").references(() => teamsTable.id, { onDelete: "cascade" }),
   agentId: uuid("agent_id").references(() => agentsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   endpointPattern: text("endpoint_pattern").notNull(),
   authType: text("auth_type").notNull(),
-  connectionId: uuid("connection_id").references(() => organizationConnectionsTable.id, { onDelete: "set null" }),
+  connectionId: uuid("connection_id").references(() => connectionsTable.id, { onDelete: "set null" }),
   authConfig: jsonb("auth_config").notNull().default({}),
   isEnabled: boolean("is_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

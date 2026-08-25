@@ -22,7 +22,6 @@ export const HealthCheckResponse = zod.object({
  */
 export const ListAgentsResponseItem = zod.object({
   "id": zod.string(),
-  "teamId": zod.string().optional(),
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
@@ -37,14 +36,12 @@ export const ListAgentsResponse = zod.array(ListAgentsResponseItem)
  */
 export const CreateAgentBody = zod.object({
   "name": zod.string(),
-  "teamId": zod.string().optional(),
   "description": zod.string().optional(),
   "isEnabled": zod.boolean().optional()
 })
 
 export const CreateAgentResponse = zod.object({
   "id": zod.string(),
-  "teamId": zod.string().optional(),
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
@@ -62,7 +59,6 @@ export const GetAgentParams = zod.object({
 
 export const GetAgentResponse = zod.object({
   "id": zod.string(),
-  "teamId": zod.string().optional(),
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
@@ -86,7 +82,6 @@ export const UpdateAgentBody = zod.object({
 
 export const UpdateAgentResponse = zod.object({
   "id": zod.string(),
-  "teamId": zod.string().optional(),
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
@@ -240,7 +235,7 @@ export const CreateAgentDeploymentTokenResponse = zod.object({
 
 
 /**
- * @summary Refresh an expired organization OAuth connection
+ * @summary Refresh an expired OAuth connection
  */
 export const refreshConnectionPathConnectionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
@@ -250,25 +245,22 @@ export const RefreshConnectionParams = zod.object({
 })
 
 export const refreshConnectionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const refreshConnectionResponseOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const RefreshConnectionResponse = zod.object({
   "id": zod.string().regex(refreshConnectionResponseIdRegExp),
-  "organizationId": zod.string().regex(refreshConnectionResponseOrganizationIdRegExp),
   "name": zod.string(),
   "provider": zod.string(),
   "status": zod.string(),
   "metadata": zod.record(zod.string(), zod.unknown()).optional(),
   "tokenExpiresAt": zod.coerce.date().nullish(),
-  "enabled": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date().optional()
 })
 
 
 /**
- * @summary Revoke and remove an organization connection
+ * @summary Revoke and remove a company connection
  */
 export const deleteConnectionPathConnectionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
@@ -281,125 +273,18 @@ export const DeleteConnectionResponse = zod.void()
 
 
 /**
- * @summary List organizations for the authenticated user
+ * @summary List company connections
  */
-export const listOrganizationsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListOrganizationsResponseItem = zod.object({
-  "id": zod.string().regex(listOrganizationsResponseIdRegExp),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "createdByUserId": zod.string(),
-  "role": zod.enum(['owner', 'admin', 'member']),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-export const ListOrganizationsResponse = zod.array(ListOrganizationsResponseItem)
-
-
-/**
- * @summary Create an organization
- */
-export const CreateOrganizationBody = zod.object({
-  "name": zod.string(),
-  "slug": zod.string()
-})
-
-export const createOrganizationResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const CreateOrganizationResponse = zod.object({
-  "id": zod.string().regex(createOrganizationResponseIdRegExp),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "createdByUserId": zod.string(),
-  "role": zod.enum(['owner', 'admin', 'member']),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-
-
-/**
- * @summary List teams in an organization
- */
-export const listTeamsPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListTeamsParams = zod.object({
-  "organizationId": zod.coerce.string().regex(listTeamsPathOrganizationIdRegExp)
-})
-
-export const listTeamsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listTeamsResponseOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListTeamsResponseItem = zod.object({
-  "id": zod.string().regex(listTeamsResponseIdRegExp),
-  "organizationId": zod.string().regex(listTeamsResponseOrganizationIdRegExp),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "productName": zod.string(),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-export const ListTeamsResponse = zod.array(ListTeamsResponseItem)
-
-
-/**
- * @summary Create a team
- */
-export const createTeamPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const CreateTeamParams = zod.object({
-  "organizationId": zod.coerce.string().regex(createTeamPathOrganizationIdRegExp)
-})
-
-export const CreateTeamBody = zod.object({
-  "name": zod.string(),
-  "slug": zod.string(),
-  "productName": zod.string().optional()
-})
-
-export const createTeamResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createTeamResponseOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const CreateTeamResponse = zod.object({
-  "id": zod.string().regex(createTeamResponseIdRegExp),
-  "organizationId": zod.string().regex(createTeamResponseOrganizationIdRegExp),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "productName": zod.string(),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-
-
-/**
- * @summary List reusable organization connections
- */
-export const listConnectionsPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListConnectionsParams = zod.object({
-  "organizationId": zod.coerce.string().regex(listConnectionsPathOrganizationIdRegExp)
-})
-
 export const listConnectionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listConnectionsResponseOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const ListConnectionsResponseItem = zod.object({
   "id": zod.string().regex(listConnectionsResponseIdRegExp),
-  "organizationId": zod.string().regex(listConnectionsResponseOrganizationIdRegExp),
   "name": zod.string(),
   "provider": zod.string(),
   "status": zod.string(),
   "metadata": zod.record(zod.string(), zod.unknown()).optional(),
   "tokenExpiresAt": zod.coerce.date().nullish(),
-  "enabled": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date().optional()
 })
@@ -407,15 +292,8 @@ export const ListConnectionsResponse = zod.array(ListConnectionsResponseItem)
 
 
 /**
- * @summary Create an encrypted organization connection
+ * @summary Create an encrypted company connection
  */
-export const createConnectionPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const CreateConnectionParams = zod.object({
-  "organizationId": zod.coerce.string().regex(createConnectionPathOrganizationIdRegExp)
-})
-
 export const CreateConnectionBody = zod.object({
   "name": zod.string(),
   "provider": zod.string(),
@@ -426,107 +304,25 @@ export const CreateConnectionBody = zod.object({
 })
 
 export const createConnectionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const createConnectionResponseOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
 export const CreateConnectionResponse = zod.object({
   "id": zod.string().regex(createConnectionResponseIdRegExp),
-  "organizationId": zod.string().regex(createConnectionResponseOrganizationIdRegExp),
   "name": zod.string(),
   "provider": zod.string(),
   "status": zod.string(),
   "metadata": zod.record(zod.string(), zod.unknown()).optional(),
   "tokenExpiresAt": zod.coerce.date().nullish(),
-  "enabled": zod.boolean().optional(),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date().optional()
 })
 
 
 /**
- * @summary List organization members and roles
- */
-export const listOrganizationMembersPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListOrganizationMembersParams = zod.object({
-  "organizationId": zod.coerce.string().regex(listOrganizationMembersPathOrganizationIdRegExp)
-})
-
-export const ListOrganizationMembersResponseItem = zod.object({
-  "id": zod.string(),
-  "organizationId": zod.string(),
-  "userId": zod.string(),
-  "role": zod.enum(['owner', 'admin', 'member']),
-  "createdAt": zod.coerce.date().optional()
-})
-export const ListOrganizationMembersResponse = zod.array(ListOrganizationMembersResponseItem)
-
-
-/**
- * @summary Add or update an organization member
- */
-export const addOrganizationMemberPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const AddOrganizationMemberParams = zod.object({
-  "organizationId": zod.coerce.string().regex(addOrganizationMemberPathOrganizationIdRegExp)
-})
-
-export const AddOrganizationMemberBody = zod.object({
-  "userId": zod.string(),
-  "role": zod.enum(['admin', 'member']).optional()
-})
-
-export const AddOrganizationMemberResponse = zod.object({
-  "id": zod.string(),
-  "organizationId": zod.string(),
-  "userId": zod.string(),
-  "role": zod.enum(['owner', 'admin', 'member']),
-  "createdAt": zod.coerce.date().optional()
-})
-
-
-/**
- * @summary Update an organization member role
- */
-export const updateOrganizationMemberPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const UpdateOrganizationMemberParams = zod.object({
-  "organizationId": zod.coerce.string().regex(updateOrganizationMemberPathOrganizationIdRegExp),
-  "userId": zod.coerce.string()
-})
-
-export const UpdateOrganizationMemberBody = zod.object({
-  "role": zod.enum(['owner', 'admin', 'member'])
-})
-
-export const UpdateOrganizationMemberResponse = zod.object({
-  "id": zod.string(),
-  "organizationId": zod.string(),
-  "userId": zod.string(),
-  "role": zod.enum(['owner', 'admin', 'member']),
-  "createdAt": zod.coerce.date().optional()
-})
-
-
-/**
  * @summary Start an OAuth authorization flow
  */
-export const startConnectionOAuthPathOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const StartConnectionOAuthParams = zod.object({
-  "organizationId": zod.coerce.string().regex(startConnectionOAuthPathOrganizationIdRegExp)
-})
-
-export const startConnectionOAuthBodyTeamIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
 export const StartConnectionOAuthBody = zod.object({
-  "provider": zod.enum(['notion', 'confluence']),
-  "teamId": zod.string().regex(startConnectionOAuthBodyTeamIdRegExp).optional()
+  "provider": zod.enum(['notion', 'confluence'])
 })
 
 export const StartConnectionOAuthResponse = zod.object({
@@ -535,112 +331,18 @@ export const StartConnectionOAuthResponse = zod.object({
 
 
 /**
- * @summary List explicitly enabled team connections
+ * @summary Assign a knowledge source to an agent
  */
-export const listTeamConnectionsPathTeamIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const assignAgentSourcePathAgentIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
+export const assignAgentSourcePathSourceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
 
 
-export const ListTeamConnectionsParams = zod.object({
-  "teamId": zod.coerce.string().regex(listTeamConnectionsPathTeamIdRegExp)
+export const AssignAgentSourceParams = zod.object({
+  "agentId": zod.coerce.string().regex(assignAgentSourcePathAgentIdRegExp),
+  "sourceId": zod.coerce.string().regex(assignAgentSourcePathSourceIdRegExp)
 })
 
-export const listTeamConnectionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const listTeamConnectionsResponseOrganizationIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListTeamConnectionsResponseItem = zod.object({
-  "id": zod.string().regex(listTeamConnectionsResponseIdRegExp),
-  "organizationId": zod.string().regex(listTeamConnectionsResponseOrganizationIdRegExp),
-  "name": zod.string(),
-  "provider": zod.string(),
-  "status": zod.string(),
-  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
-  "tokenExpiresAt": zod.coerce.date().nullish(),
-  "enabled": zod.boolean().optional(),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-export const ListTeamConnectionsResponse = zod.array(ListTeamConnectionsResponseItem)
-
-
-/**
- * @summary Explicitly enable an organization connection for a team
- */
-export const enableTeamConnectionPathTeamIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const enableTeamConnectionPathConnectionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const EnableTeamConnectionParams = zod.object({
-  "teamId": zod.coerce.string().regex(enableTeamConnectionPathTeamIdRegExp),
-  "connectionId": zod.coerce.string().regex(enableTeamConnectionPathConnectionIdRegExp)
-})
-
-export const EnableTeamConnectionResponse = zod.void()
-
-
-/**
- * @summary Disable a connection for a team
- */
-export const disableTeamConnectionPathTeamIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const disableTeamConnectionPathConnectionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const DisableTeamConnectionParams = zod.object({
-  "teamId": zod.coerce.string().regex(disableTeamConnectionPathTeamIdRegExp),
-  "connectionId": zod.coerce.string().regex(disableTeamConnectionPathConnectionIdRegExp)
-})
-
-export const DisableTeamConnectionResponse = zod.void()
-
-
-/**
- * @summary List knowledge sources explicitly granted to a team
- */
-export const listTeamSourcesPathTeamIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListTeamSourcesParams = zod.object({
-  "teamId": zod.coerce.string().regex(listTeamSourcesPathTeamIdRegExp)
-})
-
-export const ListTeamSourcesResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-export const ListTeamSourcesResponse = zod.array(ListTeamSourcesResponseItem)
-
-
-/**
- * @summary Grant an organization source to a team
- */
-export const enableTeamSourcePathTeamIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const EnableTeamSourceParams = zod.object({
-  "teamId": zod.coerce.string().regex(enableTeamSourcePathTeamIdRegExp),
-  "sourceId": zod.coerce.string()
-})
-
-export const EnableTeamSourceResponse = zod.void()
-
-
-/**
- * @summary Remove a source grant from a team
- */
-export const disableTeamSourcePathTeamIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const DisableTeamSourceParams = zod.object({
-  "teamId": zod.coerce.string().regex(disableTeamSourcePathTeamIdRegExp),
-  "sourceId": zod.coerce.string()
-})
-
-export const DisableTeamSourceResponse = zod.void()
+export const AssignAgentSourceResponse = zod.void()
 
 
 /**
@@ -1498,8 +1200,7 @@ export const BrowseSourceIntegrationQueryParams = zod.object({
   "query": zod.coerce.string().optional(),
   "cursor": zod.coerce.string().optional(),
   "spaceId": zod.coerce.string().optional(),
-  "organizationConnectionId": zod.coerce.string().optional(),
-  "teamId": zod.coerce.string().optional()
+  "connectionId": zod.coerce.string().optional()
 })
 
 export const BrowseSourceIntegrationResponse = zod.object({

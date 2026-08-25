@@ -8,7 +8,6 @@
 
 export interface AgentInput {
   name: string;
-  teamId?: string;
   description?: string;
   isEnabled?: boolean;
 }

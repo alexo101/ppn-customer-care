@@ -3,8 +3,8 @@ import {
   db,
   knowledgeChunksTable,
   knowledgeSourcesTable,
+  agentSourceAssignmentsTable,
 } from "@workspace/db";
-import { agentSourceAssignmentsTable, teamSourceGrantsTable } from "@workspace/db";
 import type { EmbeddingProvider, RetrievedChunk } from "./llm";
 
 export async function retrieveRelevantChunks(
@@ -12,7 +12,7 @@ export async function retrieveRelevantChunks(
   queryText: string,
   embeddingProvider: EmbeddingProvider,
   limit = 5,
-  scope?: { teamId?: string; agentId?: string },
+  scope?: { agentId?: string },
 ): Promise<{ chunks: RetrievedChunk[]; totalTokens: number; model: string }> {
   if (sourceIds.length === 0 || !queryText.trim()) {
     return { chunks: [], totalTokens: 0, model: "none" };
@@ -39,14 +39,6 @@ export async function retrieveRelevantChunks(
       and(
         inArray(knowledgeChunksTable.sourceId, sourceIds),
         eq(knowledgeSourcesTable.isEnabled, true),
-        scope?.teamId ? eq(knowledgeSourcesTable.teamId, scope.teamId) : undefined,
-        scope?.teamId
-          ? sql`EXISTS (
-              SELECT 1 FROM ${teamSourceGrantsTable} grant_row
-              WHERE grant_row.source_id = ${knowledgeSourcesTable.id}
-                AND grant_row.team_id = ${scope.teamId}
-            )`
-          : undefined,
         scope?.agentId
           ? sql`EXISTS (
               SELECT 1 FROM ${agentSourceAssignmentsTable} assignment

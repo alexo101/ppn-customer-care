@@ -10,7 +10,7 @@ import appearanceRouter from "./appearance";
 import authRouter from "./auth";
 import agentsRouter from "./agents";
 import trainingQuestionsRouter from "./training-questions";
-import organizationsRouter from "./organizations";
+import connectionsRouter from "./connections";
 
 const router: IRouter = Router();
 
@@ -25,6 +25,6 @@ router.use(targetsRouter);
 router.use(analyticsRouter);
 router.use(appearanceRouter);
 router.use(authRouter);
-router.use(organizationsRouter);
+router.use(connectionsRouter);
 
 export default router;

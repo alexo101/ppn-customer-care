@@ -10,14 +10,11 @@ import type { ConnectionMetadata } from './connectionMetadata';
 export interface Connection {
   /** @pattern ^[0-9a-fA-F-]{36}$ */
   id: string;
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  organizationId: string;
   name: string;
   provider: string;
   status: string;
   metadata?: ConnectionMetadata;
   tokenExpiresAt?: Date | null;
-  enabled?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }

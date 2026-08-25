@@ -3,7 +3,7 @@ import { Show } from '@clerk/react';
 import { useAuth } from '@clerk/react';
 import { useSignIn } from '@clerk/react/legacy';
 import { Link, Redirect, useLocation } from 'wouter';
-import { Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { AuthLayout } from '@/components/auth-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ function SignupForm() {
   const register = useRegister();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const pending = register.isPending || !isLoaded;
@@ -85,17 +86,28 @@ function SignupForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="signup-password" className="text-xs">Password</Label>
-          <Input
-            id="signup-password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={15}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-10 bg-background"
-            placeholder="At least 15 characters"
-          />
+          <div className="relative">
+            <Input
+              id="signup-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              required
+              minLength={15}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-10 bg-background pr-10"
+              placeholder="At least 15 characters"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((visible) => !visible)}
+              className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         {error && (

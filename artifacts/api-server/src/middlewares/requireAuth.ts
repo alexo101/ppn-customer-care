@@ -1,6 +1,5 @@
 import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
-import { ensureDefaultTenant, getTenantContext, type TenantContext } from "../lib/tenant";
 import { and, eq } from "drizzle-orm";
 import { db, agentDeploymentsTable, agentsTable } from "@workspace/db";
 import { hashDeploymentToken } from "../lib/connection-secrets";
@@ -11,40 +10,9 @@ declare global {
     interface Request {
       userId: string;
       userEmail?: string;
-      tenant?: TenantContext;
       file?: Express.Multer.File;
     }
   }
-}
-
-/**
- * Resolves the application tenant after Clerk authentication.
- * The selected team may be supplied by route/query context or the
- * X-Team-Id header. A default tenant is created during first use so
- * existing installations can be migrated without a separate onboarding job.
- */
-export async function requireTenant(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  const requestedTeamId =
-    typeof req.params.teamId === "string"
-      ? req.params.teamId
-      : typeof req.query.teamId === "string"
-        ? req.query.teamId
-        : typeof req.headers["x-team-id"] === "string"
-          ? req.headers["x-team-id"]
-          : undefined;
-  const tenant =
-    (await getTenantContext(req.userId, requestedTeamId)) ??
-    (requestedTeamId ? null : await ensureDefaultTenant(req.userId));
-  if (!tenant) {
-    res.status(403).json({ error: "You are not a member of this team." });
-    return;
-  }
-  req.tenant = tenant;
-  next();
 }
 
 export async function requireAuthOrDeployment(
@@ -79,7 +47,6 @@ export async function requireAuthOrDeployment(
     return;
   }
   req.userId = deployment.agent.userId;
-  if (deployment.agent.teamId) req.headers["x-team-id"] = deployment.agent.teamId;
   next();
 }
 

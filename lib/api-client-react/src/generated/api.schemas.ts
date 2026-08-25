@@ -5,105 +5,16 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
-export type OrganizationRole = typeof OrganizationRole[keyof typeof OrganizationRole];
-
-
-export const OrganizationRole = {
-  owner: 'owner',
-  admin: 'admin',
-  member: 'member',
-} as const;
-
-export interface Organization {
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  id: string;
-  name: string;
-  slug: string;
-  createdByUserId: string;
-  role: OrganizationRole;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface OrganizationInput {
-  name: string;
-  slug: string;
-}
-
-export type OrganizationMemberRole = typeof OrganizationMemberRole[keyof typeof OrganizationMemberRole];
-
-
-export const OrganizationMemberRole = {
-  owner: 'owner',
-  admin: 'admin',
-  member: 'member',
-} as const;
-
-export interface OrganizationMember {
-  id: string;
-  organizationId: string;
-  userId: string;
-  role: OrganizationMemberRole;
-  createdAt?: string;
-}
-
-export type OrganizationMemberInputRole = typeof OrganizationMemberInputRole[keyof typeof OrganizationMemberInputRole];
-
-
-export const OrganizationMemberInputRole = {
-  admin: 'admin',
-  member: 'member',
-} as const;
-
-export interface OrganizationMemberInput {
-  userId: string;
-  role?: OrganizationMemberInputRole;
-}
-
-export type OrganizationMemberRoleInputRole = typeof OrganizationMemberRoleInputRole[keyof typeof OrganizationMemberRoleInputRole];
-
-
-export const OrganizationMemberRoleInputRole = {
-  owner: 'owner',
-  admin: 'admin',
-  member: 'member',
-} as const;
-
-export interface OrganizationMemberRoleInput {
-  role: OrganizationMemberRoleInputRole;
-}
-
-export interface Team {
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  id: string;
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  organizationId: string;
-  name: string;
-  slug: string;
-  productName: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface TeamInput {
-  name: string;
-  slug: string;
-  productName?: string;
-}
-
 export type ConnectionMetadata = { [key: string]: unknown };
 
 export interface Connection {
   /** @pattern ^[0-9a-fA-F-]{36}$ */
   id: string;
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  organizationId: string;
   name: string;
   provider: string;
   status: string;
   metadata?: ConnectionMetadata;
   tokenExpiresAt?: string | null;
-  enabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -129,8 +40,6 @@ export const OAuthStartInputProvider = {
 
 export interface OAuthStartInput {
   provider: OAuthStartInputProvider;
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  teamId?: string;
 }
 
 export type AgentSettingsConfiguration = { [key: string]: unknown };
@@ -177,7 +86,6 @@ export interface SuccessResponse {
 
 export interface Agent {
   id: string;
-  teamId?: string;
   name: string;
   description: string;
   isEnabled: boolean;
@@ -187,7 +95,6 @@ export interface Agent {
 
 export interface AgentInput {
   name: string;
-  teamId?: string;
   description?: string;
   isEnabled?: boolean;
 }
@@ -928,8 +835,7 @@ connectorName: BrowseSourceIntegrationConnectorName;
 query?: string;
 cursor?: string;
 spaceId?: string;
-organizationConnectionId?: string;
-teamId?: string;
+connectionId?: string;
 };
 
 export type BrowseSourceIntegrationConnectorName = typeof BrowseSourceIntegrationConnectorName[keyof typeof BrowseSourceIntegrationConnectorName];

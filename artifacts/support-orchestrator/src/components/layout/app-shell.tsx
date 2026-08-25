@@ -19,7 +19,6 @@ import { useListAgents } from "@workspace/api-client-react";
 import { agentConfigHref, parseAgentConfigLocation } from "@/lib/agent-config";
 import { AgentConfigSidebar } from "@/components/layout/agent-config-sidebar";
 import { getUserAgentsQueryKey } from "@/lib/agents-query";
-import { useTenantContext } from "@/components/tenant-context";
 
 function BrandMark() {
   return (
@@ -147,14 +146,6 @@ export function AppShell({
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { isLoaded, isSignedIn, userId } = useAuth();
-  const {
-    organizationId,
-    teamId,
-    organizations,
-    teams,
-    setOrganizationId,
-    setTeamId,
-  } = useTenantContext();
   const { data: agents = [] } = useListAgents({
     query: {
       enabled: isLoaded && isSignedIn && Boolean(userId),
@@ -190,28 +181,6 @@ export function AppShell({
         <aside className="hidden md:flex w-60 bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex-col flex-shrink-0 relative z-20">
           <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
             <BrandMark />
-          </div>
-          <div className="px-3 py-3 border-b border-sidebar-border space-y-2">
-            <select
-              value={organizationId ?? ""}
-              onChange={(event) => setOrganizationId(event.target.value)}
-              className="w-full h-8 rounded-md border border-sidebar-border bg-sidebar-accent px-2 text-xs"
-              aria-label="Select organization"
-            >
-              {organizations.map((organization) => (
-                <option key={organization.id} value={organization.id}>{organization.name}</option>
-              ))}
-            </select>
-            <select
-              value={teamId ?? ""}
-              onChange={(event) => setTeamId(event.target.value)}
-              className="w-full h-8 rounded-md border border-sidebar-border bg-sidebar-accent px-2 text-xs"
-              aria-label="Select team"
-            >
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>{team.name}</option>
-              ))}
-            </select>
           </div>
 
           <NavLinks

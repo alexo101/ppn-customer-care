@@ -35,7 +35,6 @@ import {
 
 import { ensureEveryoneTarget, getOwnedAgent } from "../lib/agents";
 import { logger } from "../lib/logger";
-import { getTenantContext, ensureDefaultTenant } from "../lib/tenant";
 import {
   databaseErrorDetails,
   replaceRuleLinks,
@@ -61,13 +60,6 @@ import {
 const router: IRouter = Router();
 let builtinVocabulariesReady = false;
 
-function activeTeamId(req: { headers: Record<string, string | string[] | undefined> }): string | undefined {
-  return typeof req.headers["x-team-id"] === "string" ? req.headers["x-team-id"] : undefined;
-}
-
-const ownerFilter = (userId: string) =>
-  eq(orchestratorRulesTable.userId, userId);
-
 router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   const parsed = ListRulesQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -76,9 +68,8 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   }
 
   const agentId = parsed.data.agentId;
-  let agent: Awaited<ReturnType<typeof getOwnedAgent>> | null = null;
   if (agentId) {
-    agent = await getOwnedAgent(req.userId, agentId, activeTeamId(req));
+    const agent = await getOwnedAgent(req.userId, agentId);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
@@ -87,8 +78,8 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   }
 
   const where = agentId
-    ? and(ownerFilter(req.userId), eq(orchestratorRulesTable.agentId, agentId), eq(orchestratorRulesTable.teamId, agent?.teamId ?? ""))
-    : ownerFilter(req.userId);
+    ? eq(orchestratorRulesTable.agentId, agentId)
+    : undefined;
 
   const rows = await db
     .select()
@@ -118,21 +109,13 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "agentId is required." });
     return;
   }
-  const agent = await getOwnedAgent(req.userId, agentId, activeTeamId(req));
+  const agent = await getOwnedAgent(req.userId, agentId);
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
     return;
   }
-  const tenant = activeTeamId(req)
-    ? await getTenantContext(req.userId, activeTeamId(req))
-    : agent.teamId ? await getTenantContext(req.userId, agent.teamId) : await ensureDefaultTenant(req.userId);
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
-    return;
-  }
 
   const allowed = await validateRuleTargets(
-    req.userId,
     agentId,
     parsed.data.categoryIds,
     parsed.data.sourceIds,
@@ -148,8 +131,6 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
         .insert(orchestratorRulesTable)
         .values({
           userId: req.userId,
-          organizationId: tenant.organizationId,
-          teamId: tenant.teamId,
           agentId,
           name: parsed.data.name,
           description: parsed.data.description ?? "",
@@ -187,7 +168,6 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
     res.status(500).json({ error: ruleSaveClientMessage(error) });
   }
 });
-
 router.post(
   "/agents/:agentId/rule-authoring/messages",
   requireAuth,
@@ -236,30 +216,14 @@ router.post(
           name: intentCategoriesTable.name,
         })
         .from(intentCategoriesTable)
-        .where(
-          and(
-            eq(intentCategoriesTable.agentId, params.data.agentId),
-            or(
-              eq(intentCategoriesTable.userId, req.userId),
-              isNull(intentCategoriesTable.userId),
-            ),
-          ),
-        ),
+        .where(eq(intentCategoriesTable.agentId, params.data.agentId)),
       db
         .select({
           id: knowledgeSourcesTable.id,
           name: knowledgeSourcesTable.name,
         })
         .from(knowledgeSourcesTable)
-        .where(
-          and(
-            eq(knowledgeSourcesTable.agentId, params.data.agentId),
-            or(
-              eq(knowledgeSourcesTable.userId, req.userId),
-              isNull(knowledgeSourcesTable.userId),
-            ),
-          ),
-        ),
+        .where(eq(knowledgeSourcesTable.agentId, params.data.agentId)),
       db
         .select({
           kind: ruleVocabulariesTable.kind,
@@ -273,10 +237,7 @@ router.post(
               isNull(ruleVocabulariesTable.agentId),
               eq(ruleVocabulariesTable.isBuiltin, true),
             ),
-            and(
-              eq(ruleVocabulariesTable.agentId, params.data.agentId),
-              eq(ruleVocabulariesTable.userId, req.userId),
-            ),
+            eq(ruleVocabulariesTable.agentId, params.data.agentId),
           ),
         ),
       db
@@ -290,10 +251,6 @@ router.post(
           and(
             eq(audienceTargetsTable.agentId, params.data.agentId),
             eq(audienceTargetsTable.isEnabled, true),
-            or(
-              eq(audienceTargetsTable.userId, req.userId),
-              isNull(audienceTargetsTable.userId),
-            ),
           ),
         ),
     ]);
@@ -349,12 +306,7 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(orchestratorRulesTable)
-    .where(
-      and(
-        eq(orchestratorRulesTable.id, params.data.id),
-        eq(orchestratorRulesTable.userId, req.userId),
-      ),
-    )
+    .where(eq(orchestratorRulesTable.id, params.data.id))
     .limit(1);
 
   if (!existing) {
@@ -363,7 +315,6 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const allowed = await validateRuleTargets(
-    req.userId,
     existing.agentId,
     parsed.data.categoryIds,
     parsed.data.sourceIds,
@@ -412,12 +363,7 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
       const [updated] = await tx
         .update(orchestratorRulesTable)
         .set(updates)
-        .where(
-          and(
-            eq(orchestratorRulesTable.id, params.data.id),
-            eq(orchestratorRulesTable.userId, req.userId),
-          ),
-        )
+        .where(eq(orchestratorRulesTable.id, params.data.id))
         .returning();
 
       if (!updated) return null;
@@ -461,12 +407,7 @@ router.delete("/rules/:id", requireAuth, async (req, res): Promise<void> => {
 
   const deleted = await db
     .delete(orchestratorRulesTable)
-    .where(
-      and(
-        eq(orchestratorRulesTable.id, params.data.id),
-        eq(orchestratorRulesTable.userId, req.userId),
-      ),
-    )
+    .where(eq(orchestratorRulesTable.id, params.data.id))
     .returning({ id: orchestratorRulesTable.id });
 
   if (deleted.length === 0) {
@@ -490,15 +431,7 @@ router.get(
     const [rule] = await db
       .select({ id: orchestratorRulesTable.id })
       .from(orchestratorRulesTable)
-      .where(
-        and(
-          eq(orchestratorRulesTable.id, params.data.id),
-          or(
-            eq(orchestratorRulesTable.userId, req.userId),
-            isNull(orchestratorRulesTable.userId),
-          ),
-        ),
-      );
+      .where(eq(orchestratorRulesTable.id, params.data.id));
     if (!rule) {
       res.status(404).json({ error: "Rule not found" });
       return;
@@ -518,14 +451,9 @@ router.get(
     const cats = await db
       .select()
       .from(intentCategoriesTable)
-      .where(
-        or(
-          eq(intentCategoriesTable.userId, req.userId),
-          isNull(intentCategoriesTable.userId),
-        ),
-      );
+      .where(inArray(intentCategoriesTable.id, catIds));
 
-    res.json(cats.filter((c) => catIds.includes(c.id)).map(toCategory));
+    res.json(cats.map(toCategory));
   },
 );
 
@@ -548,22 +476,13 @@ router.post(
     const [rule] = await db
       .select()
       .from(orchestratorRulesTable)
-      .where(
-        and(
-          eq(orchestratorRulesTable.id, params.data.id),
-          or(
-            eq(orchestratorRulesTable.userId, req.userId),
-            isNull(orchestratorRulesTable.userId),
-          ),
-        ),
-      );
+      .where(eq(orchestratorRulesTable.id, params.data.id));
     if (!rule) {
       res.status(404).json({ error: "Rule not found" });
       return;
     }
 
     const allowed = await validateRuleTargets(
-      req.userId,
       rule.agentId,
       [parsed.data.categoryId],
       undefined,
@@ -595,15 +514,7 @@ router.delete(
     const [rule] = await db
       .select({ id: orchestratorRulesTable.id })
       .from(orchestratorRulesTable)
-      .where(
-        and(
-          eq(orchestratorRulesTable.id, params.data.id),
-          or(
-            eq(orchestratorRulesTable.userId, req.userId),
-            isNull(orchestratorRulesTable.userId),
-          ),
-        ),
-      );
+      .where(eq(orchestratorRulesTable.id, params.data.id));
     if (!rule) {
       res.status(404).json({ error: "Rule not found" });
       return;
@@ -652,10 +563,7 @@ router.get(
               isNull(ruleVocabulariesTable.agentId),
               eq(ruleVocabulariesTable.isBuiltin, true),
             ),
-            and(
-              eq(ruleVocabulariesTable.agentId, parsed.data.agentId),
-              eq(ruleVocabulariesTable.userId, req.userId),
-            ),
+            eq(ruleVocabulariesTable.agentId, parsed.data.agentId),
           ),
         ),
       )
@@ -836,7 +744,6 @@ router.delete(
 );
 
 async function validateRuleTargets(
-  userId: string,
   agentId: string | null,
   categoryIds: string[] | undefined,
   sourceIds: string[] | undefined,
@@ -850,7 +757,6 @@ async function validateRuleTargets(
       .select({
         id: intentCategoriesTable.id,
         agentId: intentCategoriesTable.agentId,
-        userId: intentCategoriesTable.userId,
       })
       .from(intentCategoriesTable)
       .where(inArray(intentCategoriesTable.id, uniqueIds));
@@ -858,12 +764,7 @@ async function validateRuleTargets(
       res.status(400).json({ error: "One or more categories were not found." });
       return false;
     }
-    const invalid = cats.some((c) => {
-      const owned = c.userId === userId || c.userId == null;
-      const sameAgent = !agentId || c.agentId === agentId;
-      return !owned || !sameAgent;
-    });
-    if (invalid) {
+    if (cats.some((c) => agentId && c.agentId !== agentId)) {
       res.status(400).json({ error: "Categories must belong to this agent." });
       return false;
     }
@@ -875,7 +776,6 @@ async function validateRuleTargets(
       .select({
         id: knowledgeSourcesTable.id,
         agentId: knowledgeSourcesTable.agentId,
-        userId: knowledgeSourcesTable.userId,
       })
       .from(knowledgeSourcesTable)
       .where(inArray(knowledgeSourcesTable.id, uniqueIds));
@@ -883,12 +783,7 @@ async function validateRuleTargets(
       res.status(400).json({ error: "One or more sources were not found." });
       return false;
     }
-    const invalid = sources.some((s) => {
-      const owned = s.userId === userId || s.userId == null;
-      const sameAgent = !agentId || s.agentId === agentId;
-      return !owned || !sameAgent;
-    });
-    if (invalid) {
+    if (sources.some((s) => agentId && s.agentId !== agentId)) {
       res.status(400).json({ error: "Sources must belong to this agent." });
       return false;
     }
@@ -900,7 +795,6 @@ async function validateRuleTargets(
       .select({
         id: apiConnectorsTable.id,
         agentId: apiConnectorsTable.agentId,
-        userId: apiConnectorsTable.userId,
       })
       .from(apiConnectorsTable)
       .where(inArray(apiConnectorsTable.id, uniqueIds));
@@ -908,12 +802,7 @@ async function validateRuleTargets(
       res.status(400).json({ error: "One or more connectors were not found." });
       return false;
     }
-    const invalid = connectors.some((connector) => {
-      const owned = connector.userId === userId || connector.userId == null;
-      const sameAgent = !agentId || connector.agentId === agentId;
-      return !owned || !sameAgent;
-    });
-    if (invalid) {
+    if (connectors.some((connector) => agentId && connector.agentId !== agentId)) {
       res.status(400).json({ error: "Connectors must belong to this agent." });
       return false;
     }
@@ -925,7 +814,6 @@ async function validateRuleTargets(
       .select({
         id: audienceTargetsTable.id,
         agentId: audienceTargetsTable.agentId,
-        userId: audienceTargetsTable.userId,
       })
       .from(audienceTargetsTable)
       .where(inArray(audienceTargetsTable.id, uniqueIds));
@@ -933,12 +821,7 @@ async function validateRuleTargets(
       res.status(400).json({ error: "One or more audience targets were not found." });
       return false;
     }
-    const invalid = targets.some((target) => {
-      const owned = target.userId === userId || target.userId == null;
-      const sameAgent = !agentId || target.agentId === agentId;
-      return !owned || !sameAgent;
-    });
-    if (invalid) {
+    if (targets.some((target) => agentId && target.agentId !== agentId)) {
       res.status(400).json({ error: "Audience targets must belong to this agent." });
       return false;
     }

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, audienceTargetsTable, targetConditionsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -10,11 +10,6 @@ import {
   DeleteTargetParams,
 } from "@workspace/api-zod";
 import { getOwnedAgent, ensureEveryoneTarget } from "../lib/agents";
-import { getTenantContext, ensureDefaultTenant } from "../lib/tenant";
-
-function activeTeamId(req: { headers: Record<string, string | string[] | undefined> }): string | undefined {
-  return typeof req.headers["x-team-id"] === "string" ? req.headers["x-team-id"] : undefined;
-}
 import {
   isMatchMode,
   validateTargetCondition,
@@ -107,7 +102,7 @@ router.get("/targets", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const agent = await getOwnedAgent(req.userId, parsed.data.agentId, activeTeamId(req));
+  const agent = await getOwnedAgent(req.userId, parsed.data.agentId);
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
     return;
@@ -117,7 +112,7 @@ router.get("/targets", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(audienceTargetsTable)
-    .where(and(eq(audienceTargetsTable.userId, req.userId), eq(audienceTargetsTable.agentId, parsed.data.agentId)))
+    .where(eq(audienceTargetsTable.agentId, parsed.data.agentId))
     .orderBy(audienceTargetsTable.name);
 
   const loaded = await loadTargets(rows.map((row) => row.id));
@@ -149,16 +144,9 @@ router.post("/targets", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const agent = await getOwnedAgent(req.userId, parsed.data.agentId, activeTeamId(req));
+  const agent = await getOwnedAgent(req.userId, parsed.data.agentId);
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
-    return;
-  }
-  const tenant = activeTeamId(req)
-    ? await getTenantContext(req.userId, activeTeamId(req))
-    : agent.teamId ? await getTenantContext(req.userId, agent.teamId) : await ensureDefaultTenant(req.userId);
-  if (!tenant) {
-    res.status(403).json({ error: "Invalid team context." });
     return;
   }
 
@@ -166,8 +154,6 @@ router.post("/targets", requireAuth, async (req, res): Promise<void> => {
     .insert(audienceTargetsTable)
     .values({
       userId: req.userId,
-      organizationId: tenant.organizationId,
-      teamId: tenant.teamId,
       agentId: parsed.data.agentId,
       name,
       description: parsed.data.description?.trim() ?? "",
@@ -197,7 +183,7 @@ router.patch("/targets/:id", requireAuth, async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(audienceTargetsTable)
-    .where(and(eq(audienceTargetsTable.id, params.data.id), eq(audienceTargetsTable.userId, req.userId)))
+    .where(eq(audienceTargetsTable.id, params.data.id))
     .limit(1);
 
   if (!existing) {
@@ -234,7 +220,7 @@ router.patch("/targets/:id", requireAuth, async (req, res): Promise<void> => {
   const [row] = await db
     .update(audienceTargetsTable)
     .set(updates)
-    .where(and(eq(audienceTargetsTable.id, params.data.id), eq(audienceTargetsTable.userId, req.userId)))
+    .where(eq(audienceTargetsTable.id, params.data.id))
     .returning();
 
   if (!row) {
@@ -259,7 +245,7 @@ router.delete("/targets/:id", requireAuth, async (req, res): Promise<void> => {
 
   const deleted = await db
     .delete(audienceTargetsTable)
-    .where(and(eq(audienceTargetsTable.id, params.data.id), eq(audienceTargetsTable.userId, req.userId)))
+    .where(eq(audienceTargetsTable.id, params.data.id))
     .returning({ id: audienceTargetsTable.id });
 
   if (deleted.length === 0) {

@@ -1,46 +1,33 @@
-import { useEffect } from "react";
 import {
   CheckCircle2,
   ExternalLink,
   Link2,
   Plus,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import {
   useListConnections,
-  useListTeamConnections,
   useStartConnectionOAuth,
-  useEnableTeamConnection,
-  useDisableTeamConnection,
+  useDeleteConnection,
   getListConnectionsQueryKey,
-  getListTeamConnectionsQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useTenantContext } from "@/components/tenant-context";
 
 export default function ConnectionsPage() {
-  const { organizationId, teamId, organizations, setOrganizationId } = useTenantContext();
-  const connectionsQuery = useListConnections(organizationId ?? "", {
-    query: { enabled: Boolean(organizationId), queryKey: getListConnectionsQueryKey(organizationId ?? "") },
+  const queryClient = useQueryClient();
+  const connectionsQuery = useListConnections({
+    query: { queryKey: getListConnectionsQueryKey() },
   });
   const oauth = useStartConnectionOAuth();
-  const enabledQuery = useListTeamConnections(
-    teamId ?? "",
-    { query: { enabled: Boolean(teamId), queryKey: getListTeamConnectionsQueryKey(teamId ?? "") } },
-  );
-  const enable = useEnableTeamConnection();
-  const disable = useDisableTeamConnection();
-
-  useEffect(() => {
-    if (!organizationId && organizations[0]) setOrganizationId(organizations[0].id);
-  }, [organizationId, organizations, setOrganizationId]);
+  const deleteConnection = useDeleteConnection();
 
   const connect = (provider: "notion" | "confluence") => {
-    if (!organizationId) return;
     oauth.mutate(
-      { organizationId, data: { provider } },
+      { data: { provider } },
       {
         onSuccess: (result) => {
           window.location.assign(result.authorizationUrl);
@@ -49,38 +36,29 @@ export default function ConnectionsPage() {
     );
   };
 
+  const connectedProviders = new Set(
+    (connectionsQuery.data ?? [])
+      .filter((c) => c.status === "connected")
+      .map((c) => c.provider.toLowerCase()),
+  );
+
   return (
     <div className="flex-1 overflow-auto p-6 md:p-8">
       <div className="max-w-5xl mx-auto space-y-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Organization</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Company</p>
             <h1 className="text-2xl font-semibold tracking-tight mt-1">Connections</h1>
             <p className="text-muted-foreground mt-2 max-w-2xl">
-              Connect provider accounts once, then explicitly enable them for each team.
-              New teams start with no connections.
+              Connect each provider once for this company. Tokens are encrypted and shared
+              across all agents.
             </p>
           </div>
           <Badge variant="outline" className="gap-1.5">
             <Link2 className="w-3.5 h-3.5" />
-            Reusable at organization level
+            One credential per provider
           </Badge>
         </div>
-
-        {organizations.length > 1 && (
-          <select
-            value={organizationId ?? ""}
-            onChange={(event) => setOrganizationId(event.target.value)}
-            className="h-10 rounded-md border bg-background px-3 text-sm"
-            aria-label="Select organization"
-          >
-            {organizations.map((organization) => (
-              <option key={organization.id} value={organization.id}>
-                {organization.name}
-              </option>
-            ))}
-          </select>
-        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           {(["notion", "confluence"] as const).map((provider) => (
@@ -88,16 +66,16 @@ export default function ConnectionsPage() {
               <CardHeader>
                 <CardTitle className="capitalize">{provider}</CardTitle>
                 <CardDescription>
-                  Authorize {provider} for this organization.
+                  Authorize {provider} for this company.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button
                   onClick={() => connect(provider)}
-                  disabled={!organizationId || oauth.isPending}
+                  disabled={oauth.isPending || connectedProviders.has(provider)}
                 >
                   <Plus className="w-4 h-4" />
-                  Connect {provider}
+                  {connectedProviders.has(provider) ? "Connected" : `Connect ${provider}`}
                 </Button>
               </CardContent>
             </Card>
@@ -106,7 +84,7 @@ export default function ConnectionsPage() {
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Organization connections</h2>
+            <h2 className="font-semibold">Company connections</h2>
             <Button variant="ghost" size="sm" onClick={() => connectionsQuery.refetch()}>
               <RefreshCw className="w-3.5 h-3.5" />
               Refresh
@@ -128,35 +106,26 @@ export default function ConnectionsPage() {
                         </p>
                       </div>
                     </div>
-                    {enabledQuery.data?.some((item) => item.id === connection.id) ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          if (teamId) {
-                            disable.mutate({ teamId, connectionId: connection.id }, {
-                              onSuccess: () => enabledQuery.refetch(),
-                            });
-                          }
-                        }}
-                      >
-                        Enabled for team
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          if (teamId) {
-                            enable.mutate({ teamId, connectionId: connection.id }, {
-                              onSuccess: () => enabledQuery.refetch(),
-                            });
-                          }
-                        }}
-                      >
-                        Enable for team
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        deleteConnection.mutate(
+                          { connectionId: connection.id },
+                          {
+                            onSuccess: () => {
+                              queryClient.invalidateQueries({
+                                queryKey: getListConnectionsQueryKey(),
+                              });
+                            },
+                          },
+                        );
+                      }}
+                      disabled={deleteConnection.isPending}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Remove
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -164,8 +133,7 @@ export default function ConnectionsPage() {
           ) : (
             <Card className="border-dashed">
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                No organization connections yet. Connect a provider above to make it available
-                for explicit team assignment.
+                No connections yet. Connect a provider above.
               </CardContent>
             </Card>
           )}
