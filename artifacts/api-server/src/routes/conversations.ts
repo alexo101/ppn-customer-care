@@ -59,8 +59,6 @@ import {
 
 const router: IRouter = Router();
 
-router.use(requireAuth);
-
 // All conversation endpoints require authentication and are scoped to the authenticated user.
 // ── List conversations ────────────────────────────────────────────────────
 router.get("/conversations", requireAuth, async (req, res): Promise<void> => {
