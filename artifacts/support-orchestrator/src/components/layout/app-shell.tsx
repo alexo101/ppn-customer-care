@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth, useClerk, useUser } from "@clerk/react";
-import { LayoutDashboard, Network, Bot, Link2, LogOutIcon, Menu } from "lucide-react";
+import { LayoutDashboard, Network, Bot, LogOutIcon, Menu, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import { useListAgents } from "@workspace/api-client-react";
 import { agentConfigHref, parseAgentConfigLocation } from "@/lib/agent-config";
 import { AgentConfigSidebar } from "@/components/layout/agent-config-sidebar";
 import { getUserAgentsQueryKey } from "@/lib/agents-query";
+import { useWorkspaceAccess } from "@/components/workspace-access";
 
 function BrandMark() {
   return (
@@ -66,20 +67,20 @@ function NavLinks({
         Dashboard
       </Link>
       <Link
-        href="/connections"
+        href="/team"
         onClick={onNavigate}
         className={cn(
           "relative flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-colors",
-          location.startsWith("/connections")
+          location.startsWith("/team")
             ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
         )}
       >
-        {location.startsWith("/connections") && (
+        {location.startsWith("/team") && (
           <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-sidebar-primary" />
         )}
-        <Link2 className="w-4 h-4 shrink-0" />
-        Connections
+        <Users className="w-4 h-4 shrink-0" />
+        Team
       </Link>
       <div>
         <div
@@ -143,6 +144,7 @@ export function AppShell({
   const [location] = useLocation();
   const { signOut } = useClerk();
   const { user } = useUser();
+  const { canEdit } = useWorkspaceAccess();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { isLoaded, isSignedIn, userId } = useAuth();
@@ -271,6 +273,11 @@ export function AppShell({
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-w-0 bg-background relative z-10 overflow-hidden">
+          {!canEdit && (
+            <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-900 dark:text-amber-200">
+              View only — you can browse this workspace but cannot change configuration.
+            </div>
+          )}
           {children}
         </main>
       </div>

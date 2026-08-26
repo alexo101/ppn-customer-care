@@ -29,16 +29,14 @@ import type {
   ApiConnector,
   Appearance,
   AppearanceUpdate,
-  BrowseSourceIntegrationParams,
   CategoryInput,
   CategoryUpdate,
-  Connection,
-  ConnectionInput,
   ConnectorInput,
   ConnectorUpdate,
   Conversation,
   ConversationInput,
   ConversationUpdate,
+  CurrentMember,
   DeploymentToken,
   ErrorResponse,
   FeedbackInput,
@@ -46,6 +44,7 @@ import type {
   ImportAppearanceInput,
   ImportAppearanceResult,
   IntentCategory,
+  InviteMemberInput,
   KnowledgeSource,
   ListAnalyticsLogsParams,
   ListCategoriesParams,
@@ -58,12 +57,9 @@ import type {
   ListTargetsParams,
   ListTrainingQuestionsParams,
   Message,
-  OAuthStartInput,
   OrchestratorLog,
   OrchestratorRule,
   Question,
-  RegisterInput,
-  RegisterResult,
   RuleAuthoringRequest,
   RuleAuthoringResponse,
   RuleCategoryLinkInput,
@@ -74,12 +70,9 @@ import type {
   RuleVocabularyUpdate,
   SendMessageInput,
   SendMessageResult,
-  SourceBrowseResult,
   SourceInput,
-  SourceIntegration,
   SourceUpdate,
   SourceUploadInput,
-  StartConnectionOAuth200,
   SuccessResponse,
   Target,
   TargetInput,
@@ -88,7 +81,9 @@ import type {
   TrainingQuestionBulkInput,
   TrainingQuestionBulkResult,
   TrainingQuestionInput,
-  TrainingQuestionUpdate
+  TrainingQuestionUpdate,
+  UpdateMemberInput,
+  WorkspaceMember
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1003,367 +998,6 @@ export const useCreateAgentDeploymentToken = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateAgentDeploymentTokenMutationOptions(options));
-    }
-
-export const getRefreshConnectionUrl = (connectionId: string,) => {
-
-
-
-
-  return `/api/connections/${connectionId}/refresh`
-}
-
-/**
- * @summary Refresh an expired OAuth connection
- */
-export const refreshConnection = async (connectionId: string, options?: Parameters<typeof customFetch>[1]): Promise<Connection> => {
-
-  return customFetch<Connection>(getRefreshConnectionUrl(connectionId),
-  {
-    ...options,
-    method: 'POST'
-
-
-  }
-);}
-
-
-
-
-
-export const getRefreshConnectionMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshConnection>>, TError,{connectionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof refreshConnection>>, TError,{connectionId: string}, TContext> => {
-
-const mutationKey = ['refreshConnection'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof refreshConnection>>, {connectionId: string}> = (props) => {
-          const {connectionId} = props ?? {};
-
-          return  refreshConnection(connectionId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type RefreshConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof refreshConnection>>>
-
-    export type RefreshConnectionMutationError = ErrorType<unknown>
-
-    /**
- * @summary Refresh an expired OAuth connection
- */
-export const useRefreshConnection = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof refreshConnection>>, TError,{connectionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof refreshConnection>>,
-        TError,
-        {connectionId: string},
-        TContext
-      > => {
-      return useMutation(getRefreshConnectionMutationOptions(options));
-    }
-
-export const getDeleteConnectionUrl = (connectionId: string,) => {
-
-
-
-
-  return `/api/connections/${connectionId}`
-}
-
-/**
- * @summary Revoke and remove a company connection
- */
-export const deleteConnection = async (connectionId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
-
-  return customFetch<void>(getDeleteConnectionUrl(connectionId),
-  {
-    ...options,
-    method: 'DELETE'
-
-
-  }
-);}
-
-
-
-
-
-export const getDeleteConnectionMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteConnection>>, TError,{connectionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteConnection>>, TError,{connectionId: string}, TContext> => {
-
-const mutationKey = ['deleteConnection'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteConnection>>, {connectionId: string}> = (props) => {
-          const {connectionId} = props ?? {};
-
-          return  deleteConnection(connectionId,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteConnection>>>
-
-    export type DeleteConnectionMutationError = ErrorType<unknown>
-
-    /**
- * @summary Revoke and remove a company connection
- */
-export const useDeleteConnection = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteConnection>>, TError,{connectionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteConnection>>,
-        TError,
-        {connectionId: string},
-        TContext
-      > => {
-      return useMutation(getDeleteConnectionMutationOptions(options));
-    }
-
-export const getListConnectionsUrl = () => {
-
-
-
-
-  return `/api/connections`
-}
-
-/**
- * @summary List company connections
- */
-export const listConnections = async ( options?: Parameters<typeof customFetch>[1]): Promise<Connection[]> => {
-
-  return customFetch<Connection[]>(getListConnectionsUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListConnectionsQueryKey = () => {
-    return [
-    `/api/connections`
-    ] as const;
-    }
-
-
-export const getListConnectionsQueryOptions = <TData = Awaited<ReturnType<typeof listConnections>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListConnectionsQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listConnections>>> = ({ signal }) => listConnections({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listConnections>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListConnectionsQueryResult = NonNullable<Awaited<ReturnType<typeof listConnections>>>
-export type ListConnectionsQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List company connections
- */
-
-export function useListConnections<TData = Awaited<ReturnType<typeof listConnections>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listConnections>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListConnectionsQueryOptions(options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getCreateConnectionUrl = () => {
-
-
-
-
-  return `/api/connections`
-}
-
-/**
- * @summary Create an encrypted company connection
- */
-export const createConnection = async (connectionInput: ConnectionInput, options?: Parameters<typeof customFetch>[1]): Promise<Connection> => {
-
-  return customFetch<Connection>(getCreateConnectionUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(connectionInput)
-  }
-);}
-
-
-
-
-
-export const getCreateConnectionMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createConnection>>, TError,{data: BodyType<ConnectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createConnection>>, TError,{data: BodyType<ConnectionInput>}, TContext> => {
-
-const mutationKey = ['createConnection'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createConnection>>, {data: BodyType<ConnectionInput>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  createConnection(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type CreateConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof createConnection>>>
-    export type CreateConnectionMutationBody = BodyType<ConnectionInput>
-    export type CreateConnectionMutationError = ErrorType<unknown>
-
-    /**
- * @summary Create an encrypted company connection
- */
-export const useCreateConnection = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createConnection>>, TError,{data: BodyType<ConnectionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof createConnection>>,
-        TError,
-        {data: BodyType<ConnectionInput>},
-        TContext
-      > => {
-      return useMutation(getCreateConnectionMutationOptions(options));
-    }
-
-export const getStartConnectionOAuthUrl = () => {
-
-
-
-
-  return `/api/connections/oauth/start`
-}
-
-/**
- * @summary Start an OAuth authorization flow
- */
-export const startConnectionOAuth = async (oAuthStartInput: OAuthStartInput, options?: Parameters<typeof customFetch>[1]): Promise<StartConnectionOAuth200> => {
-
-  return customFetch<StartConnectionOAuth200>(getStartConnectionOAuthUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(oAuthStartInput)
-  }
-);}
-
-
-
-
-
-export const getStartConnectionOAuthMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startConnectionOAuth>>, TError,{data: BodyType<OAuthStartInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof startConnectionOAuth>>, TError,{data: BodyType<OAuthStartInput>}, TContext> => {
-
-const mutationKey = ['startConnectionOAuth'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startConnectionOAuth>>, {data: BodyType<OAuthStartInput>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  startConnectionOAuth(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type StartConnectionOAuthMutationResult = NonNullable<Awaited<ReturnType<typeof startConnectionOAuth>>>
-    export type StartConnectionOAuthMutationBody = BodyType<OAuthStartInput>
-    export type StartConnectionOAuthMutationError = ErrorType<unknown>
-
-    /**
- * @summary Start an OAuth authorization flow
- */
-export const useStartConnectionOAuth = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startConnectionOAuth>>, TError,{data: BodyType<OAuthStartInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
- ): UseMutationResult<
-        Awaited<ReturnType<typeof startConnectionOAuth>>,
-        TError,
-        {data: BodyType<OAuthStartInput>},
-        TContext
-      > => {
-      return useMutation(getStartConnectionOAuthMutationOptions(options));
     }
 
 export const getAssignAgentSourceUrl = (agentId: string,
@@ -3980,167 +3614,6 @@ export const useDeleteSource = <TError = ErrorType<unknown>,
       return useMutation(getDeleteSourceMutationOptions(options));
     }
 
-export const getListSourceIntegrationsUrl = () => {
-
-
-
-
-  return `/api/sources/integrations`
-}
-
-/**
- * @summary List Notion and Confluence Replit Integration status
- */
-export const listSourceIntegrations = async ( options?: Parameters<typeof customFetch>[1]): Promise<SourceIntegration[]> => {
-
-  return customFetch<SourceIntegration[]>(getListSourceIntegrationsUrl(),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getListSourceIntegrationsQueryKey = () => {
-    return [
-    `/api/sources/integrations`
-    ] as const;
-    }
-
-
-export const getListSourceIntegrationsQueryOptions = <TData = Awaited<ReturnType<typeof listSourceIntegrations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSourceIntegrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getListSourceIntegrationsQueryKey();
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSourceIntegrations>>> = ({ signal }) => listSourceIntegrations({ signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSourceIntegrations>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type ListSourceIntegrationsQueryResult = NonNullable<Awaited<ReturnType<typeof listSourceIntegrations>>>
-export type ListSourceIntegrationsQueryError = ErrorType<unknown>
-
-
-/**
- * @summary List Notion and Confluence Replit Integration status
- */
-
-export function useListSourceIntegrations<TData = Awaited<ReturnType<typeof listSourceIntegrations>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSourceIntegrations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getListSourceIntegrationsQueryOptions(options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export const getBrowseSourceIntegrationUrl = (params: BrowseSourceIntegrationParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `/api/sources/integrations/browse?${stringifiedParams}` : `/api/sources/integrations/browse`
-}
-
-/**
- * @summary Browse Notion pages/databases or Confluence spaces/pages
- */
-export const browseSourceIntegration = async (params: BrowseSourceIntegrationParams, options?: Parameters<typeof customFetch>[1]): Promise<SourceBrowseResult> => {
-
-  return customFetch<SourceBrowseResult>(getBrowseSourceIntegrationUrl(params),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getBrowseSourceIntegrationQueryKey = (params?: BrowseSourceIntegrationParams,) => {
-    return [
-    `/api/sources/integrations/browse`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-
-export const getBrowseSourceIntegrationQueryOptions = <TData = Awaited<ReturnType<typeof browseSourceIntegration>>, TError = ErrorType<ErrorResponse>>(params: BrowseSourceIntegrationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof browseSourceIntegration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getBrowseSourceIntegrationQueryKey(params);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof browseSourceIntegration>>> = ({ signal }) => browseSourceIntegration(params, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof browseSourceIntegration>>, TError, TData> & { queryKey: QueryKey }
-}
-
-export type BrowseSourceIntegrationQueryResult = NonNullable<Awaited<ReturnType<typeof browseSourceIntegration>>>
-export type BrowseSourceIntegrationQueryError = ErrorType<ErrorResponse>
-
-
-/**
- * @summary Browse Notion pages/databases or Confluence spaces/pages
- */
-
-export function useBrowseSourceIntegration<TData = Awaited<ReturnType<typeof browseSourceIntegration>>, TError = ErrorType<ErrorResponse>>(
- params: BrowseSourceIntegrationParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof browseSourceIntegration>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
-
- ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-
-  const queryOptions = getBrowseSourceIntegrationQueryOptions(params,options)
-
-  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
 export const getRefreshSourceUrl = (id: string,) => {
 
 
@@ -4221,7 +3694,7 @@ export const getUploadSourceDocumentUrl = () => {
 }
 
 /**
- * @summary Upload a Word document as a knowledge source
+ * @summary Upload a Word or Excel document as a knowledge source
  */
 export const uploadSourceDocument = async (sourceUploadInput: SourceUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<KnowledgeSource> => {
     const formData = new FormData();
@@ -4276,7 +3749,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UploadSourceDocumentMutationError = ErrorType<unknown>
 
     /**
- * @summary Upload a Word document as a knowledge source
+ * @summary Upload a Word or Excel document as a knowledge source
  */
 export const useUploadSourceDocument = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadSourceDocument>>, TError,{data: BodyType<SourceUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -5267,25 +4740,25 @@ export const useImportAppearance = <TError = ErrorType<ErrorResponse>,
       return useMutation(getImportAppearanceMutationOptions(options));
     }
 
-export const getRegisterUrl = () => {
+export const getGetMeUrl = () => {
 
 
 
 
-  return `/api/auth/register`
+  return `/api/auth/me`
 }
 
 /**
- * @summary Create an account without an email verification code
+ * @summary Return the signed-in workspace member and role
  */
-export const register = async (registerInput: RegisterInput, options?: Parameters<typeof customFetch>[1]): Promise<RegisterResult> => {
+export const getMe = async ( options?: Parameters<typeof customFetch>[1]): Promise<CurrentMember> => {
 
-  return customFetch<RegisterResult>(getRegisterUrl(),
+  return customFetch<CurrentMember>(getGetMeUrl(),
   {
     ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(registerInput)
+    method: 'GET'
+
+
   }
 );}
 
@@ -5293,11 +4766,165 @@ export const register = async (registerInput: RegisterInput, options?: Parameter
 
 
 
-export const getRegisterMutationOptions = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<RegisterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<RegisterInput>}, TContext> => {
+export const getGetMeQueryKey = () => {
+    return [
+    `/api/auth/me`
+    ] as const;
+    }
 
-const mutationKey = ['register'];
+
+export const getGetMeQueryOptions = <TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMe>>> = ({ signal }) => getMe({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMeQueryResult = NonNullable<Awaited<ReturnType<typeof getMe>>>
+export type GetMeQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Return the signed-in workspace member and role
+ */
+
+export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListMembersUrl = () => {
+
+
+
+
+  return `/api/members`
+}
+
+/**
+ * @summary List invited workspace members
+ */
+export const listMembers = async ( options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceMember[]> => {
+
+  return customFetch<WorkspaceMember[]>(getListMembersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMembersQueryKey = () => {
+    return [
+    `/api/members`
+    ] as const;
+    }
+
+
+export const getListMembersQueryOptions = <TData = Awaited<ReturnType<typeof listMembers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMembersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMembers>>> = ({ signal }) => listMembers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listMembers>>>
+export type ListMembersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List invited workspace members
+ */
+
+export function useListMembers<TData = Awaited<ReturnType<typeof listMembers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMembersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getInviteMemberUrl = () => {
+
+
+
+
+  return `/api/members`
+}
+
+/**
+ * @summary Invite a papernest.com user with a role
+ */
+export const inviteMember = async (inviteMemberInput: InviteMemberInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceMember> => {
+
+  return customFetch<WorkspaceMember>(getInviteMemberUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inviteMemberInput)
+  }
+);}
+
+
+
+
+
+export const getInviteMemberMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteMember>>, TError,{data: BodyType<InviteMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof inviteMember>>, TError,{data: BodyType<InviteMemberInput>}, TContext> => {
+
+const mutationKey = ['inviteMember'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -5307,10 +4934,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof register>>, {data: BodyType<RegisterInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof inviteMember>>, {data: BodyType<InviteMemberInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  register(data,requestOptions)
+          return  inviteMember(data,requestOptions)
         }
 
 
@@ -5320,21 +4947,164 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type RegisterMutationResult = NonNullable<Awaited<ReturnType<typeof register>>>
-    export type RegisterMutationBody = BodyType<RegisterInput>
-    export type RegisterMutationError = ErrorType<ErrorResponse>
+    export type InviteMemberMutationResult = NonNullable<Awaited<ReturnType<typeof inviteMember>>>
+    export type InviteMemberMutationBody = BodyType<InviteMemberInput>
+    export type InviteMemberMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Create an account without an email verification code
+ * @summary Invite a papernest.com user with a role
  */
-export const useRegister = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof register>>, TError,{data: BodyType<RegisterInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useInviteMember = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof inviteMember>>, TError,{data: BodyType<InviteMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof register>>,
+        Awaited<ReturnType<typeof inviteMember>>,
         TError,
-        {data: BodyType<RegisterInput>},
+        {data: BodyType<InviteMemberInput>},
         TContext
       > => {
-      return useMutation(getRegisterMutationOptions(options));
+      return useMutation(getInviteMemberMutationOptions(options));
+    }
+
+export const getUpdateMemberUrl = (id: string,) => {
+
+
+
+
+  return `/api/members/${id}`
+}
+
+/**
+ * @summary Change a member role
+ */
+export const updateMember = async (id: string,
+    updateMemberInput: UpdateMemberInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceMember> => {
+
+  return customFetch<WorkspaceMember>(getUpdateMemberUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateMemberInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMemberMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,{id: string;data: BodyType<UpdateMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,{id: string;data: BodyType<UpdateMemberInput>}, TContext> => {
+
+const mutationKey = ['updateMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMember>>, {id: string;data: BodyType<UpdateMemberInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateMember(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMemberMutationResult = NonNullable<Awaited<ReturnType<typeof updateMember>>>
+    export type UpdateMemberMutationBody = BodyType<UpdateMemberInput>
+    export type UpdateMemberMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Change a member role
+ */
+export const useUpdateMember = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMember>>, TError,{id: string;data: BodyType<UpdateMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMember>>,
+        TError,
+        {id: string;data: BodyType<UpdateMemberInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateMemberMutationOptions(options));
+    }
+
+export const getDeleteMemberUrl = (id: string,) => {
+
+
+
+
+  return `/api/members/${id}`
+}
+
+/**
+ * @summary Revoke workspace access
+ */
+export const deleteMember = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteMemberUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMemberMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMember>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMember>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMember>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMember(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMemberMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMember>>>
+
+    export type DeleteMemberMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Revoke workspace access
+ */
+export const useDeleteMember = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMember>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMember>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteMemberMutationOptions(options));
     }
 

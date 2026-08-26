@@ -5,7 +5,9 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { MemberRole } from './memberRole';
 
-export interface RegisterResult {
-  ticket: string;
+export interface InviteMemberInput {
+  email: string;
+  role: MemberRole;
 }

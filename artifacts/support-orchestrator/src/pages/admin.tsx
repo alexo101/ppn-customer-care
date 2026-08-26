@@ -56,6 +56,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { MutatingControls, useWorkspaceAccess } from '@/components/workspace-access';
 
 export default function Admin() {
   return <Redirect to="/agents" />;
@@ -453,6 +454,7 @@ function CategoryFormDialog({
 }
 
 export function CategoriesTab({ agentId }: { agentId: string }) {
+  const { canEdit } = useWorkspaceAccess();
   const { data: categories = [] } = useListCategories({ agentId });
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -718,6 +720,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                 {parentCategories.length}
               </span>
             </div>
+            <MutatingControls>
             <Button
               size="sm"
               onClick={openAddCategory}
@@ -726,6 +729,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
               <Plus className="w-3.5 h-3.5" />
               Add Category
             </Button>
+            </MutatingControls>
           </div>
 
           <div className="relative">
@@ -774,8 +778,10 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                       checked={cat.isEnabled}
                       onCheckedChange={(checked) => handleToggleCategory(cat, checked)}
                       onClick={(e) => e.stopPropagation()}
+                      disabled={!canEdit}
                       aria-label={cat.isEnabled ? 'Disable category' : 'Enable category'}
                     />
+                    {canEdit ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button
@@ -808,6 +814,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -845,6 +852,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                     {currentSubcategories.length}
                   </span>
                 </div>
+                <MutatingControls>
                 <Button
                   size="sm"
                   onClick={openAddSubcategory}
@@ -853,6 +861,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                   <Plus className="w-3.5 h-3.5" />
                   Add Subcategory
                 </Button>
+                </MutatingControls>
               </div>
 
               <div className="space-y-2.5">
@@ -886,9 +895,12 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                         <Switch
                           checked={sub.isEnabled}
                           onCheckedChange={(checked) => handleToggleSub(sub, checked)}
+                          disabled={!canEdit}
                           aria-label={sub.isEnabled ? 'Disable subcategory' : 'Enable subcategory'}
                         />
 
+                        {canEdit ? (
+                        <>
                         {/* Move subcategory dropdown */}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -951,6 +963,8 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </>
+                        ) : null}
                       </div>
                     </div>
                   );

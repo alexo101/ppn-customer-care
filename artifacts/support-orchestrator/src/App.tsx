@@ -12,6 +12,7 @@ import { AppearanceProvider } from '@/components/appearance-provider';
 import Home from '@/pages/home';
 import Login from '@/pages/login';
 import Signup from '@/pages/signup';
+import SSOCallback from '@/pages/sso-callback';
 import Chat from '@/pages/chat';
 import Admin from '@/pages/admin';
 import Dashboard from '@/pages/dashboard';
@@ -19,9 +20,9 @@ import Appearance from '@/pages/appearance';
 import AgentsBoard from '@/pages/agents';
 import CreateAgentPage from '@/pages/agent-new';
 import EditAgentPage from '@/pages/agent-edit';
+import Team from '@/pages/team';
 import Widget from '@/pages/widget';
 import NotFound from '@/pages/not-found';
-import ConnectionsPage from '@/pages/connections';
 
 // REQUIRED — resolves key from hostname so same build serves multiple Clerk domains.
 const clerkPubKey = publishableKeyFromHost(
@@ -79,18 +80,12 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/login/*?" component={Login} />
         <Route path="/signup/*?" component={Signup} />
+        <Route path="/sso-callback/*?" component={SSOCallback} />
         <Route path="/widget" component={Widget} />
         <Route path="/dashboard">
           <ProtectedRoute>
             <AppShell activeTab="dashboard">
               <Dashboard />
-            </AppShell>
-          </ProtectedRoute>
-        </Route>
-        <Route path="/connections">
-          <ProtectedRoute>
-            <AppShell activeTab="connections">
-              <ConnectionsPage />
             </AppShell>
           </ProtectedRoute>
         </Route>
@@ -129,6 +124,13 @@ function Router() {
             </AppShell>
           </ProtectedRoute>
         </Route>
+        <Route path="/team">
+          <ProtectedRoute>
+            <AppShell activeTab="team">
+              <Team />
+            </AppShell>
+          </ProtectedRoute>
+        </Route>
         <Route path="/chat">
           <ProtectedRoute>
             <AppShell activeTab="chat">
@@ -164,7 +166,7 @@ function ClerkProviderWithRoutes() {
       publishableKey={clerkPubKey!}
       proxyUrl={clerkProxyUrl}
       signInUrl={`${basePath}/login`}
-      signUpUrl={`${basePath}/signup`}
+      signUpUrl={`${basePath}/login`}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >

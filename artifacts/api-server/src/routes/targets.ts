@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, inArray } from "drizzle-orm";
 import { db, audienceTargetsTable, targetConditionsTable } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   ListTargetsQueryParams,
   CreateTargetBody,
@@ -119,7 +119,7 @@ router.get("/targets", requireAuth, async (req, res): Promise<void> => {
   res.json(loaded);
 });
 
-router.post("/targets", requireAuth, async (req, res): Promise<void> => {
+router.post("/targets", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = CreateTargetBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -167,7 +167,7 @@ router.post("/targets", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(created);
 });
 
-router.patch("/targets/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/targets/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateTargetParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -236,7 +236,7 @@ router.patch("/targets/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(updated);
 });
 
-router.delete("/targets/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/targets/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = DeleteTargetParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

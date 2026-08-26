@@ -8,6 +8,6 @@ export * from "./appearance";
 export * from "./training-questions";
 export * from "./targets";
 export * from "./knowledge-chunks";
-export * from "./connections";
 export * from "./assignments";
 export * from "./agent-settings";
+export * from "./members";

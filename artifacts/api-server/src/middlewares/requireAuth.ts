@@ -1,18 +1,52 @@
 import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
 import { and, eq } from "drizzle-orm";
-import { db, agentDeploymentsTable, agentsTable } from "@workspace/db";
+import { db, agentDeploymentsTable, agentsTable, type MemberRole } from "@workspace/db";
 import { hashDeploymentToken } from "../lib/connection-secrets";
+import { resolveUserEmail } from "../lib/identity";
+import {
+  WorkspaceAccessError,
+  ensureWorkspaceMember,
+} from "../lib/workspace-access";
 
-// Augment Express Request so downstream handlers can read req.userId without casts
 declare global {
   namespace Express {
     interface Request {
       userId: string;
       userEmail?: string;
+      memberRole?: MemberRole;
       file?: Express.Multer.File;
     }
   }
+}
+
+async function attachWorkspaceMember(
+  req: Request,
+  res: Response,
+  userId: string,
+  emailFromSession?: string,
+): Promise<boolean> {
+  try {
+    const email = await resolveUserEmail(userId, emailFromSession);
+    const member = await ensureWorkspaceMember(userId, email);
+    req.userId = userId;
+    req.userEmail = member.email;
+    req.memberRole = member.role as MemberRole;
+    return true;
+  } catch (error) {
+    if (error instanceof WorkspaceAccessError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return false;
+    }
+    throw error;
+  }
+}
+
+function emailFromAuth(auth: ReturnType<typeof getAuth>): string | undefined {
+  const claims = (
+    auth as unknown as { sessionClaims?: Record<string, unknown> }
+  )?.sessionClaims;
+  return typeof claims?.email === "string" ? claims.email : undefined;
 }
 
 export async function requireAuthOrDeployment(
@@ -22,10 +56,13 @@ export async function requireAuthOrDeployment(
 ): Promise<void> {
   const auth = getAuth(req);
   if (auth?.userId) {
-    req.userId = auth.userId;
-    const claims = (auth as unknown as { sessionClaims?: Record<string, unknown> })?.sessionClaims;
-    if (typeof claims?.email === "string") req.userEmail = claims.email;
-    next();
+    const attached = await attachWorkspaceMember(
+      req,
+      res,
+      auth.userId,
+      emailFromAuth(auth),
+    );
+    if (attached) next();
     return;
   }
   const rawToken = req.header("x-agent-deployment-token");
@@ -50,11 +87,11 @@ export async function requireAuthOrDeployment(
   next();
 }
 
-export function requireAuth(
+export async function requireAuth(
   req: Request,
   res: Response,
   next: NextFunction,
-): void {
+): Promise<void> {
   res.setHeader("Cache-Control", "private, no-store");
   const auth = getAuth(req);
   const userId = auth?.userId;
@@ -62,12 +99,27 @@ export function requireAuth(
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  req.userId = userId;
-  const claims = (
-    auth as unknown as { sessionClaims?: Record<string, unknown> }
-  )?.sessionClaims;
-  if (typeof claims?.email === "string") {
-    req.userEmail = claims.email;
+  const attached = await attachWorkspaceMember(
+    req,
+    res,
+    userId,
+    emailFromAuth(auth),
+  );
+  if (attached) next();
+}
+
+export function requireEditor(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  if (!req.userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  if (req.memberRole !== "editor") {
+    res.status(403).json({ error: "You need edit access to change this workspace." });
+    return;
   }
   next();
 }

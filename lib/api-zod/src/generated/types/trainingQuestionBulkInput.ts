@@ -9,7 +9,7 @@
 export interface TrainingQuestionBulkInput {
   agentId: string;
   /**
-     * @maxItems 100
+     * @maxItems 200
      * @items.maxLength 2000
      */
   questions: string[];

@@ -36,6 +36,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { getUserAgentsQueryKey } from "@/lib/agents-query";
+import { MutatingControls } from "@/components/workspace-access";
 
 export default function AgentsBoard() {
   const { isLoaded, isSignedIn, userId } = useAuth();
@@ -67,12 +68,14 @@ export default function AgentsBoard() {
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
       <div className="h-16 px-6 md:px-8 border-b border-border flex items-center justify-between bg-card shrink-0">
         <h1 className="text-xl font-semibold tracking-tight">Agents</h1>
-        <Button size="sm" asChild>
-          <Link href="/agents/new">
-            <Plus className="w-3.5 h-3.5" />
-            Create agent
-          </Link>
-        </Button>
+        <MutatingControls>
+          <Button size="sm" asChild>
+            <Link href="/agents/new">
+              <Plus className="w-3.5 h-3.5" />
+              Create agent
+            </Link>
+          </Button>
+        </MutatingControls>
       </div>
 
       <div className="flex-1 overflow-auto p-6 md:p-8">
@@ -99,12 +102,14 @@ export default function AgentsBoard() {
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
-                <Button asChild>
-                  <Link href="/agents/new">
-                    <Plus className="w-3.5 h-3.5" />
-                    Create agent
-                  </Link>
-                </Button>
+                <MutatingControls>
+                  <Button asChild>
+                    <Link href="/agents/new">
+                      <Plus className="w-3.5 h-3.5" />
+                      Create agent
+                    </Link>
+                  </Button>
+                </MutatingControls>
               </EmptyContent>
             </Empty>
           ) : (
@@ -139,16 +144,18 @@ export default function AgentsBoard() {
                         {agent.description || "No description"}
                       </CardDescription>
                     </Link>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() =>
-                        setToDelete({ id: agent.id, name: agent.name })
-                      }
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                    </Button>
+                    <MutatingControls>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                        onClick={() =>
+                          setToDelete({ id: agent.id, name: agent.name })
+                        }
+                      >
+                        <Trash className="w-3.5 h-3.5" />
+                      </Button>
+                    </MutatingControls>
                   </CardHeader>
                 </Card>
               ))}

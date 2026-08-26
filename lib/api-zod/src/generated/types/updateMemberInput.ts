@@ -5,8 +5,8 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
-import type { OAuthStartInputProvider } from './oAuthStartInputProvider';
+import type { MemberRole } from './memberRole';
 
-export interface OAuthStartInput {
-  provider: OAuthStartInputProvider;
+export interface UpdateMemberInput {
+  role: MemberRole;
 }

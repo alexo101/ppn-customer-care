@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, eq } from "drizzle-orm";
 import { db, appearanceSettingsTable } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   UpdateAppearanceBody,
   ImportAppearanceBody,
@@ -31,7 +31,7 @@ router.get("/appearance", requireAuth, async (req, res): Promise<void> => {
   res.json(toAppearance(row));
 });
 
-router.put("/appearance", requireAuth, async (req, res): Promise<void> => {
+router.put("/appearance", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = UpdateAppearanceBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -43,7 +43,7 @@ router.put("/appearance", requireAuth, async (req, res): Promise<void> => {
   if (row) res.json(toAppearance(row));
 });
 
-router.post("/appearance/import", requireAuth, async (req, res): Promise<void> => {
+router.post("/appearance/import", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = ImportAppearanceBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -69,7 +69,7 @@ router.get("/agents/:id/appearance", requireAuth, async (req, res): Promise<void
   res.json(toAppearance(row));
 });
 
-router.put("/agents/:id/appearance", requireAuth, async (req, res): Promise<void> => {
+router.put("/agents/:id/appearance", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateAgentAppearanceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -89,7 +89,7 @@ router.put("/agents/:id/appearance", requireAuth, async (req, res): Promise<void
   if (row) res.json(toAppearance(row));
 });
 
-router.post("/agents/:id/appearance/import", requireAuth, async (req, res): Promise<void> => {
+router.post("/agents/:id/appearance/import", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = ImportAgentAppearanceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

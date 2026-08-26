@@ -31,9 +31,9 @@ tags:
   - name: training
     description: Training questions the agent should attempt to answer
   - name: auth
-    description: Registration without email verification codes
-  - name: connections
-    description: Company-level OAuth connections (one credential per provider)
+    description: Signed-in workspace member identity
+  - name: members
+    description: Papernest.com team invites and roles
 paths:
   /healthz:
     get:
@@ -285,87 +285,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentToken"
-
-  /connections/{connectionId}/refresh:
-    post:
-      operationId: refreshConnection
-      tags: [connections]
-      summary: Refresh an expired OAuth connection
-      parameters:
-        - $ref: "#/components/parameters/ConnectionId"
-      responses:
-        "200":
-          description: Refreshed connection
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Connection"
-
-  /connections/{connectionId}:
-    delete:
-      operationId: deleteConnection
-      tags: [connections]
-      summary: Revoke and remove a company connection
-      parameters:
-        - $ref: "#/components/parameters/ConnectionId"
-      responses:
-        "204":
-          description: Deleted
-
-  /connections:
-    get:
-      operationId: listConnections
-      tags: [connections]
-      summary: List company connections
-      responses:
-        "200":
-          description: Connections without secrets
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Connection"
-    post:
-      operationId: createConnection
-      tags: [connections]
-      summary: Create an encrypted company connection
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ConnectionInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Connection"
-
-  /connections/oauth/start:
-    post:
-      operationId: startConnectionOAuth
-      tags: [connections]
-      summary: Start an OAuth authorization flow
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/OAuthStartInput"
-      responses:
-        "200":
-          description: Authorization URL
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [authorizationUrl]
-                properties:
-                  authorizationUrl:
-                    type: string
 
   /agents/{agentId}/sources/{sourceId}:
     post:
@@ -1218,69 +1137,6 @@ paths:
         "204":
           description: Deleted
 
-  /sources/integrations:
-    get:
-      operationId: listSourceIntegrations
-      tags: [sources]
-      summary: List Notion and Confluence Replit Integration status
-      responses:
-        "200":
-          description: Integration connection status
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/SourceIntegration"
-
-  /sources/integrations/browse:
-    get:
-      operationId: browseSourceIntegration
-      tags: [sources]
-      summary: Browse Notion pages/databases or Confluence spaces/pages
-      parameters:
-        - in: query
-          name: connectorName
-          required: true
-          schema:
-            type: string
-            enum: [notion, confluence]
-        - in: query
-          name: query
-          schema:
-            type: string
-        - in: query
-          name: cursor
-          schema:
-            type: string
-        - in: query
-          name: spaceId
-          schema:
-            type: string
-        - in: query
-          name: connectionId
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Browse results
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SourceBrowseResult"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Provider not connected or access denied
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /sources/{id}/refresh:
     post:
       operationId: refreshSource
@@ -1310,7 +1166,7 @@ paths:
     post:
       operationId: uploadSourceDocument
       tags: [sources]
-      summary: Upload a Word document as a knowledge source
+      summary: Upload a Word or Excel document as a knowledge source
       requestBody:
         required: true
         content:
@@ -1608,68 +1464,134 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   # ── Auth ──────────────────────────────────────────────────────────────────
-  /auth/register:
-    post:
-      operationId: register
+  /auth/me:
+    get:
+      operationId: getMe
       tags: [auth]
-      summary: Create an account without an email verification code
+      summary: Return the signed-in workspace member and role
+      responses:
+        "200":
+          description: Current member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentMember"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Domain or invite denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Members ───────────────────────────────────────────────────────────────
+  /members:
+    get:
+      operationId: listMembers
+      tags: [members]
+      summary: List invited workspace members
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceMember"
+    post:
+      operationId: inviteMember
+      tags: [members]
+      summary: Invite a papernest.com user with a role
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RegisterInput"
+              $ref: "#/components/schemas/InviteMemberInput"
       responses:
         "201":
-          description: Account created
+          description: Invited
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RegisterResult"
+                $ref: "#/components/schemas/WorkspaceMember"
         "400":
-          description: Invalid input or account already exists
+          description: Invalid invite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /members/{id}:
+    patch:
+      operationId: updateMember
+      tags: [members]
+      summary: Change a member role
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          description: Invalid role change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteMember
+      tags: [members]
+      summary: Revoke workspace access
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+        "400":
+          description: Cannot remove this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
 components:
-  parameters:
-    ConnectionId:
-      in: path
-      name: connectionId
-      required: true
-      schema:
-        type: string
-        pattern: "^[0-9a-fA-F-]{36}$"
   schemas:
-    Connection:
-      type: object
-      required: [id, name, provider, status]
-      properties:
-        id: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
-        name: { type: string }
-        provider: { type: string }
-        status: { type: string }
-        metadata: { type: object, additionalProperties: true }
-        tokenExpiresAt: { type: string, format: date-time, nullable: true }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-    ConnectionInput:
-      type: object
-      required: [name, provider]
-      properties:
-        name: { type: string }
-        provider: { type: string }
-        accessToken: { type: string, writeOnly: true }
-        refreshToken: { type: string, writeOnly: true }
-        tokenExpiresAt: { type: string, format: date-time }
-        metadata: { type: object, additionalProperties: true }
-    OAuthStartInput:
-      type: object
-      required: [provider]
-      properties:
-        provider: { type: string, enum: [notion, confluence] }
     AgentSettings:
       type: object
       required: [agentId, prompt, targetAudience, llmProvider, llmModel, temperature]
@@ -1860,7 +1782,7 @@ components:
           type: string
         questions:
           type: array
-          maxItems: 100
+          maxItems: 200
           items:
             type: string
             maxLength: 2000
@@ -2440,52 +2362,6 @@ components:
         isEnabled:
           type: boolean
 
-    SourceIntegration:
-      type: object
-      required: [connectorName, displayName, connected]
-      properties:
-        connectorName:
-          type: string
-        displayName:
-          type: string
-        connected:
-          type: boolean
-        connectionId:
-          type: string
-          nullable: true
-        status:
-          type: string
-          nullable: true
-
-    SourceBrowseItem:
-      type: object
-      required: [id, type, title]
-      properties:
-        id:
-          type: string
-        type:
-          type: string
-          enum: [page, database, space]
-        title:
-          type: string
-        parentTitle:
-          type: string
-        url:
-          type: string
-
-    SourceBrowseResult:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/SourceBrowseItem"
-        nextCursor:
-          type: ["string", "null"]
-        spaceTitle:
-          type: string
-
     SourceUploadInput:
       type: object
       required: [file, agentId]
@@ -2644,8 +2520,6 @@ components:
           type: string
         authType:
           type: string
-        connectionId:
-          type: string
         authConfig:
           type: object
           additionalProperties: true
@@ -2667,8 +2541,6 @@ components:
         endpointPattern:
           type: string
         authType:
-          type: string
-        connectionId:
           type: string
         authConfig:
           type: object
@@ -2781,18 +2653,57 @@ components:
           items:
             type: string
 
-    RegisterInput:
+    MemberRole:
+      type: string
+      enum: [editor, viewer]
+
+    MemberStatus:
+      type: string
+      enum: [invited, active]
+
+    CurrentMember:
       type: object
-      required: [email, password]
+      required: [email, role]
       properties:
         email:
           type: string
-        password:
-          type: string
+        role:
+          $ref: "#/components/schemas/MemberRole"
 
-    RegisterResult:
+    WorkspaceMember:
       type: object
-      required: [ticket]
+      required: [id, email, role, status, createdAt, updatedAt]
       properties:
-        ticket:
+        id:
           type: string
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/MemberRole"
+        status:
+          $ref: "#/components/schemas/MemberStatus"
+        invitedByEmail:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    InviteMemberInput:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/MemberRole"
+
+    UpdateMemberInput:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/MemberRole"

@@ -2,7 +2,6 @@ import { pgTable, text, timestamp, boolean, uuid, jsonb } from "drizzle-orm/pg-c
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { agentsTable } from "./agents";
-import { connectionsTable } from "./connections";
 
 export const knowledgeSourcesTable = pgTable("knowledge_sources", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -23,7 +22,6 @@ export const apiConnectorsTable = pgTable("api_connectors", {
   name: text("name").notNull(),
   endpointPattern: text("endpoint_pattern").notNull(),
   authType: text("auth_type").notNull(),
-  connectionId: uuid("connection_id").references(() => connectionsTable.id, { onDelete: "set null" }),
   authConfig: jsonb("auth_config").notNull().default({}),
   isEnabled: boolean("is_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

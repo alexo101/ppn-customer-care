@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { useCreateAgent, getListAgentsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CategoriesTab, RulesTab, SourcesTab, TargetsTab } from "@/pages/admin";
 import { AppearanceEditor } from "@/components/appearance-editor";
 import { cn } from "@/lib/utils";
+import { useWorkspaceAccess } from "@/components/workspace-access";
 
 const STEPS = [
   { id: "appearance", label: "Appearance" },
@@ -21,6 +22,7 @@ const STEPS = [
 
 export default function CreateAgentPage() {
   const [, setLocation] = useLocation();
+  const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
   const createAgent = useCreateAgent();
   const [step, setStep] = useState(0);
@@ -30,6 +32,8 @@ export default function CreateAgentPage() {
   const [error, setError] = useState<string | null>(null);
 
   const canContinue = step === 0 ? name.trim().length > 0 : Boolean(agentId);
+
+  if (!canEdit) return <Redirect to="/agents" />;
 
   const handleNext = async () => {
     setError(null);

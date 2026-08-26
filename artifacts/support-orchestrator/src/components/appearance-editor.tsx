@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useGetAgent,
   useGetAgentAppearance,
-  useImportAgentAppearance,
   useUpdateAgent,
   useUpdateAgentAppearance,
   getGetAgentAppearanceQueryKey,
@@ -11,10 +10,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Globe,
   Loader2,
   Save,
-  Sparkles,
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,18 +20,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatAppearancePreview } from "@/components/chat/chat-appearance-preview";
 import { toast } from "@/hooks/use-toast";
+import { MutatingControls } from "@/components/workspace-access";
 import {
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_CTA_COLOR,
   isHexColor,
   normalizeHexColor,
 } from "@/lib/appearance-theme";
-import { cn } from "@/lib/utils";
 
 const MAX_LOGO_BYTES = 400_000;
 
 type Draft = {
-  websiteUrl: string;
   ctaColor: string;
   backgroundColor: string;
   logoUrl: string;
@@ -61,20 +57,14 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   const { data, isLoading } = useGetAgentAppearance(agentId);
   const updateAppearance = useUpdateAgentAppearance();
   const updateAgent = useUpdateAgent();
-  const importAppearance = useImportAgentAppearance();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [draft, setDraft] = useState<Draft>({
-    websiteUrl: "",
     ctaColor: DEFAULT_CTA_COLOR,
     backgroundColor: DEFAULT_BACKGROUND_COLOR,
     logoUrl: "",
   });
-  const [ctaCandidates, setCtaCandidates] = useState<string[]>([]);
-  const [backgroundCandidates, setBackgroundCandidates] = useState<string[]>([]);
-  const [logoCandidates, setLogoCandidates] = useState<string[]>([]);
-  const [pageTitle, setPageTitle] = useState<string | null>(null);
   const [ctaHexInput, setCtaHexInput] = useState(DEFAULT_CTA_COLOR);
   const [bgHexInput, setBgHexInput] = useState(DEFAULT_BACKGROUND_COLOR);
   const logoFileRef = useRef<HTMLInputElement>(null);
@@ -91,7 +81,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
     if (lastSyncedAt.current === data.updatedAt) return;
     lastSyncedAt.current = data.updatedAt;
     setDraft({
-      websiteUrl: data.websiteUrl ?? "",
       ctaColor: data.ctaColor,
       backgroundColor: data.backgroundColor,
       logoUrl: data.logoUrl ?? "",
@@ -105,7 +94,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       JSON.stringify({
         name: agent?.name ?? "",
         description: agent?.description ?? "",
-        websiteUrl: data?.websiteUrl ?? "",
         ctaColor: data?.ctaColor ?? DEFAULT_CTA_COLOR,
         backgroundColor: data?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR,
         logoUrl: data?.logoUrl ?? "",
@@ -116,72 +104,12 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   const currentSnapshot = JSON.stringify({
     name,
     description,
-    websiteUrl: draft.websiteUrl,
     ctaColor: draft.ctaColor,
     backgroundColor: draft.backgroundColor,
     logoUrl: draft.logoUrl,
   });
   const isDirty = currentSnapshot !== savedSnapshot;
   const saving = updateAppearance.isPending || updateAgent.isPending;
-
-  const handleImport = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!draft.websiteUrl.trim() || importAppearance.isPending) return;
-
-    importAppearance.mutate(
-      { id: agentId, data: { url: draft.websiteUrl.trim() } },
-      {
-        onSuccess: (result) => {
-          const next = result.appearance;
-          // #region agent log
-          fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e104fc" },
-            body: JSON.stringify({
-              sessionId: "e104fc",
-              runId: "post-fix",
-              hypothesisId: "E",
-              location: "appearance-editor.tsx:handleImport.onSuccess",
-              message: "Client received import appearance",
-              data: {
-                ctaColor: next.ctaColor,
-                ctaColorCandidates: result.ctaColorCandidates ?? [],
-                currentDraftCta: draft.ctaColor,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
-          setDraft({
-            websiteUrl: next.websiteUrl ?? draft.websiteUrl,
-            ctaColor: next.ctaColor,
-            backgroundColor: next.backgroundColor,
-            logoUrl: next.logoUrl ?? "",
-          });
-          setCtaHexInput(next.ctaColor);
-          setBgHexInput(next.backgroundColor);
-          setCtaCandidates(result.ctaColorCandidates ?? []);
-          setBackgroundCandidates(result.backgroundColorCandidates ?? []);
-          setLogoCandidates(result.logoCandidates ?? []);
-          setPageTitle(result.pageTitle ?? null);
-          queryClient.invalidateQueries({ queryKey: getGetAgentAppearanceQueryKey(agentId) });
-          toast({
-            title: "Main styling imported",
-            description: result.pageTitle
-              ? `Detected colors and logo from ${result.pageTitle}. You can adjust them below.`
-              : "Detected CTA color, background color, and logo. You can adjust them below.",
-          });
-        },
-        onError: (error) => {
-          toast({
-            title: "Could not import styling",
-            description: error instanceof Error ? error.message : "Check the URL and try again.",
-            variant: "destructive",
-          });
-        },
-      },
-    );
-  };
 
   const handleSave = async () => {
     const ctaColor = normalizeHexColor(draft.ctaColor);
@@ -207,7 +135,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       await updateAppearance.mutateAsync({
         id: agentId,
         data: {
-          websiteUrl: draft.websiteUrl.trim() || null,
           ctaColor,
           backgroundColor,
           logoUrl: draft.logoUrl.trim() || null,
@@ -268,19 +195,21 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <Button
-          size="sm"
-          className="h-8 text-xs"
-          onClick={handleSave}
-          disabled={!isDirty || saving || isLoading}
-        >
-          {saving ? (
-            <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-          ) : (
-            <Save className="w-3.5 h-3.5 mr-1" />
-          )}
-          Save appearance
-        </Button>
+        <MutatingControls>
+          <Button
+            size="sm"
+            className="h-8 text-xs"
+            onClick={handleSave}
+            disabled={!isDirty || saving || isLoading}
+          >
+            {saving ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5 mr-1" />
+            )}
+            Save appearance
+          </Button>
+        </MutatingControls>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
@@ -306,30 +235,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             />
           </FieldBlock>
 
-          <FieldBlock title="Website URL">
-            <form onSubmit={handleImport} className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                <Input
-                  type="text"
-                  inputMode="url"
-                  placeholder="https://www.your-website.com"
-                  value={draft.websiteUrl}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, websiteUrl: e.target.value }))}
-                  className="h-9 text-sm bg-background"
-                />
-              </div>
-              <Button type="submit" className="h-9 text-xs shrink-0" disabled={importAppearance.isPending || !draft.websiteUrl.trim()}>
-                {importAppearance.isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                )}
-                Import styling
-              </Button>
-            </form>
-          </FieldBlock>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FieldBlock title="CTA color">
               <ColorField
@@ -338,7 +243,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
                 hexInput={ctaHexInput}
                 onHexInputChange={setCtaHexInput}
                 onCommit={setCtaColor}
-                candidates={ctaCandidates}
               />
             </FieldBlock>
 
@@ -349,7 +253,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
                 hexInput={bgHexInput}
                 onHexInputChange={setBgHexInput}
                 onCommit={setBackgroundColor}
-                candidates={backgroundCandidates}
               />
             </FieldBlock>
           </div>
@@ -393,25 +296,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
                 />
               </div>
             </div>
-            {logoCandidates.length > 1 && (
-              <div className="space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  {logoCandidates.map((src) => (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => setDraft((prev) => ({ ...prev, logoUrl: src }))}
-                      className={cn(
-                        "h-12 w-12 rounded-md border bg-background overflow-hidden",
-                        draft.logoUrl === src ? "border-primary ring-1 ring-primary" : "border-border hover:border-foreground/30",
-                      )}
-                    >
-                      <img src={src} alt="" className="h-full w-full object-contain p-1" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </FieldBlock>
         </div>
 
@@ -433,53 +317,32 @@ function ColorField({
   hexInput,
   onHexInputChange,
   onCommit,
-  candidates,
 }: {
   label: string;
   value: string;
   hexInput: string;
   onHexInputChange: (value: string) => void;
   onCommit: (value: string) => void;
-  candidates: string[];
 }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={isHexColor(value) ? value : "#000000"}
-          onChange={(e) => onCommit(e.target.value)}
-          className="h-9 w-12 rounded-md border border-input bg-background cursor-pointer p-0.5"
-          aria-label={label}
-        />
-        <Input
-          value={hexInput}
-          onChange={(e) => {
-            const next = e.target.value;
-            onHexInputChange(next);
-            if (isHexColor(next)) onCommit(next);
-          }}
-          className="h-9 font-mono text-xs uppercase"
-          maxLength={7}
-        />
-      </div>
-      {candidates.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {candidates.map((hex) => (
-            <button
-              key={hex}
-              type="button"
-              title={hex}
-              onClick={() => onCommit(hex)}
-              className={cn(
-                "h-6 w-6 rounded-full border",
-                value.toUpperCase() === hex.toUpperCase() ? "border-foreground ring-2 ring-ring" : "border-border",
-              )}
-              style={{ backgroundColor: hex }}
-            />
-          ))}
-        </div>
-      )}
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={isHexColor(value) ? value : "#000000"}
+        onChange={(e) => onCommit(e.target.value)}
+        className="h-9 w-12 rounded-md border border-input bg-background cursor-pointer p-0.5"
+        aria-label={label}
+      />
+      <Input
+        value={hexInput}
+        onChange={(e) => {
+          const next = e.target.value;
+          onHexInputChange(next);
+          if (isHexColor(next)) onCommit(next);
+        }}
+        className="h-9 font-mono text-xs uppercase"
+        maxLength={7}
+      />
     </div>
   );
 }

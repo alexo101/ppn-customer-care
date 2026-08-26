@@ -10,27 +10,13 @@ import {
   EmbeddingProviderError,
   type EmbeddingProvider,
 } from "./llm";
-import { browseConfluenceItems, fetchConfluenceDocuments } from "./confluence-knowledge";
-import {
-  joinKnowledgeDocuments,
-  parseSelectedKnowledgeItems,
-  readSyncStatus,
-  type IntegrationSyncStatus,
-  type SourceBrowseResult,
-} from "./integration-knowledge";
-import { browseNotionItems, fetchNotionDocuments } from "./notion-knowledge";
-import {
-  createReplitConnectorProxy,
-  type ConnectorProxy,
-  type SourceIntegrationName,
-} from "./replit-integrations";
-import { createManagedIntegrationProxy } from "./managed-integrations";
+type SourceSyncStatus = "idle" | "syncing" | "ready" | "empty" | "error";
 
 const DEFAULT_MAX_CHARS = 1_200;
 const DEFAULT_OVERLAP = 150;
 const EMBEDDING_BATCH_SIZE = 64;
 
-export const INDEXABLE_SOURCE_TYPES = ["document", "article", "notion", "confluence"] as const;
+export const INDEXABLE_SOURCE_TYPES = ["document", "article", "spreadsheet"] as const;
 
 export type IndexableSourceType = (typeof INDEXABLE_SOURCE_TYPES)[number];
 
@@ -53,6 +39,14 @@ export function sourceNeedsReindex(
   if (indexedModel !== model) return true;
   const status = readSyncStatus(config ?? {});
   return status === "error" || status === "idle" || status === "syncing";
+}
+
+function readSyncStatus(config: Record<string, unknown>): SourceSyncStatus {
+  const value = config.syncStatus;
+  if (value === "idle" || value === "syncing" || value === "ready" || value === "empty" || value === "error") {
+    return value;
+  }
+  return "idle";
 }
 
 export function chunkText(
@@ -99,44 +93,18 @@ export function chunkText(
   return chunks;
 }
 
-export async function browseIntegrationContent(
-  connectorName: SourceIntegrationName,
-  input: { query?: string; cursor?: string; spaceId?: string } = {},
-  proxy: ConnectorProxy = createReplitConnectorProxy(connectorName),
-): Promise<SourceBrowseResult> {
-  if (connectorName === "notion") {
-    return browseNotionItems(proxy, input);
-  }
-  return browseConfluenceItems(proxy, input);
-}
-
 async function resolveSourceText(
   source: typeof knowledgeSourcesTable.$inferSelect,
 ): Promise<{ text: string; itemCount: number }> {
   const config = (source.connectionConfig ?? {}) as Record<string, unknown>;
-  if (source.sourceType === "document" && typeof config.text === "string") {
+  if (
+    (source.sourceType === "document" || source.sourceType === "spreadsheet")
+    && typeof config.text === "string"
+  ) {
     return { text: config.text.trim(), itemCount: config.text.trim() ? 1 : 0 };
   }
   if (source.sourceType === "article" && typeof config.body === "string") {
     return { text: config.body.trim(), itemCount: config.body.trim() ? 1 : 0 };
-  }
-  if (source.sourceType === "notion" || source.sourceType === "confluence") {
-    const selected = parseSelectedKnowledgeItems(config.selectedItems);
-    if (selected.length === 0) return { text: "", itemCount: 0 };
-    const managedConnectionId =
-      typeof config.connectionId === "string"
-        ? config.connectionId
-        : typeof config.organizationConnectionId === "string"
-          ? config.organizationConnectionId
-          : null;
-    const proxy = managedConnectionId
-      ? await createManagedIntegrationProxy(managedConnectionId)
-      : createReplitConnectorProxy(source.sourceType);
-    const documents =
-      source.sourceType === "notion"
-        ? await fetchNotionDocuments(proxy, selected)
-        : await fetchConfluenceDocuments(proxy, selected);
-    return { text: joinKnowledgeDocuments(documents), itemCount: documents.length };
   }
   return { text: "", itemCount: 0 };
 }
@@ -187,7 +155,7 @@ async function replaceSourceChunks(
 
 async function markSync(
   sourceId: string,
-  status: IntegrationSyncStatus,
+  status: SourceSyncStatus,
   extra: Record<string, unknown> = {},
 ) {
   await patchConnectionConfig(sourceId, {

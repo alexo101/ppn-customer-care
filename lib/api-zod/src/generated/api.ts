@@ -235,102 +235,6 @@ export const CreateAgentDeploymentTokenResponse = zod.object({
 
 
 /**
- * @summary Refresh an expired OAuth connection
- */
-export const refreshConnectionPathConnectionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const RefreshConnectionParams = zod.object({
-  "connectionId": zod.coerce.string().regex(refreshConnectionPathConnectionIdRegExp)
-})
-
-export const refreshConnectionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const RefreshConnectionResponse = zod.object({
-  "id": zod.string().regex(refreshConnectionResponseIdRegExp),
-  "name": zod.string(),
-  "provider": zod.string(),
-  "status": zod.string(),
-  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
-  "tokenExpiresAt": zod.coerce.date().nullish(),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-
-
-/**
- * @summary Revoke and remove a company connection
- */
-export const deleteConnectionPathConnectionIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const DeleteConnectionParams = zod.object({
-  "connectionId": zod.coerce.string().regex(deleteConnectionPathConnectionIdRegExp)
-})
-
-export const DeleteConnectionResponse = zod.void()
-
-
-/**
- * @summary List company connections
- */
-export const listConnectionsResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const ListConnectionsResponseItem = zod.object({
-  "id": zod.string().regex(listConnectionsResponseIdRegExp),
-  "name": zod.string(),
-  "provider": zod.string(),
-  "status": zod.string(),
-  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
-  "tokenExpiresAt": zod.coerce.date().nullish(),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-export const ListConnectionsResponse = zod.array(ListConnectionsResponseItem)
-
-
-/**
- * @summary Create an encrypted company connection
- */
-export const CreateConnectionBody = zod.object({
-  "name": zod.string(),
-  "provider": zod.string(),
-  "accessToken": zod.string().optional(),
-  "refreshToken": zod.string().optional(),
-  "tokenExpiresAt": zod.coerce.date().optional(),
-  "metadata": zod.record(zod.string(), zod.unknown()).optional()
-})
-
-export const createConnectionResponseIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const CreateConnectionResponse = zod.object({
-  "id": zod.string().regex(createConnectionResponseIdRegExp),
-  "name": zod.string(),
-  "provider": zod.string(),
-  "status": zod.string(),
-  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
-  "tokenExpiresAt": zod.coerce.date().nullish(),
-  "createdAt": zod.coerce.date().optional(),
-  "updatedAt": zod.coerce.date().optional()
-})
-
-
-/**
- * @summary Start an OAuth authorization flow
- */
-export const StartConnectionOAuthBody = zod.object({
-  "provider": zod.enum(['notion', 'confluence'])
-})
-
-export const StartConnectionOAuthResponse = zod.object({
-  "authorizationUrl": zod.string()
-})
-
-
-/**
  * @summary Assign a knowledge source to an agent
  */
 export const assignAgentSourcePathAgentIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
@@ -607,7 +511,7 @@ export const CreateTrainingQuestionResponse = zod.object({
  */
 export const bulkCreateTrainingQuestionsBodyQuestionsItemMax = 2000;
 
-export const bulkCreateTrainingQuestionsBodyQuestionsMax = 100;
+export const bulkCreateTrainingQuestionsBodyQuestionsMax = 200;
 
 
 
@@ -1180,43 +1084,6 @@ export const DeleteSourceResponse = zod.void()
 
 
 /**
- * @summary List Notion and Confluence Replit Integration status
- */
-export const ListSourceIntegrationsResponseItem = zod.object({
-  "connectorName": zod.string(),
-  "displayName": zod.string(),
-  "connected": zod.boolean(),
-  "connectionId": zod.string().nullish(),
-  "status": zod.string().nullish()
-})
-export const ListSourceIntegrationsResponse = zod.array(ListSourceIntegrationsResponseItem)
-
-
-/**
- * @summary Browse Notion pages/databases or Confluence spaces/pages
- */
-export const BrowseSourceIntegrationQueryParams = zod.object({
-  "connectorName": zod.enum(['notion', 'confluence']),
-  "query": zod.coerce.string().optional(),
-  "cursor": zod.coerce.string().optional(),
-  "spaceId": zod.coerce.string().optional(),
-  "connectionId": zod.coerce.string().optional()
-})
-
-export const BrowseSourceIntegrationResponse = zod.object({
-  "items": zod.array(zod.object({
-  "id": zod.string(),
-  "type": zod.enum(['page', 'database', 'space']),
-  "title": zod.string(),
-  "parentTitle": zod.string().optional(),
-  "url": zod.string().optional()
-})),
-  "nextCursor": zod.string().nullish(),
-  "spaceTitle": zod.string().optional()
-})
-
-
-/**
  * @summary Re-index a knowledge source
  */
 export const RefreshSourceParams = zod.object({
@@ -1235,7 +1102,7 @@ export const RefreshSourceResponse = zod.object({
 
 
 /**
- * @summary Upload a Word document as a knowledge source
+ * @summary Upload a Word or Excel document as a knowledge source
  */
 export const UploadSourceDocumentBody = zod.object({
   "agentId": zod.string(),
@@ -1397,7 +1264,6 @@ export const ListConnectorsResponseItem = zod.object({
   "name": zod.string(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
-  "connectionId": zod.string().optional(),
   "authConfig": zod.record(zod.string(), zod.unknown()),
   "isEnabled": zod.boolean(),
   "createdAt": zod.string(),
@@ -1414,7 +1280,6 @@ export const CreateConnectorBody = zod.object({
   "agentId": zod.string().optional(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
-  "connectionId": zod.string().optional(),
   "authConfig": zod.record(zod.string(), zod.unknown()).optional(),
   "isEnabled": zod.boolean().optional()
 })
@@ -1424,7 +1289,6 @@ export const CreateConnectorResponse = zod.object({
   "name": zod.string(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
-  "connectionId": zod.string().optional(),
   "authConfig": zod.record(zod.string(), zod.unknown()),
   "isEnabled": zod.boolean(),
   "createdAt": zod.string(),
@@ -1452,7 +1316,6 @@ export const UpdateConnectorResponse = zod.object({
   "name": zod.string(),
   "endpointPattern": zod.string(),
   "authType": zod.string(),
-  "connectionId": zod.string().optional(),
   "authConfig": zod.record(zod.string(), zod.unknown()),
   "isEnabled": zod.boolean(),
   "createdAt": zod.string(),
@@ -1584,15 +1447,77 @@ export const ImportAppearanceResponse = zod.object({
 
 
 /**
- * @summary Create an account without an email verification code
+ * @summary Return the signed-in workspace member and role
  */
-export const RegisterBody = zod.object({
+export const GetMeResponse = zod.object({
   "email": zod.string(),
-  "password": zod.string()
+  "role": zod.enum(['editor', 'viewer'])
 })
 
-export const RegisterResponse = zod.object({
-  "ticket": zod.string()
+
+/**
+ * @summary List invited workspace members
+ */
+export const ListMembersResponseItem = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer']),
+  "status": zod.enum(['invited', 'active']),
+  "invitedByEmail": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
+export const ListMembersResponse = zod.array(ListMembersResponseItem)
+
+
+/**
+ * @summary Invite a papernest.com user with a role
+ */
+export const InviteMemberBody = zod.object({
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer'])
+})
+
+export const InviteMemberResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer']),
+  "status": zod.enum(['invited', 'active']),
+  "invitedByEmail": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Change a member role
+ */
+export const UpdateMemberParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateMemberBody = zod.object({
+  "role": zod.enum(['editor', 'viewer'])
+})
+
+export const UpdateMemberResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer']),
+  "status": zod.enum(['invited', 'active']),
+  "invitedByEmail": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Revoke workspace access
+ */
+export const DeleteMemberParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteMemberResponse = zod.void()
 
 

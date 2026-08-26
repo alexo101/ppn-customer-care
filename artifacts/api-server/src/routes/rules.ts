@@ -13,7 +13,7 @@ import {
   apiConnectorsTable,
   audienceTargetsTable,
 } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   ListRulesQueryParams,
   CreateRuleBody,
@@ -97,7 +97,7 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.post("/rules", requireAuth, async (req, res): Promise<void> => {
+router.post("/rules", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = CreateRuleBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -171,6 +171,7 @@ router.post("/rules", requireAuth, async (req, res): Promise<void> => {
 router.post(
   "/agents/:agentId/rule-authoring/messages",
   requireAuth,
+  requireEditor,
   async (req, res): Promise<void> => {
     const params = SendRuleAuthoringMessageParams.safeParse(req.params);
     if (!params.success) {
@@ -265,15 +266,15 @@ router.post(
           context: {
             categories,
             sources,
-            operators: vocabularies
-              .filter((item) => item.kind === "operator")
-              .map((item) => ({ label: item.label })),
-            actions: vocabularies
-              .filter((item) => item.kind === "action")
-              .map((item) => ({
-                label: item.label,
-                requiresSource: item.requiresSource,
-              })),
+            operators: uniqueVocabularyLabels(
+              vocabularies.filter((item) => item.kind === "operator"),
+            ).map((item) => ({ label: item.label })),
+            actions: uniqueVocabularyLabels(
+              vocabularies.filter((item) => item.kind === "action"),
+            ).map((item) => ({
+              label: item.label,
+              requiresSource: item.requiresSource,
+            })),
             audienceTargets,
           },
         },
@@ -290,7 +291,7 @@ router.post(
   },
 );
 
-router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/rules/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateRuleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -398,7 +399,7 @@ router.patch("/rules/:id", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/rules/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/rules/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = DeleteRuleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -460,6 +461,7 @@ router.get(
 router.post(
   "/rules/:id/categories",
   requireAuth,
+  requireEditor,
   async (req, res): Promise<void> => {
     const params = LinkRuleCategoryParams.safeParse(req.params);
     if (!params.success) {
@@ -504,6 +506,7 @@ router.post(
 router.delete(
   "/rules/:id/categories/:categoryId",
   requireAuth,
+  requireEditor,
   async (req, res): Promise<void> => {
     const params = UnlinkRuleCategoryParams.safeParse(req.params);
     if (!params.success) {
@@ -569,13 +572,14 @@ router.get(
       )
       .orderBy(ruleVocabulariesTable.sortOrder, ruleVocabulariesTable.label);
 
-    res.json(rows.map(toVocabulary));
+    res.json(uniqueVocabularies(rows).map(toVocabulary));
   },
 );
 
 router.post(
   "/rule-vocabularies",
   requireAuth,
+  requireEditor,
   async (req, res): Promise<void> => {
     const parsed = CreateRuleVocabularyBody.safeParse(req.body);
     if (!parsed.success) {
@@ -648,6 +652,7 @@ router.post(
 router.patch(
   "/rule-vocabularies/:id",
   requireAuth,
+  requireEditor,
   async (req, res): Promise<void> => {
     const params = UpdateRuleVocabularyParams.safeParse(req.params);
     if (!params.success) {
@@ -716,6 +721,7 @@ router.patch(
 router.delete(
   "/rule-vocabularies/:id",
   requireAuth,
+  requireEditor,
   async (req, res): Promise<void> => {
     const params = DeleteRuleVocabularyParams.safeParse(req.params);
     if (!params.success) {
@@ -912,6 +918,33 @@ function toCategory(row: typeof intentCategoriesTable.$inferSelect) {
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };
+}
+
+function uniqueVocabularyLabels<T extends { label: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const row of rows) {
+    const key = row.label.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+  }
+  return unique;
+}
+
+function uniqueVocabularies(rows: Array<typeof ruleVocabulariesTable.$inferSelect>) {
+  const ranked = [...rows].sort((left, right) => Number(right.isBuiltin) - Number(left.isBuiltin));
+  const seen = new Set<string>();
+  const unique: typeof ranked = [];
+  for (const row of ranked) {
+    const key = `${row.kind}:${row.slug || row.label.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+  }
+  return unique.sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label),
+  );
 }
 
 function toVocabulary(row: typeof ruleVocabulariesTable.$inferSelect) {

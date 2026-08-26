@@ -1,14 +1,12 @@
-import { Show, useAuth } from '@clerk/react';
-import { useSignIn } from '@clerk/react/legacy';
-import { useState } from 'react';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { Link, Redirect, useLocation } from 'wouter';
-import { AuthLayout } from '@/components/auth-layout';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Show, useAuth } from "@clerk/react";
+import { useSignIn } from "@clerk/react/legacy";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
+import { Redirect } from "wouter";
+import { AuthLayout } from "@/components/auth-layout";
+import { Button } from "@/components/ui/button";
 
-const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function SignedInRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -29,29 +27,34 @@ export default function Login() {
 }
 
 function LoginForm() {
-  const [, setLocation] = useLocation();
-  const { isLoaded, signIn, setActive } = useSignIn();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const pending = !isLoaded;
+  const { isLoaded, signIn } = useSignIn();
+  const [error, setError] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("error") === "forbidden") {
+      return "This workspace is only for invited papernest.com Google accounts.";
+    }
+    return null;
+  });
+  const [pending, setPending] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!signIn || pending) return;
+  const handleGoogle = async () => {
+    if (!signIn || !isLoaded || pending) return;
     setError(null);
-
+    setPending(true);
     try {
-      const attempt = await signIn.create({ identifier: email, password });
-      if (attempt.status === 'complete' && attempt.createdSessionId) {
-        await setActive({ session: attempt.createdSessionId });
-        setLocation('/dashboard');
-        return;
-      }
-      setError('Sign-in needs another step. Please try again or use account recovery.');
+      await signIn.authenticateWithRedirect({
+        strategy: "oauth_google",
+        redirectUrl: `${window.location.origin}${basePath}/sso-callback`,
+        redirectUrlComplete: `${window.location.origin}${basePath}/dashboard`,
+        oidcPrompt: "select_account",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message.replace(/^HTTP \d+ [^:]+:\s*/, '') : 'Could not sign in.');
+      setPending(false);
+      setError(
+        err instanceof Error
+          ? err.message.replace(/^HTTP \d+ [^:]+:\s*/, "")
+          : "Could not start Google sign-in.",
+      );
     }
   };
 
@@ -59,62 +62,37 @@ function LoginForm() {
     <div className="w-full max-w-sm space-y-6">
       <div className="space-y-1 text-center md:text-left">
         <h1 className="text-2xl font-medium tracking-tight">Welcome back</h1>
-        <p className="text-sm text-muted-foreground">Sign in to your support workspace.</p>
+        <p className="text-sm text-muted-foreground">
+          Sign in with your @papernest.com Google account. You must be invited to this workspace.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="login-email" className="text-xs">Email</Label>
-          <Input
-            id="login-email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="h-10 bg-background"
-            placeholder="you@company.com"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="login-password" className="text-xs">Password</Label>
-          <div className="relative">
-            <Input
-              id="login-password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-10 bg-background pr-10"
-              placeholder="Your password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((visible) => !visible)}
-              className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-pressed={showPassword}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-        </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
-
-        <Button type="submit" className="h-10 w-full" disabled={pending}>
-          {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Sign in
-        </Button>
-      </form>
-
-      <p className="text-center text-xs text-muted-foreground">
-        Don&apos;t have an account?{' '}
-        <Link href={`${basePath}/signup`} className="text-foreground underline underline-offset-4 hover:text-primary">
-          Create one
-        </Link>
-      </p>
+      <Button
+        type="button"
+        className="h-10 w-full"
+        disabled={!isLoaded || pending}
+        onClick={() => void handleGoogle()}
+      >
+        {pending || !isLoaded ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <GoogleMark />
+        )}
+        Continue with Google
+      </Button>
     </div>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M21.35 11.1h-9.18v2.96h5.27c-.23 1.5-1.78 4.4-5.27 4.4-3.18 0-5.78-2.63-5.78-5.86s2.6-5.86 5.78-5.86c1.81 0 3.03.77 3.73 1.43l2.54-2.45C16.54 4.36 14.46 3.4 12.17 3.4 7.5 3.4 3.7 7.2 3.7 11.9s3.8 8.5 8.47 8.5c4.89 0 8.13-3.44 8.13-8.28 0-.56-.06-1.02-.15-1.02z"
+      />
+    </svg>
   );
 }

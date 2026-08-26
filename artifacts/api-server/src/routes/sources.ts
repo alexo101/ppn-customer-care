@@ -1,23 +1,21 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import multer from "multer";
-import mammoth from "mammoth";
 import {
   db,
   knowledgeSourcesTable,
   apiConnectorsTable,
   agentSourceAssignmentsTable,
   agentConnectorAssignmentsTable,
-  connectionsTable,
+  agentsTable,
 } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   ListSourcesQueryParams,
   CreateSourceBody,
   UpdateSourceParams,
   UpdateSourceBody,
   DeleteSourceParams,
-  BrowseSourceIntegrationQueryParams,
   RefreshSourceParams,
   ListConnectorsQueryParams,
   CreateConnectorBody,
@@ -25,41 +23,35 @@ import {
   UpdateConnectorBody,
   DeleteConnectorParams,
 } from "@workspace/api-zod";
+import { z } from "zod";
 
 import { getOwnedAgent } from "../lib/agents";
 import {
-  getSourceIntegration,
-  IntegrationProviderError,
-  isSourceIntegrationName,
-  listSourceIntegrations,
-} from "../lib/replit-integrations";
-import {
-  browseIntegrationContent,
   indexSource,
   isIndexableSourceType,
 } from "../lib/knowledge-indexing";
-import { parseSelectedKnowledgeItems } from "../lib/integration-knowledge";
 import { createEmbeddingProvider, EmbeddingProviderError } from "../lib/llm";
 import { logger } from "../lib/logger";
-import { createManagedIntegrationProxy } from "../lib/managed-integrations";
-
-const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const MAX_DOCX_BYTES = 10 * 1024 * 1024;
+import {
+  extractOfficeText,
+  isAllowedOfficeUpload,
+  OFFICE_MAX_BYTES,
+} from "../lib/extract-office";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_DOCX_BYTES },
+  limits: { fileSize: OFFICE_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
-    const name = file.originalname.toLowerCase();
-    if (file.mimetype === DOCX_MIME || name.endsWith(".docx")) {
+    if (isAllowedOfficeUpload(file)) {
       cb(null, true);
       return;
     }
-    cb(new Error("Only .docx files are supported"));
+    cb(new Error("Only .docx and .xlsx files are supported"));
   },
 });
 
 const router: IRouter = Router();
+const uuid = z.string().uuid();
 
 async function requireAgent(
   userId: string,
@@ -93,7 +85,7 @@ router.get("/sources", requireAuth, async (req, res): Promise<void> => {
   res.json(rows.map(toSource));
 });
 
-router.post("/sources", requireAuth, async (req, res): Promise<void> => {
+router.post("/sources", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = CreateSourceBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -106,20 +98,13 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
   }
   if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
 
-  let connectionConfig: Record<string, unknown> =
-    (parsed.data.connectionConfig as Record<string, unknown> | undefined) ?? {};
-
   if (parsed.data.sourceType === "notion" || parsed.data.sourceType === "confluence") {
-    const integrationConfig = await integrationConnectionConfig(
-      parsed.data.sourceType,
-      connectionConfig,
-    );
-    if ("error" in integrationConfig) {
-      res.status(400).json({ error: integrationConfig.error });
-      return;
-    }
-    connectionConfig = integrationConfig.config;
+    res.status(400).json({ error: "Notion and Confluence sources are not supported." });
+    return;
   }
+
+  const connectionConfig: Record<string, unknown> =
+    (parsed.data.connectionConfig as Record<string, unknown> | undefined) ?? {};
 
   const [row] = await db
     .insert(knowledgeSourcesTable)
@@ -138,62 +123,31 @@ router.post("/sources", requireAuth, async (req, res): Promise<void> => {
   queueSourceIndex(row.id);
 });
 
-router.get("/sources/integrations", requireAuth, async (_req, res): Promise<void> => {
-  const integrations = await listSourceIntegrations();
-  res.json(integrations);
+router.post("/agents/:agentId/sources/:sourceId", requireAuth, requireEditor, async (req, res): Promise<void> => {
+  const agentId = uuid.safeParse(req.params.agentId);
+  const sourceId = uuid.safeParse(req.params.sourceId);
+  if (!agentId.success || !sourceId.success) {
+    res.status(400).json({ error: "Invalid assignment" });
+    return;
+  }
+  const [agent] = await db.select().from(agentsTable)
+    .where(eq(agentsTable.id, agentId.data))
+    .limit(1);
+  const [source] = await db.select().from(knowledgeSourcesTable)
+    .where(eq(knowledgeSourcesTable.id, sourceId.data))
+    .limit(1);
+  if (!agent || !source) {
+    res.status(404).json({ error: "Agent or source not found" });
+    return;
+  }
+  const [assignment] = await db.insert(agentSourceAssignmentsTable)
+    .values({ agentId: agent.id, sourceId: sourceId.data })
+    .onConflictDoNothing()
+    .returning();
+  res.status(201).json(assignment ?? { agentId: agent.id, sourceId: sourceId.data });
 });
 
-router.get("/sources/integrations/browse", requireAuth, async (req, res): Promise<void> => {
-  const parsed = BrowseSourceIntegrationQueryParams.safeParse(req.query);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  if (!isSourceIntegrationName(parsed.data.connectorName)) {
-    res.status(400).json({ error: "Unsupported integration." });
-    return;
-  }
-
-  if (parsed.data.connectionId) {
-    try {
-      const proxy = await createManagedIntegrationProxy(
-        parsed.data.connectionId,
-      );
-      const result = await browseIntegrationContent(parsed.data.connectorName, {
-        query: parsed.data.query,
-        cursor: parsed.data.cursor,
-        spaceId: parsed.data.spaceId,
-      }, proxy);
-      res.json(result);
-    } catch (error) {
-      const mapped = integrationErrorResponse(error);
-      res.status(mapped.status).json({ error: mapped.error });
-    }
-    return;
-  }
-
-  const integration = await getSourceIntegration(parsed.data.connectorName);
-  if (!integration?.connected) {
-    res.status(403).json({
-      error: `Connect ${integration?.displayName ?? parsed.data.connectorName} in Replit Integrations first.`,
-    });
-    return;
-  }
-
-  try {
-    const result = await browseIntegrationContent(parsed.data.connectorName, {
-      query: parsed.data.query,
-      cursor: parsed.data.cursor,
-      spaceId: parsed.data.spaceId,
-    });
-    res.json(result);
-  } catch (error) {
-    const mapped = integrationErrorResponse(error);
-    res.status(mapped.status).json({ error: mapped.error });
-  }
-});
-
-router.post("/sources/:id/refresh", requireAuth, async (req, res): Promise<void> => {
+router.post("/sources/:id/refresh", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = RefreshSourceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -214,20 +168,6 @@ router.post("/sources/:id/refresh", requireAuth, async (req, res): Promise<void>
     return;
   }
 
-  if (existing.sourceType === "notion" || existing.sourceType === "confluence") {
-    const config = (existing.connectionConfig ?? {}) as Record<string, unknown>;
-    const hasManaged = typeof config.connectionId === "string" || typeof config.organizationConnectionId === "string";
-    if (!hasManaged) {
-      const integration = await getSourceIntegration(existing.sourceType);
-      if (!integration?.connected) {
-        res.status(403).json({
-          error: `Connect ${existing.sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
-        });
-        return;
-      }
-    }
-  }
-
   try {
     await indexSource(existing.id, createEmbeddingProvider());
   } catch (error) {
@@ -244,7 +184,7 @@ router.post("/sources/:id/refresh", requireAuth, async (req, res): Promise<void>
   res.json(toSource(updated ?? existing));
 });
 
-router.post("/sources/upload", requireAuth, (req, res, next) => {
+router.post("/sources/upload", requireAuth, requireEditor, (req, res, next) => {
   upload.single("file")(req, res, (err: unknown) => {
     if (err) {
       const message = err instanceof Error ? err.message : "Could not upload the document.";
@@ -257,7 +197,7 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
 }, async (req, res): Promise<void> => {
   const file = req.file;
   if (!file?.buffer) {
-    res.status(400).json({ error: "A .docx file is required." });
+    res.status(400).json({ error: "A .docx or .xlsx file is required." });
     return;
   }
 
@@ -269,27 +209,33 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
   }
   if (!(await requireAgent(req.userId, agentId, res))) return;
 
-  let text = "";
+  let extracted: { kind: "document" | "spreadsheet"; text: string };
   try {
-    const extracted = await mammoth.extractRawText({ buffer: file.buffer });
-    text = extracted.value.trim();
+    extracted = await extractOfficeText({
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      buffer: file.buffer,
+    });
   } catch {
-    res.status(400).json({ error: "Could not read that Word document." });
+    res.status(400).json({ error: "Could not read that file." });
     return;
   }
 
-  const sourceName = name || file.originalname.replace(/\.docx$/i, "") || "Uploaded document";
+  const fallbackName = file.originalname.replace(/\.(docx|xlsx)$/i, "") || (
+    extracted.kind === "spreadsheet" ? "Uploaded spreadsheet" : "Uploaded document"
+  );
+  const sourceName = name || fallbackName;
   const [row] = await db
     .insert(knowledgeSourcesTable)
     .values({
       userId: req.userId,
       agentId,
       name: sourceName,
-      sourceType: "document",
-      connectionConfig: withIndexingState("document", {
+      sourceType: extracted.kind,
+      connectionConfig: withIndexingState(extracted.kind, {
         fileName: file.originalname,
-        mimeType: file.mimetype || DOCX_MIME,
-        text,
+        mimeType: file.mimetype,
+        text: extracted.text,
       }),
       isEnabled: true,
     })
@@ -300,7 +246,7 @@ router.post("/sources/upload", requireAuth, (req, res, next) => {
   queueSourceIndex(row.id);
 });
 
-router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/sources/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateSourceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -332,17 +278,12 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
     const incoming = (d.connectionConfig as Record<string, unknown>) ?? {};
     const sourceType = typeof d.sourceType === "string" ? d.sourceType : existing.sourceType;
     if (sourceType === "notion" || sourceType === "confluence") {
-      const integrationConfig = await integrationConnectionConfig(sourceType, incoming);
-      if ("error" in integrationConfig) {
-        res.status(400).json({ error: integrationConfig.error });
-        return;
-      }
-      updates.connectionConfig = integrationConfig.config;
-    } else if (isIndexableSourceType(sourceType)) {
-      updates.connectionConfig = withIndexingState(sourceType, incoming);
-    } else {
-      updates.connectionConfig = incoming;
+      res.status(400).json({ error: "Notion and Confluence sources are not supported." });
+      return;
     }
+    updates.connectionConfig = isIndexableSourceType(sourceType)
+      ? withIndexingState(sourceType, incoming)
+      : incoming;
   }
 
   const [row] = await db
@@ -362,7 +303,7 @@ router.patch("/sources/:id", requireAuth, async (req, res): Promise<void> => {
   }
 });
 
-router.delete("/sources/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/sources/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = DeleteSourceParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -382,7 +323,6 @@ router.delete("/sources/:id", requireAuth, async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
-// ── API Connectors ────────────────────────────────────────────────────────
 router.get("/connectors", requireAuth, async (req, res): Promise<void> => {
   const parsed = ListConnectorsQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -401,7 +341,7 @@ router.get("/connectors", requireAuth, async (req, res): Promise<void> => {
   res.json(rows.map(toConnector));
 });
 
-router.post("/connectors", requireAuth, async (req, res): Promise<void> => {
+router.post("/connectors", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = CreateConnectorBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -422,7 +362,6 @@ router.post("/connectors", requireAuth, async (req, res): Promise<void> => {
       name: parsed.data.name,
       endpointPattern: parsed.data.endpointPattern,
       authType: parsed.data.authType,
-      connectionId: parsed.data.connectionId ?? null,
       authConfig: parsed.data.authConfig ?? {},
       isEnabled: parsed.data.isEnabled ?? true,
     })
@@ -432,7 +371,7 @@ router.post("/connectors", requireAuth, async (req, res): Promise<void> => {
   await db.insert(agentConnectorAssignmentsTable).values({ agentId: parsed.data.agentId, connectorId: row.id }).onConflictDoNothing();
 });
 
-router.patch("/connectors/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/connectors/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateConnectorParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -450,7 +389,6 @@ router.patch("/connectors/:id", requireAuth, async (req, res): Promise<void> => 
   if (d.name !== undefined) updates.name = d.name;
   if (d.endpointPattern !== undefined) updates.endpointPattern = d.endpointPattern;
   if (d.authType !== undefined) updates.authType = d.authType;
-  if (d.connectionId !== undefined) updates.connectionId = d.connectionId;
   if (d.authConfig !== undefined) updates.authConfig = d.authConfig;
   if (d.isEnabled !== undefined) updates.isEnabled = d.isEnabled;
 
@@ -468,7 +406,7 @@ router.patch("/connectors/:id", requireAuth, async (req, res): Promise<void> => 
   res.json(toConnector(row));
 });
 
-router.delete("/connectors/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/connectors/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = DeleteConnectorParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -506,62 +444,10 @@ function toConnector(row: typeof apiConnectorsTable.$inferSelect) {
     name: row.name,
     endpointPattern: row.endpointPattern,
     authType: row.authType,
-    connectionId: row.connectionId ?? null,
     authConfig: (row.authConfig as Record<string, unknown>) ?? {},
     isEnabled: row.isEnabled,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
-  };
-}
-
-async function integrationConnectionConfig(
-  sourceType: "notion" | "confluence",
-  incoming: Record<string, unknown>,
-): Promise<{ config: Record<string, unknown> } | { error: string }> {
-  const managedConnectionId =
-    typeof incoming.connectionId === "string"
-      ? incoming.connectionId
-      : typeof incoming.organizationConnectionId === "string"
-        ? incoming.organizationConnectionId
-        : null;
-  if (managedConnectionId) {
-    const [managed] = await db
-      .select()
-      .from(connectionsTable)
-      .where(and(
-        eq(connectionsTable.id, managedConnectionId),
-        eq(connectionsTable.provider, sourceType),
-        eq(connectionsTable.status, "connected"),
-      ))
-      .limit(1);
-    if (!managed) return { error: "Connection is not available." };
-    const selectedItems = parseSelectedKnowledgeItems(incoming.selectedItems);
-    if (selectedItems.length === 0) return { error: "Select at least one page, database, or space." };
-    return {
-      config: {
-        connectionId: managedConnectionId,
-        selectedItems,
-        ...indexingState(),
-      },
-    };
-  }
-  const integration = await getSourceIntegration(sourceType);
-  if (!integration?.connected) {
-    return {
-      error: `Connect ${sourceType === "notion" ? "Notion" : "Confluence"} in Replit Integrations first.`,
-    };
-  }
-  const selectedItems = parseSelectedKnowledgeItems(incoming.selectedItems);
-  if (selectedItems.length === 0) {
-    return { error: "Select at least one page, database, or space." };
-  }
-  return {
-    config: {
-      connectorName: integration.connectorName,
-      connectionId: integration.connectionId,
-      selectedItems,
-      ...indexingState(),
-    },
   };
 }
 
@@ -588,28 +474,9 @@ function indexErrorResponse(error: unknown): { status: number; error: string } {
   if (error instanceof EmbeddingProviderError) {
     return { status: 503, error: error.message };
   }
-  const mapped = integrationErrorResponse(error);
-  return {
-    status: mapped.status === 403 ? 403 : 502,
-    error: mapped.error,
-  };
-}
-
-function integrationErrorResponse(error: unknown): { status: number; error: string } {
-  if (error instanceof IntegrationProviderError) {
-    const status =
-      error.code === "disconnected" || error.code === "permission"
-        ? 403
-        : error.code === "not_found"
-          ? 404
-          : error.code === "rate_limit"
-            ? 429
-            : 502;
-    return { status, error: error.message };
-  }
   return {
     status: 502,
-    error: error instanceof Error ? error.message : "Could not reach the connected provider.",
+    error: error instanceof Error ? error.message : "Could not index this source.",
   };
 }
 

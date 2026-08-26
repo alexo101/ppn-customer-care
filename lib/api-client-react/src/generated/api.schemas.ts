@@ -5,43 +5,6 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
-export type ConnectionMetadata = { [key: string]: unknown };
-
-export interface Connection {
-  /** @pattern ^[0-9a-fA-F-]{36}$ */
-  id: string;
-  name: string;
-  provider: string;
-  status: string;
-  metadata?: ConnectionMetadata;
-  tokenExpiresAt?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export type ConnectionInputMetadata = { [key: string]: unknown };
-
-export interface ConnectionInput {
-  name: string;
-  provider: string;
-  accessToken?: string;
-  refreshToken?: string;
-  tokenExpiresAt?: string;
-  metadata?: ConnectionInputMetadata;
-}
-
-export type OAuthStartInputProvider = typeof OAuthStartInputProvider[keyof typeof OAuthStartInputProvider];
-
-
-export const OAuthStartInputProvider = {
-  notion: 'notion',
-  confluence: 'confluence',
-} as const;
-
-export interface OAuthStartInput {
-  provider: OAuthStartInputProvider;
-}
-
 export type AgentSettingsConfiguration = { [key: string]: unknown };
 
 export interface AgentSettings {
@@ -173,7 +136,7 @@ export interface TrainingQuestionUpdate {
 export interface TrainingQuestionBulkInput {
   agentId: string;
   /**
-     * @maxItems 100
+     * @maxItems 200
      * @items.maxLength 2000
      */
   questions: string[];
@@ -514,38 +477,6 @@ export interface SourceUpdate {
   isEnabled?: boolean;
 }
 
-export interface SourceIntegration {
-  connectorName: string;
-  displayName: string;
-  connected: boolean;
-  connectionId?: string | null;
-  status?: string | null;
-}
-
-export type SourceBrowseItemType = typeof SourceBrowseItemType[keyof typeof SourceBrowseItemType];
-
-
-export const SourceBrowseItemType = {
-  page: 'page',
-  database: 'database',
-  space: 'space',
-} as const;
-
-export interface SourceBrowseItem {
-  id: string;
-  type: SourceBrowseItemType;
-  title: string;
-  parentTitle?: string;
-  url?: string;
-}
-
-export interface SourceBrowseResult {
-  items: SourceBrowseItem[];
-  /** @nullable */
-  nextCursor?: string | null;
-  spaceTitle?: string;
-}
-
 export interface SourceUploadInput {
   agentId: string;
   name?: string;
@@ -665,7 +596,6 @@ export interface ApiConnector {
   name: string;
   endpointPattern: string;
   authType: string;
-  connectionId?: string;
   authConfig: ApiConnectorAuthConfig;
   isEnabled: boolean;
   createdAt: string;
@@ -679,7 +609,6 @@ export interface ConnectorInput {
   agentId?: string;
   endpointPattern: string;
   authType: string;
-  connectionId?: string;
   authConfig?: ConnectorInputAuthConfig;
   isEnabled?: boolean;
 }
@@ -744,18 +673,45 @@ export interface ImportAppearanceResult {
   logoCandidates?: string[];
 }
 
-export interface RegisterInput {
+export type MemberRole = typeof MemberRole[keyof typeof MemberRole];
+
+
+export const MemberRole = {
+  editor: 'editor',
+  viewer: 'viewer',
+} as const;
+
+export type MemberStatus = typeof MemberStatus[keyof typeof MemberStatus];
+
+
+export const MemberStatus = {
+  invited: 'invited',
+  active: 'active',
+} as const;
+
+export interface CurrentMember {
   email: string;
-  password: string;
+  role: MemberRole;
 }
 
-export interface RegisterResult {
-  ticket: string;
+export interface WorkspaceMember {
+  id: string;
+  email: string;
+  role: MemberRole;
+  status: MemberStatus;
+  invitedByEmail?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export type StartConnectionOAuth200 = {
-  authorizationUrl: string;
-};
+export interface InviteMemberInput {
+  email: string;
+  role: MemberRole;
+}
+
+export interface UpdateMemberInput {
+  role: MemberRole;
+}
 
 export type ListConversationsParams = {
 agentId?: string;
@@ -829,22 +785,6 @@ export const ListRuleVocabulariesKind = {
 export type ListSourcesParams = {
 agentId?: string;
 };
-
-export type BrowseSourceIntegrationParams = {
-connectorName: BrowseSourceIntegrationConnectorName;
-query?: string;
-cursor?: string;
-spaceId?: string;
-connectionId?: string;
-};
-
-export type BrowseSourceIntegrationConnectorName = typeof BrowseSourceIntegrationConnectorName[keyof typeof BrowseSourceIntegrationConnectorName];
-
-
-export const BrowseSourceIntegrationConnectorName = {
-  notion: 'notion',
-  confluence: 'confluence',
-} as const;
 
 export type ListTargetsParams = {
 agentId: string;

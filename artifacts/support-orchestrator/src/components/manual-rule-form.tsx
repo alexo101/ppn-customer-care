@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { MutatingControls } from "@/components/workspace-access";
 import {
   actionIsEscalation,
   actionUsesSource,
@@ -238,10 +239,12 @@ export function ManualRuleForm({
         <p className="text-xs text-muted-foreground">
           {canSave ? "Ready to save this rule." : "Add a name and at least one category or subcategory to save."}
         </p>
-        <Button type="submit" disabled={saving || !canSave}>
-          <Save className="h-4 w-4" />
-          Save rule
-        </Button>
+        <MutatingControls>
+          <Button type="submit" disabled={saving || !canSave}>
+            <Save className="h-4 w-4" />
+            Save rule
+          </Button>
+        </MutatingControls>
       </div>
     </form>
   );
@@ -507,11 +510,20 @@ function VocabPicker({
   const vocabularies = useListRuleVocabularies({ agentId, kind });
   const createVocabulary = useCreateRuleVocabulary();
   const entries = useMemo(() => {
-    const current = value.trim();
-    if (current && !vocabularies.data?.some((item) => item.label === current)) {
-      return [{ id: `current-${current}`, label: current }, ...(vocabularies.data ?? [])];
+    const unique: { id: string; label: string }[] = [];
+    const seen = new Set<string>();
+    for (const item of vocabularies.data ?? []) {
+      const key = item.label.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      unique.push(item);
     }
-    return vocabularies.data ?? [];
+    const current = value.trim();
+    const currentKey = current.toLowerCase();
+    if (current && !seen.has(currentKey)) {
+      return [{ id: `current-${current}`, label: current }, ...unique];
+    }
+    return unique;
   }, [value, vocabularies.data]);
 
   const addCustom = () => {
@@ -547,7 +559,7 @@ function VocabPicker({
         </SelectTrigger>
         <SelectContent>
           {entries.map((entry) => (
-            <SelectItem key={entry.id} value={entry.label}>{entry.label}</SelectItem>
+            <SelectItem key={entry.label} value={entry.label}>{entry.label}</SelectItem>
           ))}
         </SelectContent>
       </Select>

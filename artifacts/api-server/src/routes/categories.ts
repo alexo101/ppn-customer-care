@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, intentCategoriesTable } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   ListCategoriesQueryParams,
   CreateCategoryBody,
@@ -41,7 +41,7 @@ router.get("/categories", requireAuth, async (req, res): Promise<void> => {
   res.json(rows.map(toCategory));
 });
 
-router.post("/categories", requireAuth, async (req, res): Promise<void> => {
+router.post("/categories", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = CreateCategoryBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -78,7 +78,7 @@ router.post("/categories", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(toCategory(row));
 });
 
-router.patch("/categories/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/categories/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateCategoryParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -118,7 +118,7 @@ router.patch("/categories/:id", requireAuth, async (req, res): Promise<void> => 
   res.json(toCategory(row));
 });
 
-router.delete("/categories/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/categories/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = DeleteCategoryParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

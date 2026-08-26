@@ -30,6 +30,7 @@ import { RuleEditorDialog } from "@/components/rule-editor-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatCategoryPath, formatRuleSentence, apiErrorMessage } from "@/lib/rules";
 import { cn } from "@/lib/utils";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 
 export function RulesTab({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
@@ -196,23 +197,25 @@ export function RulesTab({ agentId }: { agentId: string }) {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs"
-              onClick={() => openAuthoring(null, "manual")}
-            >
-              <PenLine className="h-3.5 w-3.5" />
-              Set the rule manually
-            </Button>
-            <Button
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => openAuthoring(null, "ai")}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Chat with AI to create a rule
-            </Button>
+            <MutatingControls>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => openAuthoring(null, "manual")}
+              >
+                <PenLine className="h-3.5 w-3.5" />
+                Set the rule manually
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => openAuthoring(null, "ai")}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Chat with AI to create a rule
+              </Button>
+            </MutatingControls>
           </div>
         </div>
 
@@ -366,6 +369,7 @@ function RuleRow({
   onDelete,
   onToggle,
 }: RowProps) {
+  const { canEdit } = useWorkspaceAccess();
   const sentence = formatRuleSentence({
     operator: rule.conditionOperator,
     categoryNames: rule.categoryIds
@@ -426,24 +430,26 @@ function RuleRow({
         <Switch
           checked={rule.isEnabled}
           onCheckedChange={onToggle}
+          disabled={!canEdit}
           aria-label={rule.isEnabled ? "Disable rule" : "Enable rule"}
         />
       </div>
 
-      {/* Delete */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="mr-2 h-8 w-8 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus:opacity-100"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        aria-label={`Delete ${rule.name}`}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {canEdit ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="mr-2 h-8 w-8 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label={`Delete ${rule.name}`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      ) : null}
     </div>
   );
 }

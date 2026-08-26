@@ -57,6 +57,7 @@ import {
   formatCondition,
   isCatchAllTarget,
 } from "@/lib/targets";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 
 function emptyForm(): {
   name: string;
@@ -75,6 +76,7 @@ function emptyForm(): {
 }
 
 export function TargetsTab({ agentId }: { agentId: string }) {
+  const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
   const { data: targets = [] } = useListTargets({ agentId });
   const createTarget = useCreateTarget();
@@ -245,10 +247,12 @@ export function TargetsTab({ agentId }: { agentId: string }) {
               {targets.length}
             </span>
           </div>
-          <Button size="sm" className="h-8 text-xs" onClick={openCreate}>
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Add target
-          </Button>
+          <MutatingControls>
+            <Button size="sm" className="h-8 text-xs" onClick={openCreate}>
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Add target
+            </Button>
+          </MutatingControls>
         </div>
 
         {targets.length === 0 ? (
@@ -293,6 +297,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                 <div className="flex items-center gap-3 shrink-0 pt-0.5">
                   <Switch
                     checked={target.isEnabled}
+                    disabled={!canEdit}
                     onCheckedChange={(checked) => {
                       updateTarget.mutate(
                         { id: target.id, data: { isEnabled: checked } },
@@ -309,6 +314,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                       );
                     }}
                   />
+                  {canEdit ? (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -317,6 +323,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   >
                     <Trash className="w-3.5 h-3.5" />
                   </Button>
+                  ) : null}
                 </div>
               </div>
             ))}

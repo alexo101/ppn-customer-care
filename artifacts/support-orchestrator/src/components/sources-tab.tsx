@@ -4,30 +4,17 @@ import {
   useCreateSource,
   useUpdateSource,
   useDeleteSource,
-  useListSourceIntegrations,
-  useListConnections,
   useUploadSourceDocument,
   useRefreshSource,
-  browseSourceIntegration,
   getListSourcesQueryKey,
-  getListSourceIntegrationsQueryKey,
-  getListConnectionsQueryKey,
   type KnowledgeSource,
-  type SourceBrowseItem,
-  type SourceIntegration,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
-  ArrowLeft,
-  BookOpen,
-  ExternalLink,
   FileText,
   FileUp,
-  Link2,
-  Loader2,
   MoreVertical,
-  Plug,
   RefreshCw,
   Table2,
   Trash,
@@ -38,8 +25,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -66,20 +51,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 
-const REPLIT_INTEGRATIONS_URL =
-  "https://replit.com/~?settings.show=true&settings.tab=integrations";
-
-type SourceKind = "article" | "document" | "spreadsheet" | "notion" | "confluence";
-type AddKind = SourceKind | "document-or-spreadsheet";
-type DialogKind = AddKind | "edit-article" | null;
+type SourceKind = "article" | "document";
+type DialogKind = SourceKind | "edit-article" | null;
 
 const SOURCE_LABELS: Record<string, string> = {
   article: "Article",
   document: "Document",
   spreadsheet: "Spreadsheet",
-  notion: "Notion",
-  confluence: "Confluence",
 };
 
 function configString(config: Record<string, unknown> | undefined, key: string) {
@@ -89,20 +69,6 @@ function configString(config: Record<string, unknown> | undefined, key: string) 
 
 function configValue(config: Record<string, unknown> | undefined, key: string): unknown {
   return config?.[key];
-}
-
-function selectedKnowledgeItems(config: Record<string, unknown> | undefined): SourceBrowseItem[] {
-  const raw = configValue(config, "selectedItems");
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((entry) => {
-    if (!entry || typeof entry !== "object") return [];
-    const item = entry as Record<string, unknown>;
-    const id = typeof item.id === "string" ? item.id : "";
-    const type = item.type === "page" || item.type === "database" || item.type === "space" ? item.type : null;
-    const title = typeof item.title === "string" ? item.title : id;
-    if (!id || !type) return [];
-    return [{ id, type, title, parentTitle: typeof item.parentTitle === "string" ? item.parentTitle : undefined }];
-  });
 }
 
 function syncStatus(config: Record<string, unknown> | undefined) {
@@ -124,7 +90,7 @@ function syncBadge(config: Record<string, unknown> | undefined) {
 }
 
 function isIndexableSourceType(sourceType: string) {
-  return sourceType === "article" || sourceType === "document" || sourceType === "notion" || sourceType === "confluence";
+  return sourceType === "article" || sourceType === "document" || sourceType === "spreadsheet";
 }
 
 function chunkCount(config: Record<string, unknown> | undefined) {
@@ -141,14 +107,7 @@ function sourceScope(source: KnowledgeSource) {
     return configString(config, "fileName") || "Word document";
   }
   if (source.sourceType === "spreadsheet") {
-    return configString(config, "url") || "Spreadsheet link";
-  }
-  if (source.sourceType === "notion" || source.sourceType === "confluence") {
-    const items = selectedKnowledgeItems(config);
-    const titles = items.map((item) => item.title);
-    if (titles.length === 0) return "No content selected";
-    if (titles.length <= 2) return titles.join(", ");
-    return `${titles.slice(0, 2).join(", ")} +${titles.length - 2} more`;
+    return configString(config, "fileName") || "Excel spreadsheet";
   }
   return source.sourceType;
 }
@@ -172,25 +131,13 @@ function SourceTypeIcon({ type, className }: { type: string; className?: string 
   const props = { className: cn("w-4 h-4", className) };
   if (type === "document") return <FileUp {...props} />;
   if (type === "spreadsheet") return <Table2 {...props} />;
-  if (type === "notion") return <BookOpen {...props} />;
-  if (type === "confluence") return <Plug {...props} />;
   return <FileText {...props} />;
 }
 
-function integrationFor(
-  integrations: SourceIntegration[],
-  connectorName: "notion" | "confluence",
-) {
-  return integrations.find((item) => item.connectorName === connectorName);
-}
-
 export function SourcesTab({ agentId }: { agentId: string }) {
+  const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
   const { data: sources = [] } = useListSources({ agentId });
-  const { data: integrations = [], refetch: refetchIntegrations } = useListSourceIntegrations();
-  const { data: companyConnections = [] } = useListConnections({
-    query: { queryKey: getListConnectionsQueryKey() },
-  });
   const createSource = useCreateSource();
   const updateSource = useUpdateSource();
   const deleteSource = useDeleteSource();
@@ -202,14 +149,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   const [sourceToDelete, setSourceToDelete] = useState<KnowledgeSource | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const saving =
-    createSource.isPending ||
-    updateSource.isPending ||
-    uploadDocument.isPending;
+  const saving = createSource.isPending || updateSource.isPending || uploadDocument.isPending;
 
   const invalidateSources = () => {
     queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey({ agentId }) });
@@ -226,31 +169,19 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     return () => window.clearInterval(timer);
   }, [sources, agentId, queryClient]);
 
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        queryClient.invalidateQueries({ queryKey: getListSourceIntegrationsQueryKey() });
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [queryClient]);
-
   const resetDialog = () => {
     setDialog(null);
     setEditing(null);
     setTitle("");
     setBody("");
-    setUrl("");
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const openAdd = (kind: AddKind) => {
+  const openAdd = (kind: SourceKind) => {
     setEditing(null);
     setTitle("");
     setBody("");
-    setUrl("");
     setFile(null);
     setDialog(kind);
   };
@@ -261,19 +192,6 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       setTitle(source.name);
       setBody(configString(source.connectionConfig, "body"));
       setDialog("edit-article");
-      return;
-    }
-    if (source.sourceType === "spreadsheet") {
-      setEditing(source);
-      setTitle(source.name);
-      setUrl(configString(source.connectionConfig, "url"));
-      setDialog("spreadsheet");
-      return;
-    }
-    if (source.sourceType === "notion" || source.sourceType === "confluence") {
-      setEditing(source);
-      setTitle(source.name);
-      setDialog(source.sourceType);
     }
   };
 
@@ -311,52 +229,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     );
   };
 
-  const handleSaveSpreadsheet = (event: React.FormEvent) => {
-    event.preventDefault();
-    let parsed: URL;
-    try {
-      parsed = new URL(url.trim());
-    } catch {
-      toast({ title: "Enter a valid spreadsheet URL", variant: "destructive" });
-      return;
-    }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      toast({ title: "Enter a valid spreadsheet URL", variant: "destructive" });
-      return;
-    }
-
-    const name = title.trim() || parsed.hostname.replace(/^www\./, "") || "Spreadsheet";
-    const onSuccess = () => {
-      invalidateSources();
-      toast({ title: editing ? "Spreadsheet updated" : "Spreadsheet added" });
-      resetDialog();
-    };
-
-    if (editing) {
-      updateSource.mutate(
-        { id: editing.id, data: { name, connectionConfig: { url: parsed.toString() } } },
-        { onSuccess, onError: handleCreateError },
-      );
-      return;
-    }
-
-    createSource.mutate(
-      {
-        data: {
-          agentId,
-          name,
-          sourceType: "spreadsheet",
-          connectionConfig: { url: parsed.toString() },
-        },
-      },
-      { onSuccess, onError: handleCreateError },
-    );
-  };
-
   const handleUploadDocument = (event: React.FormEvent) => {
     event.preventDefault();
     if (!file) {
-      toast({ title: "Choose a .docx file", variant: "destructive" });
+      toast({ title: "Choose a .docx or .xlsx file", variant: "destructive" });
       return;
     }
 
@@ -370,63 +246,6 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         },
         onError: handleCreateError,
       },
-    );
-  };
-
-  const handleLinkIntegration = (
-    connectorName: "notion" | "confluence",
-    selectedItems: SourceBrowseItem[],
-  ) => {
-    const integration = integrationFor(integrations, connectorName);
-    const managedConnection = companyConnections.find((connection) => connection.provider === connectorName);
-    if (!integration?.connected && !managedConnection) {
-      toast({
-        title: `Connect ${integration?.displayName ?? connectorName} first`,
-        description: "Open Replit Integrations, sign in, then come back here.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (selectedItems.length === 0) {
-      toast({ title: "Select at least one item", variant: "destructive" });
-      return;
-    }
-
-    const name =
-      title.trim() ||
-      (selectedItems.length === 1
-        ? selectedItems[0].title
-        : `${managedConnection?.provider ?? integration?.displayName ?? connectorName} (${selectedItems.length})`);
-    const connectionConfig = {
-      connectorName,
-      connectionId: integration?.connectionId,
-      ...(managedConnection ? { connectionId: managedConnection.id } : {}),
-      selectedItems,
-    };
-    const onSuccess = () => {
-      invalidateSources();
-      toast({ title: editing ? `${managedConnection?.provider ?? integration?.displayName ?? connectorName} updated` : `${managedConnection?.provider ?? integration?.displayName ?? connectorName} linked` });
-      resetDialog();
-    };
-
-    if (editing) {
-      updateSource.mutate(
-        { id: editing.id, data: { name, connectionConfig } },
-        { onSuccess, onError: handleCreateError },
-      );
-      return;
-    }
-
-    createSource.mutate(
-      {
-        data: {
-          agentId,
-          name,
-          sourceType: connectorName,
-          connectionConfig,
-        },
-      },
-      { onSuccess, onError: handleCreateError },
     );
   };
 
@@ -504,50 +323,31 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         icon: FileText,
       },
       {
-        kind: "document-or-spreadsheet" as const,
-        title: "Add a file or spreadsheet",
-        description: "Upload a Word document or paste a spreadsheet link.",
+        kind: "document" as const,
+        title: "Upload a document",
+        description: "Add a Word (.docx) or Excel (.xlsx) file.",
         icon: FileUp,
-      },
-      {
-        kind: "notion" as const,
-        title: "Link Notion",
-        description: "Connect natively with Replit Integrations.",
-        icon: BookOpen,
-      },
-      {
-        kind: "confluence" as const,
-        title: "Link Confluence",
-        description: "Connect natively with Replit Integrations.",
-        icon: Plug,
       },
     ],
     [],
   );
 
   const articleOpen = dialog === "article" || dialog === "edit-article";
-  const chooserOpen = dialog === "document-or-spreadsheet";
   const documentOpen = dialog === "document";
-  const spreadsheetOpen = dialog === "spreadsheet";
-  const notionOpen = dialog === "notion";
-  const confluenceOpen = dialog === "confluence";
 
   return (
     <div className="space-y-6">
+      <MutatingControls>
       <div className="space-y-3">
         <div>
           <h2 className="font-semibold text-base tracking-tight">Add a source</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Articles, documents, spreadsheets, and Replit Integrations this agent can use.
+            Articles and uploaded Word or Excel files this agent can use.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {addOptions.map((option) => {
             const Icon = option.icon;
-            const integration =
-              option.kind === "notion" || option.kind === "confluence"
-                ? integrationFor(integrations, option.kind)
-                : undefined;
             return (
               <button
                 key={option.kind}
@@ -555,20 +355,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                 onClick={() => openAdd(option.kind)}
                 className="rounded-lg border border-border bg-card p-4 text-left hover:border-blue-200 dark:hover:border-blue-900/50 hover:bg-accent/20 transition-colors"
               >
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <Icon className="w-4 h-4 text-primary" />
-                  {integration ? (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-xs h-5",
-                        integration.connected ? "text-emerald-500" : "text-muted-foreground",
-                      )}
-                    >
-                      {integration.connected ? "Connected" : "Not linked"}
-                    </Badge>
-                  ) : null}
-                </div>
+                <Icon className="w-4 h-4 text-primary mb-2" />
                 <div className="text-sm font-medium">{option.title}</div>
                 <p className="text-xs text-muted-foreground mt-1">{option.description}</p>
               </button>
@@ -576,6 +363,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
           })}
         </div>
       </div>
+      </MutatingControls>
 
       <div className="bg-card border border-border rounded-xl p-5 shadow-sm space-y-4">
         <div className="flex items-center gap-2.5">
@@ -606,7 +394,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
 
         {sources.length === 0 ? (
           <p className="text-xs text-muted-foreground py-6 text-center">
-            No sources yet. Write an article, add a file or spreadsheet, or connect Notion or Confluence.
+            No sources yet. Write an article or upload a .docx or .xlsx file.
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -623,7 +411,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                   <div className="w-8 h-8 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground shrink-0 border border-border/40">
                     <SourceTypeIcon type={source.sourceType} />
                   </div>
-                    <div className="min-w-0">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="font-medium text-sm truncate">{source.name}</span>
                       <Badge variant="outline" className="text-xs h-5 shrink-0">
@@ -645,8 +433,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                   <Switch
                     checked={source.isEnabled}
                     onCheckedChange={(checked) => handleToggle(source, checked)}
+                    disabled={!canEdit}
                     aria-label={source.isEnabled ? "Disable source" : "Enable source"}
                   />
+                  {canEdit ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -658,7 +448,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="text-xs">
-                      {(source.sourceType === "article" || source.sourceType === "spreadsheet" || source.sourceType === "notion" || source.sourceType === "confluence") && (
+                      {source.sourceType === "article" && (
                         <DropdownMenuItem className="gap-2 cursor-pointer" onClick={() => openEdit(source)}>
                           Edit
                         </DropdownMenuItem>
@@ -681,6 +471,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -727,47 +518,13 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={chooserOpen}
-        onOpenChange={(open) => {
-          if (!open && dialog === "document-or-spreadsheet") resetDialog();
-        }}
-      >
-        <DialogContent className="sm:max-w-[520px]">
-          <DialogHeader>
-            <DialogTitle>Add a file or spreadsheet</DialogTitle>
-            <DialogDescription>How would you like to add it?</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => openAdd("document")}
-              className="rounded-lg border border-border bg-card p-4 text-left hover:border-blue-200 dark:hover:border-blue-900/50 hover:bg-accent/20 transition-colors"
-            >
-              <FileUp className="w-4 h-4 text-primary mb-2" />
-              <div className="text-sm font-medium">Upload a Word document</div>
-              <p className="text-xs text-muted-foreground mt-1">Accepts .docx</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => openAdd("spreadsheet")}
-              className="rounded-lg border border-border bg-card p-4 text-left hover:border-blue-200 dark:hover:border-blue-900/50 hover:bg-accent/20 transition-colors"
-            >
-              <Table2 className="w-4 h-4 text-primary mb-2" />
-              <div className="text-sm font-medium">Paste a spreadsheet link</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Supports Google Sheets, Excel Online, or another published spreadsheet URL
-              </p>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={documentOpen} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Upload a document</DialogTitle>
-            <DialogDescription>Word documents (.docx) are extracted and stored as knowledge.</DialogDescription>
+            <DialogDescription>
+              Word (.docx) and Excel (.xlsx) files are extracted and stored as knowledge.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUploadDocument} className="space-y-4 pt-2">
             <div className="space-y-2">
@@ -784,7 +541,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
@@ -794,7 +551,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                 className="w-full rounded-lg border border-dashed border-border px-4 py-8 text-center hover:bg-accent/20"
               >
                 <FileUp className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
-                <div className="text-sm font-medium">{file ? file.name : "Choose a .docx file"}</div>
+                <div className="text-sm font-medium">{file ? file.name : "Choose a .docx or .xlsx file"}</div>
                 <p className="text-xs text-muted-foreground mt-1">Maximum 10 MB</p>
               </button>
             </div>
@@ -807,74 +564,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={spreadsheetOpen} onOpenChange={(open) => !open && resetDialog()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editing ? "Edit spreadsheet" : "Paste a spreadsheet link"}</DialogTitle>
-            <DialogDescription>
-              Add a Google Sheets, Excel Online, or other published spreadsheet URL.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSaveSpreadsheet} className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label htmlFor="sheet-name" className="text-xs">Name (optional)</Label>
-              <Input
-                id="sheet-name"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Pricing table"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sheet-url" className="text-xs">Spreadsheet URL</Label>
-              <Input
-                id="sheet-url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/..."
-                required
-              />
-            </div>
-            <DialogFooter>
-              <Button type="submit" disabled={saving || !url.trim()}>
-                {editing ? "Save changes" : "Add spreadsheet"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <IntegrationDialog
-        open={notionOpen}
-        connectorName="notion"
-        integration={integrationFor(integrations, "notion")}
-        managedConnectionId={companyConnections.find((connection) => connection.provider === "notion")?.id}
-        saving={saving}
-        selectedItems={editing?.sourceType === "notion" ? selectedKnowledgeItems(editing.connectionConfig) : []}
-        sourceName={title}
-        onNameChange={setTitle}
-        onOpenChange={(open) => !open && resetDialog()}
-        onRefresh={() => refetchIntegrations()}
-        onLink={(items) => handleLinkIntegration("notion", items)}
-      />
-      <IntegrationDialog
-        open={confluenceOpen}
-        connectorName="confluence"
-        integration={integrationFor(integrations, "confluence")}
-        managedConnectionId={companyConnections.find((connection) => connection.provider === "confluence")?.id}
-        saving={saving}
-        selectedItems={editing?.sourceType === "confluence" ? selectedKnowledgeItems(editing.connectionConfig) : []}
-        sourceName={title}
-        onNameChange={setTitle}
-        onOpenChange={(open) => !open && resetDialog()}
-        onRefresh={() => refetchIntegrations()}
-        onLink={(items) => handleLinkIntegration("confluence", items)}
-      />
-
-      <AlertDialog
-        open={Boolean(sourceToDelete)}
-        onOpenChange={(open) => !open && setSourceToDelete(null)}
-      >
+      <AlertDialog open={Boolean(sourceToDelete)} onOpenChange={(open) => !open && setSourceToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete source</AlertDialogTitle>
@@ -896,277 +586,4 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       </AlertDialog>
     </div>
   );
-}
-
-function IntegrationDialog({
-  open,
-  connectorName,
-  integration,
-  managedConnectionId,
-  saving,
-  selectedItems,
-  sourceName,
-  onNameChange,
-  onOpenChange,
-  onRefresh,
-  onLink,
-}: {
-  open: boolean;
-  connectorName: "notion" | "confluence";
-  integration?: SourceIntegration;
-  managedConnectionId?: string;
-  saving: boolean;
-  selectedItems: SourceBrowseItem[];
-  sourceName: string;
-  onNameChange: (value: string) => void;
-  onOpenChange: (open: boolean) => void;
-  onRefresh: () => void;
-  onLink: (items: SourceBrowseItem[]) => void;
-}) {
-  const name = integration?.displayName ?? (connectorName === "notion" ? "Notion" : "Confluence");
-  const connected = Boolean(integration?.connected || managedConnectionId);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [items, setItems] = useState<SourceBrowseItem[]>([]);
-  const [selected, setSelected] = useState<SourceBrowseItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [space, setSpace] = useState<{ id: string; title: string } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
-    return () => window.clearTimeout(timer);
-  }, [search]);
-
-  useEffect(() => {
-    if (!open) return;
-    setSelected(selectedItems);
-    setSearch("");
-    setDebouncedSearch("");
-    setSpace(null);
-    setItems([]);
-    setCursor(null);
-    setError(null);
-  }, [open, connectorName]);
-
-  useEffect(() => {
-    if (!open || !connected) return;
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await browseSourceIntegration({
-          connectorName,
-          connectionId: managedConnectionId,
-          query: debouncedSearch || undefined,
-          spaceId: space?.id,
-        });
-        if (cancelled) return;
-        setItems(result.items);
-        setCursor(result.nextCursor ?? null);
-      } catch (err) {
-        if (cancelled) return;
-        setItems([]);
-        setCursor(null);
-        setError(err instanceof Error ? err.message.replace(/^HTTP \d+\s[^:]+:\s*/, "") : "Could not load content.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, connected, connectorName, debouncedSearch, space?.id, managedConnectionId]);
-
-  const loadMore = async () => {
-    if (!cursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const result = await browseSourceIntegration({
-        connectorName,
-        connectionId: managedConnectionId,
-        query: debouncedSearch || undefined,
-        cursor,
-        spaceId: space?.id,
-      });
-      setItems((current) => uniqueBrowseItems([...current, ...result.items]));
-      setCursor(result.nextCursor ?? null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message.replace(/^HTTP \d+\s[^:]+:\s*/, "") : "Could not load more content.");
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  const toggleItem = (item: SourceBrowseItem, checked: boolean) => {
-    setSelected((current) => {
-      if (checked) return uniqueBrowseItems([...current, item]);
-      return current.filter((entry) => !(entry.id === item.id && entry.type === item.type));
-    });
-  };
-
-  const isSelected = (item: SourceBrowseItem) =>
-    selected.some((entry) => entry.id === item.id && entry.type === item.type);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px]">
-        <DialogHeader>
-          <DialogTitle>{selectedItems.length > 0 ? `Edit ${name} source` : `Link ${name}`}</DialogTitle>
-          <DialogDescription>
-            Native access uses Replit Integrations. Choose the {name} content this agent can search.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">{name}</span>
-            </div>
-            <Badge
-              variant="outline"
-              className={cn(
-                "text-xs h-5",
-                connected ? "text-emerald-500" : "text-muted-foreground",
-              )}
-            >
-              {connected ? "Connected" : "Not linked"}
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {connected
-              ? `Select ${connectorName === "notion" ? "pages or databases" : "spaces or pages"} to index. Credentials stay in Replit Integrations.`
-              : `Open Replit Integrations, sign in to ${name}, then refresh this dialog.`}
-          </p>
-        </div>
-
-        {connected ? (
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label htmlFor={`${connectorName}-source-name`} className="text-xs">Name (optional)</Label>
-              <Input
-                id={`${connectorName}-source-name`}
-                value={sourceName}
-                onChange={(event) => onNameChange(event.target.value)}
-                placeholder={name}
-              />
-            </div>
-            {space ? (
-              <button
-                type="button"
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => setSpace(null)}
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                Back to spaces
-                <span className="font-medium text-foreground">· {space.title}</span>
-              </button>
-            ) : null}
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={connectorName === "notion" ? "Search pages and databases" : space ? "Filter pages" : "Filter spaces"}
-            />
-            {error ? (
-              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                <span>{error}</span>
-              </div>
-            ) : null}
-            <ScrollArea className="h-56 rounded-md border border-border">
-              {loading ? (
-                <div className="flex h-56 items-center justify-center text-xs text-muted-foreground">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading {name} content…
-                </div>
-              ) : items.length === 0 ? (
-                <div className="flex h-56 items-center justify-center px-6 text-center text-xs text-muted-foreground">
-                  {error
-                    ? "Nothing could be loaded from this account."
-                    : `No ${space ? "pages" : connectorName === "notion" ? "pages or databases" : "spaces"} found.`}
-                </div>
-              ) : (
-                <div className="p-2 space-y-1">
-                  {items.map((item) => (
-                    <div key={`${item.type}:${item.id}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent/40">
-                      <Checkbox
-                        checked={isSelected(item)}
-                        onCheckedChange={(checked) => toggleItem(item, checked === true)}
-                        aria-label={`Select ${item.title}`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">{item.title}</div>
-                        <div className="text-[11px] text-muted-foreground capitalize">
-                          {item.type}
-                          {item.parentTitle ? ` · ${item.parentTitle}` : ""}
-                        </div>
-                      </div>
-                      {item.type === "space" ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-[11px]"
-                          onClick={() => setSpace({ id: item.id, title: item.title })}
-                        >
-                          Browse pages
-                        </Button>
-                      ) : null}
-                    </div>
-                  ))}
-                  {cursor ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full h-8 text-xs"
-                      onClick={loadMore}
-                      disabled={loadingMore}
-                    >
-                      {loadingMore ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Load more"}
-                    </Button>
-                  ) : null}
-                </div>
-              )}
-            </ScrollArea>
-            <p className="text-[11px] text-muted-foreground">{selected.length} selected</p>
-          </div>
-        ) : null}
-
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="outline" asChild>
-            <a href={REPLIT_INTEGRATIONS_URL} target="_blank" rel="noreferrer">
-              Open Integrations
-              <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
-            </a>
-          </Button>
-          {connected ? (
-            <Button type="button" onClick={() => onLink(selected)} disabled={saving || selected.length === 0}>
-              {selectedItems.length > 0 ? "Save selection" : `Add ${name}`}
-            </Button>
-          ) : (
-            <Button type="button" variant="secondary" onClick={onRefresh}>
-              Check connection
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function uniqueBrowseItems(items: SourceBrowseItem[]): SourceBrowseItem[] {
-  const seen = new Set<string>();
-  const unique: SourceBrowseItem[] = [];
-  for (const item of items) {
-    const key = `${item.type}:${item.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(item);
-  }
-  return unique;
 }

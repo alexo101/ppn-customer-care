@@ -416,7 +416,6 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
             endpointPattern: apiConnectorsTable.endpointPattern,
             authType: apiConnectorsTable.authType,
             authConfig: apiConnectorsTable.authConfig,
-            connectionId: apiConnectorsTable.connectionId,
           })
           .from(ruleConnectorLinksTable)
           .innerJoin(

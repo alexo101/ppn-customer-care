@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, agentsTable, agentSettingsTable, agentDeploymentsTable } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   CreateAgentBody,
   GetAgentParams,
@@ -24,7 +24,7 @@ router.get("/agents", requireAuth, async (req, res): Promise<void> => {
   res.json(rows.map(toAgent));
 });
 
-router.post("/agents", requireAuth, async (req, res): Promise<void> => {
+router.post("/agents", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = CreateAgentBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -62,7 +62,7 @@ router.get("/agents/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(toAgent(agent));
 });
 
-router.patch("/agents/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/agents/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateAgentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -94,7 +94,7 @@ router.patch("/agents/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(toAgent(row));
 });
 
-router.delete("/agents/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/agents/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = DeleteAgentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -133,7 +133,7 @@ router.get("/agents/:id/settings", requireAuth, async (req, res): Promise<void> 
   });
 });
 
-router.post("/agents/:id/deployment-token", requireAuth, async (req, res): Promise<void> => {
+router.post("/agents/:id/deployment-token", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const agent = await getOwnedAgent(req.userId, String(req.params.id));
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
@@ -148,7 +148,7 @@ router.post("/agents/:id/deployment-token", requireAuth, async (req, res): Promi
   res.status(201).json({ ...deployment, token });
 });
 
-router.patch("/agents/:id/settings", requireAuth, async (req, res): Promise<void> => {
+router.patch("/agents/:id/settings", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const agent = await getOwnedAgent(req.userId, String(req.params.id));
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });

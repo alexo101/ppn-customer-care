@@ -44,6 +44,7 @@ import {
   TRAINING_CSV_TEMPLATE,
 } from "@/lib/training";
 import { cn } from "@/lib/utils";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 
 function apiErrorMessage(error: unknown, fallback: string) {
   if (!(error instanceof Error)) return fallback;
@@ -51,6 +52,7 @@ function apiErrorMessage(error: unknown, fallback: string) {
 }
 
 export function TrainingEditor({ agentId }: { agentId: string }) {
+  const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
   const { data: questions = [], isLoading } = useListTrainingQuestions({ agentId });
   const createQuestion = useCreateTrainingQuestion();
@@ -232,6 +234,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
           </div>
           <Progress value={(questions.length / MAX_TRAINING_QUESTIONS) * 100} className="h-1.5" />
 
+          <MutatingControls>
           <div className="flex flex-col sm:flex-row gap-2">
             <Textarea
               value={draft}
@@ -285,6 +288,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
               />
             </div>
           </div>
+          </MutatingControls>
 
           <div className="flex items-center justify-between gap-3">
             <div className="relative flex-1">
@@ -386,6 +390,8 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
                       <>
                         <p className="flex-1 min-w-0 text-sm leading-5">{question.content}</p>
                         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100">
+                          {canEdit ? (
+                          <>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -409,6 +415,8 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
                           >
                             <Trash className="w-3.5 h-3.5" />
                           </Button>
+                          </>
+                          ) : null}
                         </div>
                       </>
                     )}

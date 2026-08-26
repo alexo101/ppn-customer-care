@@ -8,9 +8,9 @@ import targetsRouter from "./targets";
 import analyticsRouter from "./analytics";
 import appearanceRouter from "./appearance";
 import authRouter from "./auth";
+import membersRouter from "./members";
 import agentsRouter from "./agents";
 import trainingQuestionsRouter from "./training-questions";
-import connectionsRouter from "./connections";
 
 const router: IRouter = Router();
 
@@ -25,6 +25,6 @@ router.use(targetsRouter);
 router.use(analyticsRouter);
 router.use(appearanceRouter);
 router.use(authRouter);
-router.use(connectionsRouter);
+router.use(membersRouter);
 
 export default router;

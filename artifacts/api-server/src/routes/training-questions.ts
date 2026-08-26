@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, count, eq } from "drizzle-orm";
 import { db, trainingQuestionsTable } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   ListTrainingQuestionsQueryParams,
   CreateTrainingQuestionBody,
@@ -14,7 +14,7 @@ import { getOwnedAgent } from "../lib/agents";
 
 const router: IRouter = Router();
 
-export const MAX_TRAINING_QUESTIONS = 100;
+export const MAX_TRAINING_QUESTIONS = 200;
 const MAX_QUESTION_LENGTH = 2000;
 
 function normalizeQuestion(value: string): string {
@@ -66,7 +66,7 @@ router.get("/training-questions", requireAuth, async (req, res): Promise<void> =
   res.json(rows.map(toTrainingQuestion));
 });
 
-router.post("/training-questions", requireAuth, async (req, res): Promise<void> => {
+router.post("/training-questions", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = CreateTrainingQuestionBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -107,7 +107,7 @@ router.post("/training-questions", requireAuth, async (req, res): Promise<void> 
   res.status(201).json(toTrainingQuestion(row));
 });
 
-router.post("/training-questions/bulk", requireAuth, async (req, res): Promise<void> => {
+router.post("/training-questions/bulk", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const parsed = BulkCreateTrainingQuestionsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -171,7 +171,7 @@ router.post("/training-questions/bulk", requireAuth, async (req, res): Promise<v
   });
 });
 
-router.patch("/training-questions/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/training-questions/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = UpdateTrainingQuestionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -218,7 +218,7 @@ router.patch("/training-questions/:id", requireAuth, async (req, res): Promise<v
   res.json(toTrainingQuestion(row));
 });
 
-router.delete("/training-questions/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/training-questions/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
   const params = DeleteTrainingQuestionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

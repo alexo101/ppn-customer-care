@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 
 const IFRAME_STYLE =
   "position:fixed;right:0;bottom:0;border:0;z-index:2147483647;width:420px;height:720px;background:transparent;";
@@ -222,16 +223,18 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
                 : "This agent is not live yet."}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant={enabled ? "outline" : "default"}
-            className="h-8 text-xs shrink-0"
-            disabled={updateAgent.isPending}
-            onClick={() => setEnabled(!enabled)}
-          >
-            <Rocket className="w-3.5 h-3.5 mr-1" />
-            {enabled ? "Disable agent" : "Enable agent"}
-          </Button>
+          <MutatingControls>
+            <Button
+              size="sm"
+              variant={enabled ? "outline" : "default"}
+              className="h-8 text-xs shrink-0"
+              disabled={updateAgent.isPending}
+              onClick={() => setEnabled(!enabled)}
+            >
+              <Rocket className="w-3.5 h-3.5 mr-1" />
+              {enabled ? "Disable agent" : "Enable agent"}
+            </Button>
+          </MutatingControls>
         </div>
       </div>
 

@@ -1,0 +1,267 @@
+import { useState, type FormEvent } from "react";
+import {
+  useListMembers,
+  useInviteMember,
+  useUpdateMember,
+  useDeleteMember,
+  getListMembersQueryKey,
+  type MemberRole,
+  type WorkspaceMember,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
+import { toast } from "@/hooks/use-toast";
+
+function roleLabel(role: MemberRole) {
+  return role === "editor" ? "Can edit" : "View only";
+}
+
+export default function Team() {
+  const { email: currentEmail, canEdit } = useWorkspaceAccess();
+  const queryClient = useQueryClient();
+  const { data: members = [], isLoading, isError, error, refetch } = useListMembers({
+    query: {
+      queryKey: getListMembersQueryKey(),
+      refetchOnMount: "always",
+      staleTime: 0,
+    },
+  });
+  const inviteMember = useInviteMember();
+  const updateMember = useUpdateMember();
+  const deleteMember = useDeleteMember();
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<MemberRole>("viewer");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [toRevoke, setToRevoke] = useState<WorkspaceMember | null>(null);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getListMembersQueryKey() });
+  };
+
+  const handleInvite = async (event: FormEvent) => {
+    event.preventDefault();
+    setFormError(null);
+    try {
+      await inviteMember.mutateAsync({
+        data: { email: inviteEmail.trim(), role: inviteRole },
+      });
+      setInviteEmail("");
+      setInviteRole("viewer");
+      invalidate();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message.replace(/^HTTP \d+ [^:]+:\s*/, "") : "Could not invite that person.");
+    }
+  };
+
+  const errorMessage =
+    error instanceof Error ? error.message : "Could not load the team. Please try again.";
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
+      <div className="h-16 px-6 md:px-8 border-b border-border flex items-center justify-between bg-card shrink-0">
+        <h1 className="text-xl font-semibold tracking-tight">Team</h1>
+      </div>
+
+      <div className="flex-1 overflow-auto p-6 md:p-8">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <MutatingControls>
+            <form
+              onSubmit={(event) => void handleInvite(event)}
+              className="rounded-xl border border-border bg-card p-5 space-y-4"
+            >
+              <div>
+                <h2 className="text-base font-semibold tracking-tight">Invite a teammate</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Only @papernest.com Google accounts can be invited. They sign in with Google using this email.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-3 items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="invite-email" className="text-xs">Email</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    required
+                    value={inviteEmail}
+                    onChange={(event) => setInviteEmail(event.target.value)}
+                    placeholder="name@papernest.com"
+                    className="h-10 bg-background"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Access</Label>
+                  <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as MemberRole)}>
+                    <SelectTrigger className="h-10 bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="editor">Can edit</SelectItem>
+                      <SelectItem value="viewer">View only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" className="h-10" disabled={inviteMember.isPending}>
+                  <Plus className="w-3.5 h-3.5" />
+                  Invite
+                </Button>
+              </div>
+              {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
+            </form>
+          </MutatingControls>
+
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            {isLoading ? (
+              <p className="p-6 text-sm text-muted-foreground">Loading team…</p>
+            ) : isError ? (
+              <div className="p-6 space-y-3">
+                <p className="text-sm text-destructive">{errorMessage}</p>
+                <Button variant="outline" size="sm" onClick={() => refetch()}>
+                  Try again
+                </Button>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Access</TableHead>
+                    {canEdit ? <TableHead className="w-16"><span className="sr-only">Actions</span></TableHead> : null}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.map((member) => (
+                    <TableRow key={member.id}>
+                      <TableCell className="font-medium">
+                        {member.email}
+                        {member.email === currentEmail ? (
+                          <span className="ml-2 text-xs text-muted-foreground">you</span>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={member.status === "active" ? "default" : "secondary"} className="shadow-none">
+                          {member.status === "active" ? "Active" : "Invited"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {canEdit ? (
+                          <Select
+                            value={member.role}
+                            onValueChange={(value) => {
+                              updateMember.mutate(
+                                { id: member.id, data: { role: value as MemberRole } },
+                                {
+                                  onSuccess: invalidate,
+                                  onError: (err) => {
+                                    toast({
+                                      title: "Could not change access",
+                                      description:
+                                        err instanceof Error
+                                          ? err.message.replace(/^HTTP \d+ [^:]+:\s*/, "")
+                                          : "Try again.",
+                                      variant: "destructive",
+                                    });
+                                  },
+                                },
+                              );
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-36 bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="editor">Can edit</SelectItem>
+                              <SelectItem value="viewer">View only</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-sm">{roleLabel(member.role)}</span>
+                        )}
+                      </TableCell>
+                      {canEdit ? (
+                        <TableCell>
+                          {member.email !== currentEmail ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              onClick={() => setToRevoke(member)}
+                              aria-label={`Remove ${member.email}`}
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <AlertDialog open={!!toRevoke} onOpenChange={(open) => !open && setToRevoke(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove teammate</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove {toRevoke?.email}? They will no longer be able to sign in with Google.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (!toRevoke) return;
+                deleteMember.mutate(
+                  { id: toRevoke.id },
+                  {
+                    onSuccess: () => {
+                      setToRevoke(null);
+                      invalidate();
+                    },
+                  },
+                );
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

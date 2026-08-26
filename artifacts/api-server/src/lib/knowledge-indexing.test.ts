@@ -40,6 +40,7 @@ describe("sourceNeedsReindex", () => {
   it("treats documents and articles as indexable", () => {
     expect(isIndexableSourceType("document")).toBe(true);
     expect(isIndexableSourceType("article")).toBe(true);
-    expect(isIndexableSourceType("spreadsheet")).toBe(false);
+    expect(isIndexableSourceType("spreadsheet")).toBe(true);
+    expect(isIndexableSourceType("notion")).toBe(false);
   });
 });
