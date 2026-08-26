@@ -197,7 +197,7 @@ export default function Team() {
                 </div>
                 <Button type="submit" className="h-10 w-full md:w-auto" disabled={inviteMember.isPending}>
                   <Plus className="w-3.5 h-3.5" />
-                  Invite
+                  Add
                 </Button>
               </div>
               {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
