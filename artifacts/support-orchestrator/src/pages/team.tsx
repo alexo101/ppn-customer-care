@@ -10,7 +10,7 @@ import {
   type WorkspaceMember,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Plus, Trash } from "lucide-react";
+import { Copy, Plus, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,14 +40,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 import { toast } from "@/hooks/use-toast";
 import { buildInviteUrl } from "@/lib/invite-url";
@@ -82,62 +74,48 @@ export default function Team() {
   const [inviteRole, setInviteRole] = useState<MemberRole>("viewer");
   const [formError, setFormError] = useState<string | null>(null);
   const [toRevoke, setToRevoke] = useState<WorkspaceMember | null>(null);
-  const [issuedInvite, setIssuedInvite] = useState<{ email: string; url: string } | null>(null);
-  const [copied, setCopied] = useState(false);
   const [copyingId, setCopyingId] = useState<string | null>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListMembersQueryKey() });
   };
 
-  const copyUrl = async (url: string, successTitle: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-      toast({ title: successTitle });
-      return true;
-    } catch {
-      toast({
-        title: "Could not copy the invite link",
-        description: "Select the URL and copy it manually.",
-        variant: "destructive",
-      });
-      return false;
-    }
-  };
-
   const handleInvite = async (event: FormEvent) => {
     event.preventDefault();
     setFormError(null);
     try {
-      const created = await inviteMember.mutateAsync({
+      await inviteMember.mutateAsync({
         data: { email: inviteEmail.trim(), role: inviteRole },
       });
       setInviteEmail("");
       setInviteRole("viewer");
-      setCopied(false);
-      setIssuedInvite({
-        email: created.email,
-        url: inviteUrlForToken(created.token),
-      });
       invalidate();
     } catch (err) {
-      setFormError(apiErrorMessage(err, "Could not invite that person."));
+      setFormError(apiErrorMessage(err, "Could not add that person."));
     }
   };
 
   const handleCopyInvite = async (member: WorkspaceMember) => {
     setCopyingId(member.id);
+    // #region agent log
+    fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify({sessionId:'e273e6',runId:'pre-fix',hypothesisId:'B',location:'team.tsx:handleCopyInvite',message:'copy invite clicked',data:{memberId:member.id,status:member.status,idType:typeof member.id},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     try {
       const issued = await regenerateInvite.mutateAsync({ id: member.id });
-      const url = inviteUrlForToken(issued.token);
-      await copyUrl(url, "Invite link copied");
+      // #region agent log
+      fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify({sessionId:'e273e6',runId:'pre-fix',hypothesisId:'E',location:'team.tsx:handleCopyInvite:success',message:'regenerate succeeded',data:{hasToken:Boolean(issued?.token),hasInvitePath:Boolean(issued?.invitePath)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      await navigator.clipboard.writeText(inviteUrlForToken(issued.token));
+      toast({ title: "Invite link copied" });
       invalidate();
     } catch (err) {
+      const apiErr = err as { message?: string; status?: number; data?: unknown; url?: string };
+      // #region agent log
+      fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify({sessionId:'e273e6',runId:'pre-fix',hypothesisId:'A',location:'team.tsx:handleCopyInvite:catch',message:'copy invite failed',data:{errMessage:apiErr?.message,status:apiErr?.status,url:apiErr?.url,data:apiErr?.data},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       toast({
-        title: "Could not create an invite link",
-        description: apiErrorMessage(err, "Try again."),
+        title: "Could not copy the invite link",
+        description: apiErrorMessage(err, "Try again, or copy it manually from a new link."),
         variant: "destructive",
       });
     } finally {
@@ -164,8 +142,8 @@ export default function Team() {
               <div>
                 <h2 className="text-base font-semibold tracking-tight">Invite a teammate</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Only @papernest.com Google accounts can be invited. Copy the link and paste it in Slack.
-                  They sign in with Google using the invited account.
+                  Only @papernest.com Google accounts can be added. Use Copy invite link on an Invited row,
+                  paste it in Slack, and they sign in with that Google account.
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
@@ -307,33 +285,6 @@ export default function Team() {
           </div>
         </div>
       </div>
-
-      <Dialog open={!!issuedInvite} onOpenChange={(open) => !open && setIssuedInvite(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Invite link ready</DialogTitle>
-            <DialogDescription>
-              Paste this link in Slack. It expires in 7 days and can only be used once.
-              {issuedInvite ? ` ${issuedInvite.email} signs in with that Google account.` : null}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-2">
-            <Input readOnly value={issuedInvite?.url ?? ""} className="h-10 bg-background font-mono text-xs" />
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 shrink-0"
-              onClick={() => issuedInvite && void copyUrl(issuedInvite.url, "Invite link copied")}
-            >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button type="button" onClick={() => setIssuedInvite(null)}>Done</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <AlertDialog open={!!toRevoke} onOpenChange={(open) => !open && setToRevoke(null)}>
         <AlertDialogContent>

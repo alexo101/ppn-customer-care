@@ -1,4 +1,5 @@
 import { count, eq } from "drizzle-orm";
+import { appendFileSync } from "node:fs";
 import {
   db,
   workspaceMembersTable,
@@ -211,6 +212,9 @@ export async function regenerateInviteToken(id: string): Promise<IssuedInvitatio
     .where(eq(workspaceMembersTable.id, id))
     .limit(1);
 
+  // #region agent log
+  { const _p={sessionId:'e273e6',runId:'post-fix',hypothesisId:'C',location:'workspace-access.ts:regenerateInviteToken',message:'member lookup',data:{id,found:Boolean(member),hasClerkUserId:Boolean(member?.clerkUserId),hasHash:Boolean(member?.inviteTokenHash)},timestamp:Date.now()}; try{appendFileSync('/home/runner/workspace/.cursor/debug-e273e6.log',JSON.stringify(_p)+'\n');}catch{} fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify(_p)}).catch(()=>{}); }
+  // #endregion
   if (!member) {
     throw new WorkspaceAccessError("Team member not found.", 404);
   }

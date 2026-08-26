@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -80,6 +81,9 @@ app.use(
 app.use("/api", router);
 
 app.use((req, res) => {
+  // #region agent log
+  { const _p={sessionId:'e273e6',runId:'post-fix',hypothesisId:'A',location:'app.ts:404',message:'api catch-all 404',data:{method:req.method,url:req.originalUrl ?? req.url,path:req.path},timestamp:Date.now()}; try{appendFileSync('/home/runner/workspace/.cursor/debug-e273e6.log',JSON.stringify(_p)+'\n');}catch{} fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify(_p)}).catch(()=>{}); }
+  // #endregion
   res.status(404).json({ error: "Not found" });
 });
 

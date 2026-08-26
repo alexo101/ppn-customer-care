@@ -199,24 +199,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <MutatingControls>
-          <Button
-            size="sm"
-            className="h-8 text-xs"
-            onClick={handleSave}
-            disabled={!isDirty || saving || isLoading}
-          >
-            {saving ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-            ) : (
-              <Save className="w-3.5 h-3.5 mr-1" />
-            )}
-            Save appearance
-          </Button>
-        </MutatingControls>
-      </div>
-
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
         <div className="space-y-3">
           <FieldBlock title="Name">
@@ -313,13 +295,32 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
           </FieldBlock>
         </div>
 
-        <ChatAppearancePreview
-          name={name}
-          ctaColor={isHexColor(draft.ctaColor) ? draft.ctaColor : DEFAULT_CTA_COLOR}
-          backgroundColor={isHexColor(draft.backgroundColor) ? draft.backgroundColor : DEFAULT_BACKGROUND_COLOR}
-          logoUrl={draft.logoUrl || null}
-          className="rounded-xl border border-border shadow-sm overflow-hidden"
-        />
+        <div className="space-y-3">
+          <ChatAppearancePreview
+            name={name}
+            ctaColor={isHexColor(draft.ctaColor) ? draft.ctaColor : DEFAULT_CTA_COLOR}
+            backgroundColor={isHexColor(draft.backgroundColor) ? draft.backgroundColor : DEFAULT_BACKGROUND_COLOR}
+            logoUrl={draft.logoUrl || null}
+            className="rounded-xl border border-border shadow-sm overflow-hidden"
+          />
+          <div className="flex items-center justify-end">
+            <MutatingControls>
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleSave}
+                disabled={!isDirty || saving || isLoading}
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5 mr-1" />
+                )}
+                Save appearance
+              </Button>
+            </MutatingControls>
+          </div>
+        </div>
       </div>
     </div>
   );
