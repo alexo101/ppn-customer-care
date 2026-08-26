@@ -166,7 +166,7 @@ function ClerkProviderWithRoutes() {
       publishableKey={clerkPubKey!}
       proxyUrl={clerkProxyUrl}
       signInUrl={`${basePath}/login`}
-      signUpUrl={`${basePath}/login`}
+      signUpUrl={`${basePath}/signup`}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
