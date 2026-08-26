@@ -106,7 +106,7 @@ export default function Team() {
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
-                <div className="min-w-0 space-y-2">
+                <div className="min-w-0 flex flex-col gap-2">
                   <Label htmlFor="invite-email" className="text-xs">Email</Label>
                   <Input
                     id="invite-email"
@@ -118,17 +118,19 @@ export default function Team() {
                     className="h-10 bg-background"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="flex flex-col gap-2">
                   <Label htmlFor="invite-role" className="text-xs">Access</Label>
-                  <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as MemberRole)}>
-                    <SelectTrigger id="invite-role" className="h-10 w-full bg-background">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="editor">Can edit</SelectItem>
-                      <SelectItem value="viewer">View only</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as MemberRole)}>
+                      <SelectTrigger id="invite-role" className="h-10 w-full bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="editor">Can edit</SelectItem>
+                        <SelectItem value="viewer">View only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <Button type="submit" className="h-10 w-full md:w-auto" disabled={inviteMember.isPending}>
                   <Plus className="w-3.5 h-3.5" />
