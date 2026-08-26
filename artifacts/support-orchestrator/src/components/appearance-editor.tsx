@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ChatAppearancePreview } from "@/components/chat/chat-appearance-preview";
 import { toast } from "@/hooks/use-toast";
-import { MutatingControls } from "@/components/workspace-access";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 import {
   DEFAULT_BACKGROUND_COLOR,
   DEFAULT_CTA_COLOR,
@@ -52,6 +52,7 @@ function FieldBlock({
 }
 
 export function AppearanceEditor({ agentId }: { agentId: string }) {
+  const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
   const { data: agent } = useGetAgent(agentId);
   const { data, isLoading } = useGetAgentAppearance(agentId);
@@ -112,6 +113,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   const saving = updateAppearance.isPending || updateAgent.isPending;
 
   const handleSave = async () => {
+    if (!canEdit) return;
     const ctaColor = normalizeHexColor(draft.ctaColor);
     const backgroundColor = normalizeHexColor(draft.backgroundColor);
     if (!name.trim()) {
@@ -157,6 +159,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   };
 
   const handleLogoFile = (file: File | undefined) => {
+    if (!canEdit) return;
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       toast({ title: "Choose an image file", variant: "destructive" });
@@ -179,6 +182,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   };
 
   const setCtaColor = (value: string) => {
+    if (!canEdit) return;
     const hex = normalizeHexColor(value);
     if (!hex) return;
     setDraft((prev) => ({ ...prev, ctaColor: hex }));
@@ -186,6 +190,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   };
 
   const setBackgroundColor = (value: string) => {
+    if (!canEdit) return;
     const hex = normalizeHexColor(value);
     if (!hex) return;
     setDraft((prev) => ({ ...prev, backgroundColor: hex }));
@@ -220,6 +225,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
               id={`agent-name-${agentId}`}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              readOnly={!canEdit}
               placeholder="e.g. Billing support"
             />
           </FieldBlock>
@@ -230,6 +236,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
               id={`agent-description-${agentId}`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              readOnly={!canEdit}
               placeholder="Short summary of this agent"
               className="min-h-[80px]"
             />
@@ -243,6 +250,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
                 hexInput={ctaHexInput}
                 onHexInputChange={setCtaHexInput}
                 onCommit={setCtaColor}
+                disabled={!canEdit}
               />
             </FieldBlock>
 
@@ -253,6 +261,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
                 hexInput={bgHexInput}
                 onHexInputChange={setBgHexInput}
                 onCommit={setBackgroundColor}
+                disabled={!canEdit}
               />
             </FieldBlock>
           </div>
@@ -268,32 +277,37 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
               </div>
               <div className="flex-1 space-y-2 min-w-0">
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => logoFileRef.current?.click()}>
-                    <Upload className="w-3.5 h-3.5 mr-1" />
-                    Upload logo
-                  </Button>
-                  {draft.logoUrl && (
-                    <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setDraft((prev) => ({ ...prev, logoUrl: "" }))}>
-                      Remove
+                  <MutatingControls>
+                    <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={() => logoFileRef.current?.click()}>
+                      <Upload className="w-3.5 h-3.5 mr-1" />
+                      Upload logo
                     </Button>
-                  )}
+                    {draft.logoUrl && (
+                      <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setDraft((prev) => ({ ...prev, logoUrl: "" }))}>
+                        Remove
+                      </Button>
+                    )}
+                  </MutatingControls>
                 </div>
                 <Input
                   placeholder="Or paste a logo image URL"
                   value={draft.logoUrl.startsWith("data:") ? "" : draft.logoUrl}
                   onChange={(e) => setDraft((prev) => ({ ...prev, logoUrl: e.target.value }))}
+                  readOnly={!canEdit}
                   className="h-8 text-xs bg-background"
                 />
-                <input
-                  ref={logoFileRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
-                  className="hidden"
-                  onChange={(e) => {
-                    handleLogoFile(e.target.files?.[0]);
-                    e.currentTarget.value = "";
-                  }}
-                />
+                {canEdit ? (
+                  <input
+                    ref={logoFileRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      handleLogoFile(e.target.files?.[0]);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                ) : null}
               </div>
             </div>
           </FieldBlock>
@@ -317,12 +331,14 @@ function ColorField({
   hexInput,
   onHexInputChange,
   onCommit,
+  disabled,
 }: {
   label: string;
   value: string;
   hexInput: string;
   onHexInputChange: (value: string) => void;
   onCommit: (value: string) => void;
+  disabled: boolean;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -330,6 +346,7 @@ function ColorField({
         type="color"
         value={isHexColor(value) ? value : "#000000"}
         onChange={(e) => onCommit(e.target.value)}
+        disabled={disabled}
         className="h-9 w-12 rounded-md border border-input bg-background cursor-pointer p-0.5"
         aria-label={label}
       />
@@ -340,6 +357,7 @@ function ColorField({
           onHexInputChange(next);
           if (isHexColor(next)) onCommit(next);
         }}
+        readOnly={disabled}
         className="h-9 font-mono text-xs uppercase"
         maxLength={7}
       />

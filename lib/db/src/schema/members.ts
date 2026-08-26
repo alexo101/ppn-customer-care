@@ -11,6 +11,10 @@ export const workspaceMembersTable = pgTable("workspace_members", {
   clerkUserId: text("clerk_user_id"),
   role: text("role").notNull().default("viewer"),
   invitedByEmail: text("invited_by_email"),
+  inviteTokenHash: text("invite_token_hash").unique(),
+  inviteTokenPrefix: text("invite_token_prefix"),
+  inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
+  inviteRedeemedAt: timestamp("invite_redeemed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

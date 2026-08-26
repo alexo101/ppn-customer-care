@@ -709,6 +709,37 @@ export interface InviteMemberInput {
   role: MemberRole;
 }
 
+export interface IssuedInvitation {
+  id: string;
+  email: string;
+  role: MemberRole;
+  status: MemberStatus;
+  invitedByEmail?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  token: string;
+  expiresAt: string;
+  invitePath: string;
+}
+
+export type InvitationStatusStatus = typeof InvitationStatusStatus[keyof typeof InvitationStatusStatus];
+
+
+export const InvitationStatusStatus = {
+  valid: 'valid',
+  expired: 'expired',
+  redeemed: 'redeemed',
+  invalid: 'invalid',
+} as const;
+
+export interface InvitationStatus {
+  status: InvitationStatusStatus;
+}
+
+export interface RedeemInvitationInput {
+  token: string;
+}
+
 export interface UpdateMemberInput {
   role: MemberRole;
 }

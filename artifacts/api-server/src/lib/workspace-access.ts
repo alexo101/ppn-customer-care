@@ -5,9 +5,20 @@ import {
   type MemberRole,
   type WorkspaceMember,
 } from "@workspace/db";
+import { hashDeploymentToken, newDeploymentToken } from "./connection-secrets";
 import { normalizeEmail } from "./identity";
 
 export const ALLOWED_EMAIL_DOMAIN = "papernest.com";
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type InvitationStatus = "valid" | "expired" | "redeemed" | "invalid";
+
+export type IssuedInvitation = {
+  member: WorkspaceMember;
+  token: string;
+  expiresAt: Date;
+  invitePath: string;
+};
 
 export class WorkspaceAccessError extends Error {
   readonly statusCode: number;
@@ -28,6 +39,63 @@ export function isPapernestEmail(email: string): boolean {
 
 export function isMemberRole(value: unknown): value is MemberRole {
   return value === "editor" || value === "viewer";
+}
+
+export function invitePathForToken(token: string): string {
+  return `/invite/${token}`;
+}
+
+function issueInviteToken(now = new Date()) {
+  const token = newDeploymentToken();
+  const expiresAt = new Date(now.getTime() + INVITE_TTL_MS);
+  return {
+    token,
+    tokenHash: hashDeploymentToken(token),
+    tokenPrefix: token.slice(0, 8),
+    expiresAt,
+    invitePath: invitePathForToken(token),
+  };
+}
+
+export function invitationStatusForMember(
+  member: WorkspaceMember | undefined | null,
+  now = new Date(),
+): InvitationStatus {
+  if (!member) return "invalid";
+  if (member.inviteRedeemedAt) return "redeemed";
+  if (!member.inviteTokenHash) return "invalid";
+  if (member.inviteExpiresAt && member.inviteExpiresAt.getTime() <= now.getTime()) {
+    return "expired";
+  }
+  return "valid";
+}
+
+async function findMemberByInviteToken(token: string) {
+  const trimmed = token.trim();
+  if (!trimmed) return undefined;
+  const [member] = await db
+    .select()
+    .from(workspaceMembersTable)
+    .where(eq(workspaceMembersTable.inviteTokenHash, hashDeploymentToken(trimmed)))
+    .limit(1);
+  return member;
+}
+
+export async function getInvitationStatus(token: string): Promise<{ status: InvitationStatus }> {
+  const member = await findMemberByInviteToken(token);
+  return { status: invitationStatusForMember(member) };
+}
+
+function toIssuedInvitation(
+  member: WorkspaceMember,
+  issued: { token: string; expiresAt: Date; invitePath: string },
+): IssuedInvitation {
+  return {
+    member,
+    token: issued.token,
+    expiresAt: issued.expiresAt,
+    invitePath: issued.invitePath,
+  };
 }
 
 export async function ensureWorkspaceMember(
@@ -98,7 +166,7 @@ export async function inviteMember(
   email: string,
   role: MemberRole,
   invitedByEmail: string,
-): Promise<WorkspaceMember> {
+): Promise<IssuedInvitation> {
   const normalized = normalizeEmail(email);
   if (!normalized) {
     throw new WorkspaceAccessError("Enter a valid email address.", 400);
@@ -120,16 +188,99 @@ export async function inviteMember(
     throw new WorkspaceAccessError("That person is already on the team.", 400);
   }
 
+  const issued = issueInviteToken();
   const [created] = await db
     .insert(workspaceMembersTable)
     .values({
       email: normalized,
       role,
       invitedByEmail,
+      inviteTokenHash: issued.tokenHash,
+      inviteTokenPrefix: issued.tokenPrefix,
+      inviteExpiresAt: issued.expiresAt,
     })
     .returning();
 
-  return created;
+  return toIssuedInvitation(created, issued);
+}
+
+export async function regenerateInviteToken(id: string): Promise<IssuedInvitation> {
+  const [member] = await db
+    .select()
+    .from(workspaceMembersTable)
+    .where(eq(workspaceMembersTable.id, id))
+    .limit(1);
+
+  if (!member) {
+    throw new WorkspaceAccessError("Team member not found.", 404);
+  }
+  if (member.clerkUserId) {
+    throw new WorkspaceAccessError("This person already joined the workspace.", 400);
+  }
+
+  const issued = issueInviteToken();
+  const [updated] = await db
+    .update(workspaceMembersTable)
+    .set({
+      inviteTokenHash: issued.tokenHash,
+      inviteTokenPrefix: issued.tokenPrefix,
+      inviteExpiresAt: issued.expiresAt,
+      inviteRedeemedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(workspaceMembersTable.id, id))
+    .returning();
+
+  return toIssuedInvitation(updated ?? member, issued);
+}
+
+export async function redeemInvitation(
+  token: string,
+  userId: string,
+  email: string | null | undefined,
+): Promise<WorkspaceMember> {
+  const normalized = normalizeEmail(email);
+  if (!normalized) {
+    throw new WorkspaceAccessError("Could not determine your email address.", 400);
+  }
+
+  const member = await findMemberByInviteToken(token);
+  const status = invitationStatusForMember(member);
+  if (!member || status === "invalid") {
+    throw new WorkspaceAccessError("This invite link is not valid.", 400);
+  }
+  if (status === "expired") {
+    throw new WorkspaceAccessError("This invite link has expired. Ask for a new one.", 400);
+  }
+  if (status === "redeemed") {
+    throw new WorkspaceAccessError("This invite has already been used.", 400);
+  }
+  if (member.email !== normalized) {
+    throw new WorkspaceAccessError(
+      "Sign in with the Google account that was invited.",
+      403,
+    );
+  }
+
+  const redeemedAt = new Date();
+  const [updated] = await db
+    .update(workspaceMembersTable)
+    .set({
+      clerkUserId: userId,
+      inviteRedeemedAt: redeemedAt,
+      inviteTokenHash: null,
+      inviteTokenPrefix: null,
+      updatedAt: redeemedAt,
+    })
+    .where(eq(workspaceMembersTable.id, member.id))
+    .returning();
+
+  return updated ?? {
+    ...member,
+    clerkUserId: userId,
+    inviteRedeemedAt: redeemedAt,
+    inviteTokenHash: null,
+  };
 }
 
 export async function updateMemberRole(
@@ -193,6 +344,15 @@ export function toMemberDto(member: WorkspaceMember) {
     invitedByEmail: member.invitedByEmail ?? null,
     createdAt: member.createdAt.toISOString(),
     updatedAt: member.updatedAt.toISOString(),
+  };
+}
+
+export function toInviteDto(issued: IssuedInvitation) {
+  return {
+    ...toMemberDto(issued.member),
+    token: issued.token,
+    expiresAt: issued.expiresAt.toISOString(),
+    invitePath: issued.invitePath,
   };
 }
 

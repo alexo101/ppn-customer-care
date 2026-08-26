@@ -497,6 +497,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
     : [];
 
   const handleToggleCategory = (cat: IntentCategory, checked: boolean) => {
+    if (!canEdit) return;
     updateCategory.mutate(
       { id: cat.id, data: { isEnabled: checked } },
       {
@@ -508,6 +509,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
   };
 
   const handleToggleSub = (sub: IntentCategory, checked: boolean) => {
+    if (!canEdit) return;
     updateCategory.mutate(
       { id: sub.id, data: { isEnabled: checked } },
       {
@@ -559,6 +561,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
   };
 
   const handleSaveForm = () => {
+    if (!canEdit) return;
     const trimmed = formName.trim();
     if (!trimmed || !dialog) return;
     const description = formDescription.trim();
@@ -657,7 +660,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
   };
 
   const handleConfirmDeleteCategory = () => {
-    if (!categoryToDelete) return;
+    if (!canEdit || !categoryToDelete) return;
     const cat = categoryToDelete;
 
     deleteCategory.mutate(
@@ -679,6 +682,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
   };
 
   const handleMoveSub = (sub: IntentCategory, targetCat: IntentCategory) => {
+    if (!canEdit) return;
     updateCategory.mutate(
       { id: sub.id, data: { parentId: targetCat.id } },
       {
@@ -694,6 +698,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
   };
 
   const handleDeleteSub = (sub: IntentCategory) => {
+    if (!canEdit) return;
     deleteCategory.mutate(
       { id: sub.id },
       {
@@ -774,13 +779,18 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                     <span className="text-xs text-muted-foreground font-normal">
                       {subs.length} {subs.length === 1 ? 'sub' : 'subs'}
                     </span>
-                    <Switch
-                      checked={cat.isEnabled}
-                      onCheckedChange={(checked) => handleToggleCategory(cat, checked)}
-                      onClick={(e) => e.stopPropagation()}
-                      disabled={!canEdit}
-                      aria-label={cat.isEnabled ? 'Disable category' : 'Enable category'}
-                    />
+                    {canEdit ? (
+                      <Switch
+                        checked={cat.isEnabled}
+                        onCheckedChange={(checked) => handleToggleCategory(cat, checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={cat.isEnabled ? 'Disable category' : 'Enable category'}
+                      />
+                    ) : (
+                      <Badge variant={cat.isEnabled ? "default" : "secondary"} className="text-[10px]">
+                        {cat.isEnabled ? "Enabled" : "Disabled"}
+                      </Badge>
+                    )}
                     {canEdit ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -892,12 +902,17 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">
-                        <Switch
-                          checked={sub.isEnabled}
-                          onCheckedChange={(checked) => handleToggleSub(sub, checked)}
-                          disabled={!canEdit}
-                          aria-label={sub.isEnabled ? 'Disable subcategory' : 'Enable subcategory'}
-                        />
+                        {canEdit ? (
+                          <Switch
+                            checked={sub.isEnabled}
+                            onCheckedChange={(checked) => handleToggleSub(sub, checked)}
+                            aria-label={sub.isEnabled ? 'Disable subcategory' : 'Enable subcategory'}
+                          />
+                        ) : (
+                          <Badge variant={sub.isEnabled ? "default" : "secondary"} className="text-[10px]">
+                            {sub.isEnabled ? "Enabled" : "Disabled"}
+                          </Badge>
+                        )}
 
                         {canEdit ? (
                         <>
@@ -995,7 +1010,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
       </div>
 
       <CategoryFormDialog
-        open={dialog !== null}
+        open={canEdit && dialog !== null}
         onOpenChange={(open) => {
           if (!open) closeDialog();
         }}
@@ -1023,7 +1038,7 @@ export function CategoriesTab({ agentId }: { agentId: string }) {
 
       {/* Delete Category Confirmation Modal */}
       <AlertDialog
-        open={!!categoryToDelete}
+        open={canEdit && !!categoryToDelete}
         onOpenChange={(open) => !open && setCategoryToDelete(null)}
       >
         <AlertDialogContent>

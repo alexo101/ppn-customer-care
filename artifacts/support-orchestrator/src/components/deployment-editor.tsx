@@ -173,6 +173,7 @@ function CopyButton({ code }: { code: string }) {
 }
 
 export function DeploymentEditor({ agentId }: { agentId: string }) {
+  const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
   const { data: agent, isLoading } = useGetAgent(agentId);
   const updateAgent = useUpdateAgent();
@@ -180,6 +181,7 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
   const enabled = Boolean(agent?.isEnabled);
 
   const setEnabled = async (isEnabled: boolean) => {
+    if (!canEdit) return;
     try {
       await updateAgent.mutateAsync({ id: agentId, data: { isEnabled } });
       await Promise.all([

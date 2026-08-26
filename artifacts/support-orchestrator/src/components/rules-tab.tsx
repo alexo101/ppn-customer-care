@@ -35,6 +35,7 @@ import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-acc
 export function RulesTab({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { canEdit } = useWorkspaceAccess();
   const { data: rules = [] } = useListRules({ agentId });
   const { data: categories = [] } = useListCategories({ agentId });
   const { data: sources = [] } = useListSources({ agentId });
@@ -107,7 +108,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
   };
 
   const handleDelete = () => {
-    if (!ruleToDelete) return;
+    if (!canEdit || !ruleToDelete) return;
     deleteRule.mutate(
       { id: ruleToDelete.id },
       {
@@ -128,6 +129,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
   };
 
   const handleToggle = (rule: OrchestratorRule, isEnabled: boolean) => {
+    if (!canEdit) return;
     // Optimistic update
     queryClient.setQueryData(
       getListRulesQueryKey({ agentId }),
@@ -150,6 +152,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
   };
 
   const handleReorderEnd = (reordered: OrchestratorRule[]) => {
+    if (!canEdit) return;
     setIsDragging(false);
     const n = reordered.length;
     // Top of list = highest priority (n-1 down to 0)
@@ -400,27 +403,33 @@ function RuleRow({
         )}
         onPointerDown={(e) => {
           e.stopPropagation();
-          dragControls?.start(e);
+          if (canEdit) dragControls?.start(e);
         }}
       >
         <GripVertical className="h-4 w-4" />
       </div>
 
       {/* Rule sentence / click to edit */}
-      <button
-        type="button"
-        className="min-w-0 flex-1 py-3 pr-2 text-left"
-        onClick={onEdit}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium leading-6 text-foreground">
-            {sentence}
+      {canEdit ? (
+        <button
+          type="button"
+          className="min-w-0 flex-1 py-3 pr-2 text-left"
+          onClick={onEdit}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-medium leading-6 text-foreground">
+              {sentence}
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Select to edit conversationally
           </p>
+        </button>
+      ) : (
+        <div className="min-w-0 flex-1 py-3 pr-2">
+          <p className="text-sm font-medium leading-6 text-foreground">{sentence}</p>
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Select to edit conversationally
-        </p>
-      </button>
+      )}
 
       {/* Enable / disable toggle */}
       <div
@@ -459,6 +468,7 @@ function RuleRow({
 type ReorderRowProps = Omit<RowProps, "draggable" | "dragControls">;
 
 function ReorderRuleRow(props: ReorderRowProps) {
+  const { canEdit } = useWorkspaceAccess();
   const dragControls = useDragControls();
 
   return (
@@ -468,7 +478,7 @@ function ReorderRuleRow(props: ReorderRowProps) {
       dragControls={dragControls}
       className="list-none"
     >
-      <RuleRow {...props} draggable dragControls={dragControls} />
+      <RuleRow {...props} draggable={canEdit} dragControls={dragControls} />
     </Reorder.Item>
   );
 }

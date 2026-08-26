@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { hashDeploymentToken } from "./connection-secrets";
 
 type QueryResult = unknown;
 
@@ -40,16 +41,25 @@ vi.mock("@workspace/db", () => ({
     clerkUserId: "clerk_user_id",
     role: "role",
     invitedByEmail: "invited_by_email",
+    inviteTokenHash: "invite_token_hash",
+    inviteTokenPrefix: "invite_token_prefix",
+    inviteExpiresAt: "invite_expires_at",
+    inviteRedeemedAt: "invite_redeemed_at",
     createdAt: "created_at",
     updatedAt: "updated_at",
   },
 }));
 
 import {
+  INVITE_TTL_MS,
   WorkspaceAccessError,
   ensureWorkspaceMember,
+  getInvitationStatus,
+  invitationStatusForMember,
   inviteMember,
   isPapernestEmail,
+  redeemInvitation,
+  regenerateInviteToken,
   revokeMember,
   updateMemberRole,
 } from "./workspace-access";
@@ -61,6 +71,10 @@ function member(overrides: Record<string, unknown> = {}) {
     clerkUserId: "user_1",
     role: "editor",
     invitedByEmail: null,
+    inviteTokenHash: null,
+    inviteTokenPrefix: null,
+    inviteExpiresAt: null,
+    inviteRedeemedAt: null,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     ...overrides,
@@ -157,6 +171,192 @@ describe("inviteMember", () => {
     await expect(inviteMember("ada@papernest.com", "viewer", "owner@papernest.com")).rejects.toMatchObject({
       statusCode: 400,
       message: "That person is already on the team.",
+    });
+  });
+
+  it("stores a hash of a 7-day token and returns the raw token once", async () => {
+    const created = member({
+      clerkUserId: null,
+      role: "viewer",
+      invitedByEmail: "owner@papernest.com",
+    });
+    const insertQuery = createQuery([created]);
+    select.mockReturnValueOnce(createQuery([]));
+    insert.mockReturnValueOnce(insertQuery);
+
+    const before = Date.now();
+    const issued = await inviteMember("ada@papernest.com", "viewer", "owner@papernest.com");
+    const after = Date.now();
+
+    expect(issued.token).toEqual(expect.any(String));
+    expect(issued.token.length).toBeGreaterThan(20);
+    expect(issued.invitePath).toBe(`/invite/${issued.token}`);
+    expect(issued.expiresAt.getTime()).toBeGreaterThanOrEqual(before + INVITE_TTL_MS);
+    expect(issued.expiresAt.getTime()).toBeLessThanOrEqual(after + INVITE_TTL_MS);
+
+    const stored = (insertQuery.values as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+    expect(stored.inviteTokenHash).toBe(hashDeploymentToken(issued.token));
+    expect(stored.inviteTokenHash).not.toBe(issued.token);
+    expect(stored.inviteTokenPrefix).toBe(issued.token.slice(0, 8));
+    expect(stored.inviteExpiresAt).toEqual(issued.expiresAt);
+  });
+});
+
+describe("invitation tokens", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("classifies missing, expired, redeemed, and valid invites", () => {
+    expect(invitationStatusForMember(undefined)).toBe("invalid");
+    expect(invitationStatusForMember(member({ inviteTokenHash: null }))).toBe("invalid");
+    expect(
+      invitationStatusForMember(
+        member({
+          inviteTokenHash: "hash",
+          inviteRedeemedAt: new Date("2026-01-02T00:00:00.000Z"),
+        }),
+      ),
+    ).toBe("redeemed");
+    expect(
+      invitationStatusForMember(
+        member({
+          clerkUserId: null,
+          inviteTokenHash: "hash",
+          inviteExpiresAt: new Date("2026-01-01T00:00:00.000Z"),
+        }),
+        new Date("2026-01-02T00:00:00.000Z"),
+      ),
+    ).toBe("expired");
+    expect(
+      invitationStatusForMember(
+        member({
+          clerkUserId: null,
+          inviteTokenHash: "hash",
+          inviteExpiresAt: new Date("2026-01-08T00:00:00.000Z"),
+        }),
+        new Date("2026-01-02T00:00:00.000Z"),
+      ),
+    ).toBe("valid");
+  });
+
+  it("treats unknown tokens as invalid", async () => {
+    await expect(getInvitationStatus("")).resolves.toEqual({ status: "invalid" });
+    select.mockReturnValueOnce(createQuery([]));
+    await expect(getInvitationStatus("missing-token")).resolves.toEqual({ status: "invalid" });
+  });
+
+  it("replaces the previous hash when regenerating", async () => {
+    const invited = member({
+      clerkUserId: null,
+      inviteTokenHash: "old-hash",
+      inviteTokenPrefix: "oldprefx",
+      inviteExpiresAt: new Date("2026-01-02T00:00:00.000Z"),
+    });
+    const updateQuery = createQuery([invited]);
+    select.mockReturnValueOnce(createQuery([invited]));
+    update.mockReturnValueOnce(updateQuery);
+
+    const issued = await regenerateInviteToken("member-1");
+    const stored = (updateQuery.set as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+
+    expect(issued.token).toEqual(expect.any(String));
+    expect(stored.inviteTokenHash).toBe(hashDeploymentToken(issued.token));
+    expect(stored.inviteTokenHash).not.toBe("old-hash");
+    expect(stored.inviteRedeemedAt).toBeNull();
+  });
+
+  it("does not regenerate for someone who already joined", async () => {
+    select.mockReturnValueOnce(createQuery([member({ clerkUserId: "user_1" })]));
+    await expect(regenerateInviteToken("member-1")).rejects.toMatchObject({
+      statusCode: 400,
+      message: "This person already joined the workspace.",
+    });
+  });
+
+  it("returns not found when regenerating a missing member", async () => {
+    select.mockReturnValueOnce(createQuery([]));
+    await expect(regenerateInviteToken("missing")).rejects.toMatchObject({
+      statusCode: 404,
+      message: "Team member not found.",
+    });
+  });
+
+  it("redeems a valid token for the invited Google account", async () => {
+    const token = "invite-token";
+    const invited = member({
+      clerkUserId: null,
+      inviteTokenHash: hashDeploymentToken(token),
+      inviteExpiresAt: new Date(Date.now() + INVITE_TTL_MS),
+    });
+    const redeemed = member({
+      inviteTokenHash: null,
+      inviteRedeemedAt: new Date("2026-01-02T00:00:00.000Z"),
+    });
+    const updateQuery = createQuery([redeemed]);
+    select.mockReturnValueOnce(createQuery([invited]));
+    update.mockReturnValueOnce(updateQuery);
+
+    await expect(redeemInvitation(token, "user_1", "ada@papernest.com")).resolves.toEqual(redeemed);
+    const stored = (updateQuery.set as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+    expect(stored.clerkUserId).toBe("user_1");
+    expect(stored.inviteTokenHash).toBeNull();
+    expect(stored.inviteRedeemedAt).toBeInstanceOf(Date);
+  });
+
+  it("rejects redeem when the signed-in email does not match", async () => {
+    const token = "invite-token";
+    select.mockReturnValueOnce(
+      createQuery([
+        member({
+          clerkUserId: null,
+          email: "ada@papernest.com",
+          inviteTokenHash: hashDeploymentToken(token),
+          inviteExpiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        }),
+      ]),
+    );
+
+    await expect(redeemInvitation(token, "user_2", "lee@papernest.com")).rejects.toMatchObject({
+      statusCode: 403,
+      message: "Sign in with the Google account that was invited.",
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("rejects expired, redeemed, and unknown tokens", async () => {
+    select.mockReturnValueOnce(
+      createQuery([
+        member({
+          clerkUserId: null,
+          inviteTokenHash: hashDeploymentToken("expired"),
+          inviteExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
+        }),
+      ]),
+    );
+    await expect(redeemInvitation("expired", "user_1", "ada@papernest.com")).rejects.toMatchObject({
+      statusCode: 400,
+      message: "This invite link has expired. Ask for a new one.",
+    });
+
+    select.mockReturnValueOnce(
+      createQuery([
+        member({
+          inviteTokenHash: hashDeploymentToken("used"),
+          inviteRedeemedAt: new Date("2026-01-02T00:00:00.000Z"),
+          inviteExpiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        }),
+      ]),
+    );
+    await expect(redeemInvitation("used", "user_1", "ada@papernest.com")).rejects.toMatchObject({
+      statusCode: 400,
+      message: "This invite has already been used.",
+    });
+
+    select.mockReturnValueOnce(createQuery([]));
+    await expect(redeemInvitation("missing", "user_1", "ada@papernest.com")).rejects.toMatchObject({
+      statusCode: 400,
+      message: "This invite link is not valid.",
     });
   });
 });

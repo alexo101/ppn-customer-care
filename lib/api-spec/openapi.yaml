@@ -1520,9 +1520,90 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkspaceMember"
+                $ref: "#/components/schemas/IssuedInvitation"
         "400":
           description: Invalid invite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /members/{id}/invitation-token:
+    post:
+      operationId: createMemberInvitationToken
+      tags: [members]
+      summary: Create a new copyable invitation link for an invited member
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Invitation token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedInvitation"
+        "400":
+          description: Member already joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /invitations/{token}:
+    get:
+      operationId: getInvitation
+      tags: [members]
+      summary: Public status for an invitation token
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invitation status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationStatus"
+
+  /invitations/redeem:
+    post:
+      operationId: redeemInvitation
+      tags: [members]
+      summary: Redeem an invitation token for the signed-in Google account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedeemInvitationInput"
+      responses:
+        "200":
+          description: Redeemed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          description: Invalid, expired, or already used invite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Signed-in email does not match the invite
           content:
             application/json:
               schema:
@@ -2700,6 +2781,50 @@ components:
           type: string
         role:
           $ref: "#/components/schemas/MemberRole"
+
+    IssuedInvitation:
+      type: object
+      required: [id, email, role, status, createdAt, updatedAt, token, expiresAt, invitePath]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/MemberRole"
+        status:
+          $ref: "#/components/schemas/MemberStatus"
+        invitedByEmail:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        token:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        invitePath:
+          type: string
+
+    InvitationStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [valid, expired, redeemed, invalid]
+
+    RedeemInvitationInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
 
     UpdateMemberInput:
       type: object

@@ -1485,6 +1485,60 @@ export const InviteMemberResponse = zod.object({
   "status": zod.enum(['invited', 'active']),
   "invitedByEmail": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "token": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "invitePath": zod.string()
+})
+
+
+/**
+ * @summary Create a new copyable invitation link for an invited member
+ */
+export const CreateMemberInvitationTokenParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const CreateMemberInvitationTokenResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer']),
+  "status": zod.enum(['invited', 'active']),
+  "invitedByEmail": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "token": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "invitePath": zod.string()
+})
+
+
+/**
+ * @summary Public status for an invitation token
+ */
+export const GetInvitationParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetInvitationResponse = zod.object({
+  "status": zod.enum(['valid', 'expired', 'redeemed', 'invalid'])
+})
+
+
+/**
+ * @summary Redeem an invitation token for the signed-in Google account
+ */
+export const RedeemInvitationBody = zod.object({
+  "token": zod.string()
+})
+
+export const RedeemInvitationResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer']),
+  "status": zod.enum(['invited', 'active']),
+  "invitedByEmail": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
 

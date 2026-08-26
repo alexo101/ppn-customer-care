@@ -90,6 +90,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
   };
 
   const handleAdd = () => {
+    if (!canEdit) return;
     const content = draft.trim();
     if (!content || atLimit || createQuestion.isPending) return;
 
@@ -114,6 +115,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
   };
 
   const handleSaveEdit = (id: string) => {
+    if (!canEdit) return;
     const content = editingText.trim();
     if (!content) return;
 
@@ -136,7 +138,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
   };
 
   const handleDelete = () => {
-    if (!questionToDelete) return;
+    if (!canEdit || !questionToDelete) return;
     deleteQuestion.mutate(
       { id: questionToDelete.id },
       {
@@ -157,6 +159,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
   };
 
   const handleCsv = async (file: File) => {
+    if (!canEdit) return;
     const text = await file.text();
     const parsed = parseQuestionsCsv(text);
     if (parsed.length === 0) {
@@ -307,7 +310,8 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
           </div>
           {atLimit ? (
             <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              This agent is at the {MAX_TRAINING_QUESTIONS}-question limit. Delete a question to add more.
+              This agent is at the {MAX_TRAINING_QUESTIONS}-question limit.
+              {canEdit ? " Delete a question to add more." : ""}
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
@@ -461,7 +465,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
         </div>
       </div>
 
-      <AlertDialog open={!!questionToDelete} onOpenChange={(open) => !open && setQuestionToDelete(null)}>
+      <AlertDialog open={canEdit && !!questionToDelete} onOpenChange={(open) => !open && setQuestionToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this question?</AlertDialogTitle>

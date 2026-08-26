@@ -21,6 +21,7 @@ import AgentsBoard from '@/pages/agents';
 import CreateAgentPage from '@/pages/agent-new';
 import EditAgentPage from '@/pages/agent-edit';
 import Team from '@/pages/team';
+import Invite from '@/pages/invite';
 import Widget from '@/pages/widget';
 import NotFound from '@/pages/not-found';
 
@@ -82,6 +83,7 @@ function Router() {
         <Route path="/signup/*?" component={Signup} />
         <Route path="/sso-callback/*?" component={SSOCallback} />
         <Route path="/widget" component={Widget} />
+        <Route path="/invite/:token" component={Invite} />
         <Route path="/dashboard">
           <ProtectedRoute>
             <AppShell activeTab="dashboard">

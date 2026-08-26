@@ -36,9 +36,10 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { getUserAgentsQueryKey } from "@/lib/agents-query";
-import { MutatingControls } from "@/components/workspace-access";
+import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 
 export default function AgentsBoard() {
+  const { canEdit } = useWorkspaceAccess();
   const { isLoaded, isSignedIn, userId } = useAuth();
   const {
     data: agents = [],
@@ -165,7 +166,7 @@ export default function AgentsBoard() {
       </div>
 
       <AlertDialog
-        open={!!toDelete}
+        open={canEdit && !!toDelete}
         onOpenChange={(open) => !open && setToDelete(null)}
       >
         <AlertDialogContent>
@@ -181,7 +182,7 @@ export default function AgentsBoard() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (!toDelete) return;
+                if (!canEdit || !toDelete) return;
                 deleteAgent.mutate(
                   { id: toDelete.id },
                   {

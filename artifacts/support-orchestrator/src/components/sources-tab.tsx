@@ -187,6 +187,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   };
 
   const openEdit = (source: KnowledgeSource) => {
+    if (!canEdit) return;
     if (source.sourceType === "article") {
       setEditing(source);
       setTitle(source.name);
@@ -205,6 +206,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
 
   const handleSaveArticle = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canEdit) return;
     const name = title.trim();
     const content = body.trim();
     if (!name || !content) return;
@@ -231,6 +233,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
 
   const handleUploadDocument = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canEdit) return;
     if (!file) {
       toast({ title: "Choose a .docx or .xlsx file", variant: "destructive" });
       return;
@@ -250,6 +253,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   };
 
   const handleRefreshSource = (source: KnowledgeSource) => {
+    if (!canEdit) return;
     refreshSource.mutate(
       { id: source.id },
       {
@@ -290,6 +294,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     : "";
 
   const handleToggle = (source: KnowledgeSource, isEnabled: boolean) => {
+    if (!canEdit) return;
     updateSource.mutate(
       { id: source.id, data: { isEnabled } },
       {
@@ -300,7 +305,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   };
 
   const handleConfirmDelete = () => {
-    if (!sourceToDelete) return;
+    if (!canEdit || !sourceToDelete) return;
     deleteSource.mutate(
       { id: sourceToDelete.id },
       {
@@ -380,14 +385,16 @@ export function SourcesTab({ agentId }: { agentId: string }) {
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <div className="min-w-0 space-y-1">
               <p>{indexingErrorMessage}</p>
-              <button
-                type="button"
-                className="font-medium underline underline-offset-2"
-                onClick={() => handleRefreshSource(indexingError!)}
-                disabled={refreshSource.isPending}
-              >
-                Retry indexing
-              </button>
+              <MutatingControls>
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2"
+                  onClick={() => handleRefreshSource(indexingError!)}
+                  disabled={refreshSource.isPending}
+                >
+                  Retry indexing
+                </button>
+              </MutatingControls>
             </div>
           </div>
         ) : null}
@@ -398,16 +405,9 @@ export function SourcesTab({ agentId }: { agentId: string }) {
           </p>
         ) : (
           <div className="space-y-2.5">
-            {sources.map((source) => (
-              <div
-                key={source.id}
-                className="group rounded-lg p-3 flex items-center justify-between border border-border/80 bg-card shadow-sm"
-              >
-                <button
-                  type="button"
-                  className="flex items-center gap-3 min-w-0 text-left flex-1 pr-3"
-                  onClick={() => openEdit(source)}
-                >
+            {sources.map((source) => {
+              const summary = (
+                <>
                   <div className="w-8 h-8 rounded-md bg-muted/70 flex items-center justify-center text-muted-foreground shrink-0 border border-border/40">
                     <SourceTypeIcon type={source.sourceType} />
                   </div>
@@ -428,14 +428,39 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">{sourceSummary(source)}</p>
                   </div>
-                </button>
+                </>
+              );
+
+              return (
+              <div
+                key={source.id}
+                className="group rounded-lg p-3 flex items-center justify-between border border-border/80 bg-card shadow-sm"
+              >
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="flex items-center gap-3 min-w-0 text-left flex-1 pr-3"
+                    onClick={() => openEdit(source)}
+                  >
+                    {summary}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
+                    {summary}
+                  </div>
+                )}
                 <div className="flex items-center gap-3 shrink-0">
-                  <Switch
-                    checked={source.isEnabled}
-                    onCheckedChange={(checked) => handleToggle(source, checked)}
-                    disabled={!canEdit}
-                    aria-label={source.isEnabled ? "Disable source" : "Enable source"}
-                  />
+                  {canEdit ? (
+                    <Switch
+                      checked={source.isEnabled}
+                      onCheckedChange={(checked) => handleToggle(source, checked)}
+                      aria-label={source.isEnabled ? "Disable source" : "Enable source"}
+                    />
+                  ) : (
+                    <Badge variant={source.isEnabled ? "default" : "secondary"} className="text-[10px]">
+                      {source.isEnabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                  )}
                   {canEdit ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -474,12 +499,13 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                   ) : null}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      <Dialog open={articleOpen} onOpenChange={(open) => !open && resetDialog()}>
+      <Dialog open={canEdit && articleOpen} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent className="sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit article" : "Write an article"}</DialogTitle>
@@ -518,7 +544,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={documentOpen} onOpenChange={(open) => !open && resetDialog()}>
+      <Dialog open={canEdit && documentOpen} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Upload a document</DialogTitle>
@@ -564,7 +590,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={Boolean(sourceToDelete)} onOpenChange={(open) => !open && setSourceToDelete(null)}>
+      <AlertDialog open={canEdit && Boolean(sourceToDelete)} onOpenChange={(open) => !open && setSourceToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete source</AlertDialogTitle>

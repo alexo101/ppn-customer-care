@@ -121,11 +121,13 @@ export function TargetsTab({ agentId }: { agentId: string }) {
   };
 
   const openCreate = () => {
+    if (!canEdit) return;
     resetForm(null);
     setOpen(true);
   };
 
   const openEdit = (target: Target) => {
+    if (!canEdit) return;
     resetForm(target);
     setOpen(true);
   };
@@ -154,6 +156,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
 
   const handleSave = (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canEdit) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
       toast({ title: "Name this target", variant: "destructive" });
@@ -192,7 +195,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
   };
 
   const handleConfirmDelete = () => {
-    if (!toDelete) return;
+    if (!canEdit || !toDelete) return;
     deleteTarget.mutate(
       { id: toDelete.id },
       {
@@ -261,12 +264,9 @@ export function TargetsTab({ agentId }: { agentId: string }) {
           </p>
         ) : (
           <div className="space-y-2.5">
-            {targets.map((target) => (
-              <div
-                key={target.id}
-                className="group rounded-lg p-3 flex items-start justify-between gap-3 border border-border/80 bg-card shadow-sm"
-              >
-                <button type="button" className="min-w-0 text-left flex-1" onClick={() => openEdit(target)}>
+            {targets.map((target) => {
+              const summary = (
+                <>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-medium text-sm truncate">{target.name}</span>
                     <Badge variant="outline" className="text-xs h-5 shrink-0">
@@ -293,27 +293,50 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                       ))
                     )}
                   </div>
-                </button>
+                </>
+              );
+
+              return (
+              <div
+                key={target.id}
+                className="group rounded-lg p-3 flex items-start justify-between gap-3 border border-border/80 bg-card shadow-sm"
+              >
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="min-w-0 text-left flex-1"
+                    onClick={() => openEdit(target)}
+                  >
+                    {summary}
+                  </button>
+                ) : (
+                  <div className="min-w-0 text-left flex-1">{summary}</div>
+                )}
                 <div className="flex items-center gap-3 shrink-0 pt-0.5">
-                  <Switch
-                    checked={target.isEnabled}
-                    disabled={!canEdit}
-                    onCheckedChange={(checked) => {
-                      updateTarget.mutate(
-                        { id: target.id, data: { isEnabled: checked } },
-                        {
-                          onSuccess: invalidate,
-                          onError: (error) => {
-                            toast({
-                              title: "Could not update target",
-                              description: error instanceof Error ? error.message : "Try again.",
-                              variant: "destructive",
-                            });
+                  {canEdit ? (
+                    <Switch
+                      checked={target.isEnabled}
+                      onCheckedChange={(checked) => {
+                        updateTarget.mutate(
+                          { id: target.id, data: { isEnabled: checked } },
+                          {
+                            onSuccess: invalidate,
+                            onError: (error) => {
+                              toast({
+                                title: "Could not update target",
+                                description: error instanceof Error ? error.message : "Try again.",
+                                variant: "destructive",
+                              });
+                            },
                           },
-                        },
-                      );
-                    }}
-                  />
+                        );
+                      }}
+                    />
+                  ) : (
+                    <Badge variant={target.isEnabled ? "default" : "secondary"} className="text-[10px]">
+                      {target.isEnabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                  )}
                   {canEdit ? (
                   <Button
                     variant="ghost"
@@ -326,13 +349,14 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   ) : null}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       <Dialog
-        open={open}
+        open={canEdit && open}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) resetForm(null);
@@ -510,7 +534,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={Boolean(toDelete)} onOpenChange={(next) => !next && setToDelete(null)}>
+      <AlertDialog open={canEdit && Boolean(toDelete)} onOpenChange={(next) => !next && setToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete target</AlertDialogTitle>

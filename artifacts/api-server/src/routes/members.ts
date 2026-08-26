@@ -1,6 +1,9 @@
 import { Router, type IRouter } from "express";
 import {
+  CreateMemberInvitationTokenParams,
+  GetInvitationParams,
   InviteMemberBody,
+  RedeemInvitationBody,
   UpdateMemberBody,
   UpdateMemberParams,
   DeleteMemberParams,
@@ -8,10 +11,14 @@ import {
 import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
   WorkspaceAccessError,
+  getInvitationStatus,
   inviteMember,
   isMemberRole,
   listMembers,
+  redeemInvitation,
+  regenerateInviteToken,
   revokeMember,
+  toInviteDto,
   toMemberDto,
   updateMemberRole,
 } from "../lib/workspace-access";
@@ -42,12 +49,54 @@ router.post("/members", requireAuth, requireEditor, async (req, res): Promise<vo
     return;
   }
   try {
-    const created = await inviteMember(
+    const issued = await inviteMember(
       parsed.data.email,
       parsed.data.role,
       req.userEmail ?? "",
     );
-    res.status(201).json(toMemberDto(created));
+    res.status(201).json(toInviteDto(issued));
+  } catch (error) {
+    if (!sendAccessError(res, error)) throw error;
+  }
+});
+
+router.post("/members/:id/invitation-token", requireAuth, requireEditor, async (req, res): Promise<void> => {
+  const params = CreateMemberInvitationTokenParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  try {
+    const issued = await regenerateInviteToken(params.data.id);
+    res.status(201).json(toInviteDto(issued));
+  } catch (error) {
+    if (!sendAccessError(res, error)) throw error;
+  }
+});
+
+router.get("/invitations/:token", async (req, res): Promise<void> => {
+  const params = GetInvitationParams.safeParse(req.params);
+  if (!params.success) {
+    res.json({ status: "invalid" });
+    return;
+  }
+  const result = await getInvitationStatus(params.data.token);
+  res.json(result);
+});
+
+router.post("/invitations/redeem", requireAuth, async (req, res): Promise<void> => {
+  const parsed = RedeemInvitationBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const member = await redeemInvitation(
+      parsed.data.token,
+      req.userId,
+      req.userEmail,
+    );
+    res.json(toMemberDto(member));
   } catch (error) {
     if (!sendAccessError(res, error)) throw error;
   }

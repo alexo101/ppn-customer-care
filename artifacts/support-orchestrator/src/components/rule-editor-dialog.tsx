@@ -30,6 +30,7 @@ import {
   RuleAuthoringPanel,
 } from "@/components/rule-authoring-chat";
 import { ManualRuleForm } from "@/components/manual-rule-form";
+import { useWorkspaceAccess } from "@/components/workspace-access";
 
 type RuleEditorDialogProps = {
   agentId: string;
@@ -58,6 +59,7 @@ export function RuleEditorDialog({
   initialMode,
   suggestedPriority,
 }: RuleEditorDialogProps) {
+  const { canEdit } = useWorkspaceAccess();
   const { toast } = useToast();
   const createRule = useCreateRule();
   const updateRule = useUpdateRule();
@@ -85,6 +87,8 @@ export function RuleEditorDialog({
 
   const saving = createRule.isPending || updateRule.isPending;
   const title = rule ? "Edit rule" : "Create rule";
+
+  if (!canEdit) return null;
 
   const handleSave = (nextDraft: RuleAuthoringDraft) => {
     const payload = normalizeDraft(nextDraft);

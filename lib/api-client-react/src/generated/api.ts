@@ -44,7 +44,9 @@ import type {
   ImportAppearanceInput,
   ImportAppearanceResult,
   IntentCategory,
+  InvitationStatus,
   InviteMemberInput,
+  IssuedInvitation,
   KnowledgeSource,
   ListAnalyticsLogsParams,
   ListCategoriesParams,
@@ -60,6 +62,7 @@ import type {
   OrchestratorLog,
   OrchestratorRule,
   Question,
+  RedeemInvitationInput,
   RuleAuthoringRequest,
   RuleAuthoringResponse,
   RuleCategoryLinkInput,
@@ -4905,9 +4908,9 @@ export const getInviteMemberUrl = () => {
 /**
  * @summary Invite a papernest.com user with a role
  */
-export const inviteMember = async (inviteMemberInput: InviteMemberInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceMember> => {
+export const inviteMember = async (inviteMemberInput: InviteMemberInput, options?: Parameters<typeof customFetch>[1]): Promise<IssuedInvitation> => {
 
-  return customFetch<WorkspaceMember>(getInviteMemberUrl(),
+  return customFetch<IssuedInvitation>(getInviteMemberUrl(),
   {
     ...options,
     method: 'POST',
@@ -4963,6 +4966,225 @@ export const useInviteMember = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getInviteMemberMutationOptions(options));
+    }
+
+export const getCreateMemberInvitationTokenUrl = (id: string,) => {
+
+
+
+
+  return `/api/members/${id}/invitation-token`
+}
+
+/**
+ * @summary Create a new copyable invitation link for an invited member
+ */
+export const createMemberInvitationToken = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<IssuedInvitation> => {
+
+  return customFetch<IssuedInvitation>(getCreateMemberInvitationTokenUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateMemberInvitationTokenMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMemberInvitationToken>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMemberInvitationToken>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['createMemberInvitationToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMemberInvitationToken>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  createMemberInvitationToken(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMemberInvitationTokenMutationResult = NonNullable<Awaited<ReturnType<typeof createMemberInvitationToken>>>
+
+    export type CreateMemberInvitationTokenMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a new copyable invitation link for an invited member
+ */
+export const useCreateMemberInvitationToken = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMemberInvitationToken>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMemberInvitationToken>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getCreateMemberInvitationTokenMutationOptions(options));
+    }
+
+export const getGetInvitationUrl = (token: string,) => {
+
+
+
+
+  return `/api/invitations/${token}`
+}
+
+/**
+ * @summary Public status for an invitation token
+ */
+export const getInvitation = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<InvitationStatus> => {
+
+  return customFetch<InvitationStatus>(getGetInvitationUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInvitationQueryKey = (token: string,) => {
+    return [
+    `/api/invitations/${token}`
+    ] as const;
+    }
+
+
+export const getGetInvitationQueryOptions = <TData = Awaited<ReturnType<typeof getInvitation>>, TError = ErrorType<unknown>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInvitation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInvitationQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInvitation>>> = ({ signal }) => getInvitation(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInvitation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInvitationQueryResult = NonNullable<Awaited<ReturnType<typeof getInvitation>>>
+export type GetInvitationQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Public status for an invitation token
+ */
+
+export function useGetInvitation<TData = Awaited<ReturnType<typeof getInvitation>>, TError = ErrorType<unknown>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInvitation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInvitationQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRedeemInvitationUrl = () => {
+
+
+
+
+  return `/api/invitations/redeem`
+}
+
+/**
+ * @summary Redeem an invitation token for the signed-in Google account
+ */
+export const redeemInvitation = async (redeemInvitationInput: RedeemInvitationInput, options?: Parameters<typeof customFetch>[1]): Promise<WorkspaceMember> => {
+
+  return customFetch<WorkspaceMember>(getRedeemInvitationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(redeemInvitationInput)
+  }
+);}
+
+
+
+
+
+export const getRedeemInvitationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof redeemInvitation>>, TError,{data: BodyType<RedeemInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof redeemInvitation>>, TError,{data: BodyType<RedeemInvitationInput>}, TContext> => {
+
+const mutationKey = ['redeemInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof redeemInvitation>>, {data: BodyType<RedeemInvitationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  redeemInvitation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RedeemInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof redeemInvitation>>>
+    export type RedeemInvitationMutationBody = BodyType<RedeemInvitationInput>
+    export type RedeemInvitationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Redeem an invitation token for the signed-in Google account
+ */
+export const useRedeemInvitation = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof redeemInvitation>>, TError,{data: BodyType<RedeemInvitationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof redeemInvitation>>,
+        TError,
+        {data: BodyType<RedeemInvitationInput>},
+        TContext
+      > => {
+      return useMutation(getRedeemInvitationMutationOptions(options));
     }
 
 export const getUpdateMemberUrl = (id: string,) => {
