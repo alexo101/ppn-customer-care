@@ -105,8 +105,8 @@ export default function Team() {
                   Only @papernest.com Google accounts can be invited. They sign in with Google using this email.
                 </p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-3 items-end">
-                <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
+                <div className="min-w-0 space-y-2">
                   <Label htmlFor="invite-email" className="text-xs">Email</Label>
                   <Input
                     id="invite-email"
@@ -119,9 +119,9 @@ export default function Team() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs">Access</Label>
+                  <Label htmlFor="invite-role" className="text-xs">Access</Label>
                   <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as MemberRole)}>
-                    <SelectTrigger className="h-10 bg-background">
+                    <SelectTrigger id="invite-role" className="h-10 w-full bg-background">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -130,7 +130,7 @@ export default function Team() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="submit" className="h-10" disabled={inviteMember.isPending}>
+                <Button type="submit" className="h-10 w-full md:w-auto" disabled={inviteMember.isPending}>
                   <Plus className="w-3.5 h-3.5" />
                   Invite
                 </Button>
