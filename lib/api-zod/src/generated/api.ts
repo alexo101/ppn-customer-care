@@ -347,6 +347,7 @@ export const ListMessagesResponseItem = zod.object({
   "conversationId": zod.string(),
   "sender": zod.string(),
   "content": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
   "createdAt": zod.string()
 })
 export const ListMessagesResponse = zod.array(ListMessagesResponseItem)
@@ -375,6 +376,7 @@ export const SendMessageResponse = zod.object({
   "conversationId": zod.string(),
   "sender": zod.string(),
   "content": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
   "createdAt": zod.string()
 }),
   "response": zod.string(),
@@ -1102,6 +1104,91 @@ export const RefreshSourceResponse = zod.object({
 
 
 /**
+ * @summary List screenshots for a knowledge source
+ */
+export const ListSourceAssetsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ListSourceAssetsResponseItem = zod.object({
+  "id": zod.string(),
+  "sourceId": zod.string(),
+  "mimeType": zod.enum(['image/png', 'image/jpeg', 'image/webp']),
+  "originalName": zod.string(),
+  "byteSize": zod.number(),
+  "width": zod.number().nullish(),
+  "height": zod.number().nullish(),
+  "position": zod.number(),
+  "altText": zod.string(),
+  "processingStatus": zod.string()
+})
+export const ListSourceAssetsResponse = zod.array(ListSourceAssetsResponseItem)
+
+
+/**
+ * @summary Upload a screenshot to a knowledge source
+ */
+export const UploadSourceAssetParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const uploadSourceAssetBodyAltTextMax = 500;
+
+
+
+export const UploadSourceAssetBody = zod.object({
+  "file": zod.instanceof(File),
+  "altText": zod.string().max(uploadSourceAssetBodyAltTextMax).optional()
+})
+
+export const UploadSourceAssetResponse = zod.object({
+  "id": zod.string(),
+  "sourceId": zod.string(),
+  "mimeType": zod.enum(['image/png', 'image/jpeg', 'image/webp']),
+  "originalName": zod.string(),
+  "byteSize": zod.number(),
+  "width": zod.number().nullish(),
+  "height": zod.number().nullish(),
+  "position": zod.number(),
+  "altText": zod.string(),
+  "processingStatus": zod.string()
+})
+
+
+/**
+ * @summary Get a short-lived private screenshot URL
+ */
+export const GetSourceAssetUrlParams = zod.object({
+  "assetId": zod.coerce.string()
+})
+
+export const GetSourceAssetUrlResponse = zod.object({
+  "id": zod.string(),
+  "sourceId": zod.string(),
+  "mimeType": zod.enum(['image/png', 'image/jpeg', 'image/webp']),
+  "originalName": zod.string(),
+  "byteSize": zod.number(),
+  "width": zod.number().nullish(),
+  "height": zod.number().nullish(),
+  "position": zod.number(),
+  "altText": zod.string(),
+  "processingStatus": zod.string()
+}).and(zod.object({
+  "url": zod.string()
+}))
+
+
+/**
+ * @summary Delete a screenshot from a knowledge source
+ */
+export const DeleteSourceAssetParams = zod.object({
+  "assetId": zod.coerce.string()
+})
+
+export const DeleteSourceAssetResponse = zod.void()
+
+
+/**
  * @summary Upload a Word or Excel document as a knowledge source
  */
 export const UploadSourceDocumentBody = zod.object({
@@ -1111,6 +1198,26 @@ export const UploadSourceDocumentBody = zod.object({
 })
 
 export const UploadSourceDocumentResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "sourceType": zod.string(),
+  "connectionConfig": zod.record(zod.string(), zod.unknown()),
+  "isEnabled": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Import a public Google Doc, Google Sheet, or office file URL as a knowledge source
+ */
+export const CreateSourceFromUrlBody = zod.object({
+  "agentId": zod.string(),
+  "url": zod.string(),
+  "name": zod.string().optional()
+})
+
+export const CreateSourceFromUrlResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "sourceType": zod.string(),

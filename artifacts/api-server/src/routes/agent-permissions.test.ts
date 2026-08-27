@@ -31,6 +31,7 @@ const protectedRoutes: Array<{
   { file: "sources.ts", method: "post", path: "/agents/:agentId/sources/:sourceId" },
   { file: "sources.ts", method: "post", path: "/sources/:id/refresh" },
   { file: "sources.ts", method: "post", path: "/sources/upload" },
+  { file: "sources.ts", method: "post", path: "/sources/from-url" },
   { file: "sources.ts", method: "patch", path: "/sources/:id" },
   { file: "sources.ts", method: "delete", path: "/sources/:id" },
   { file: "sources.ts", method: "post", path: "/connectors" },

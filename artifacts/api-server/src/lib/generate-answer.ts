@@ -20,6 +20,7 @@ export type GeneratedAnswer = {
   model: string;
   totalTokens: number;
   promptAssembled: string;
+  citations: NonNullable<import("./llm").AnswerProviderResult["citations"]>;
 };
 
 const GREETINGS_RESPONSES = [
@@ -115,6 +116,7 @@ export async function generateAnswer(
     model: result.model,
     totalTokens: result.totalTokens,
     promptAssembled: result.promptAssembled,
+    citations: result.citations ?? [],
   };
 }
 
@@ -126,6 +128,7 @@ function localAnswer(responseText: string, resolutionStatus: string): GeneratedA
     model: "deterministic-shortcut",
     totalTokens: 0,
     promptAssembled: "",
+    citations: [],
   };
 }
 

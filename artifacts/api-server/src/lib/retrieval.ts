@@ -2,10 +2,12 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   knowledgeChunksTable,
+  knowledgeChunkAssetsTable,
   knowledgeSourcesTable,
   agentSourceAssignmentsTable,
 } from "@workspace/db";
 import type { EmbeddingProvider, RetrievedChunk } from "./llm";
+import { getKnowledgeAssetContext } from "./knowledge-assets";
 
 export async function retrieveRelevantChunks(
   sourceIds: string[],
@@ -26,6 +28,8 @@ export async function retrieveRelevantChunks(
   const rows = await db
     .select({
       sourceId: knowledgeChunksTable.sourceId,
+      chunkId: knowledgeChunksTable.id,
+      chunkIndex: knowledgeChunksTable.chunkIndex,
       sourceName: knowledgeSourcesTable.name,
       content: knowledgeChunksTable.content,
       distance,
@@ -52,12 +56,41 @@ export async function retrieveRelevantChunks(
     .orderBy(asc(distance))
     .limit(Math.max(1, Math.min(limit, 20)));
 
+  const chunkIds = rows.map((row) => row.chunkId);
+  const assetLinks = chunkIds.length
+    ? await db
+        .select({
+          chunkId: knowledgeChunkAssetsTable.chunkId,
+          assetId: knowledgeChunkAssetsTable.assetId,
+        })
+        .from(knowledgeChunkAssetsTable)
+        .where(inArray(knowledgeChunkAssetsTable.chunkId, chunkIds))
+    : [];
+  const assetIds = [...new Set(assetLinks.map((link) => link.assetId))];
+  let assetContext: Awaited<ReturnType<typeof getKnowledgeAssetContext>> = [];
+  try {
+    assetContext = await getKnowledgeAssetContext(assetIds);
+  } catch {
+    // Text retrieval remains available if private image storage is temporarily unavailable.
+  }
+  const assetsByChunk = new Map<string, string[]>();
+  for (const link of assetLinks) {
+    const ids = assetsByChunk.get(link.chunkId) ?? [];
+    ids.push(link.assetId);
+    assetsByChunk.set(link.chunkId, ids);
+  }
+
   return {
     chunks: rows.map((row) => ({
+      chunkId: row.chunkId,
+      chunkIndex: row.chunkIndex,
       sourceId: row.sourceId,
       sourceName: row.sourceName,
-      content: row.content,
+      content: row.content.replace(/\[\[screenshot:[0-9a-f-]+\]\]\s*/gi, ""),
       distance: Number(row.distance),
+      assets: assetContext.filter((asset) =>
+        (assetsByChunk.get(row.chunkId) ?? []).includes(asset.id),
+      ),
     })),
     totalTokens: embeddingResult.totalTokens,
     model: embeddingResult.model,

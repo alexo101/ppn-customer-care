@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import multer from "multer";
 import {
   db,
@@ -8,8 +8,13 @@ import {
   agentSourceAssignmentsTable,
   agentConnectorAssignmentsTable,
   agentsTable,
+  knowledgeAssetsTable,
 } from "@workspace/db";
-import { requireAuth, requireEditor } from "../middlewares/requireAuth";
+import {
+  requireAuth,
+  requireAuthOrDeployment,
+  requireEditor,
+} from "../middlewares/requireAuth";
 import {
   ListSourcesQueryParams,
   CreateSourceBody,
@@ -17,6 +22,7 @@ import {
   UpdateSourceBody,
   DeleteSourceParams,
   RefreshSourceParams,
+  CreateSourceFromUrlBody,
   ListConnectorsQueryParams,
   CreateConnectorBody,
   UpdateConnectorParams,
@@ -37,6 +43,23 @@ import {
   isAllowedOfficeUpload,
   OFFICE_MAX_BYTES,
 } from "../lib/extract-office";
+import {
+  createKnowledgeAsset,
+  deleteKnowledgeAssetById,
+  deleteKnowledgeAssetsForSource,
+  getAuthorizedKnowledgeAsset,
+  listKnowledgeAssets,
+} from "../lib/knowledge-assets";
+import {
+  KNOWLEDGE_IMAGE_MAX_BYTES,
+  knowledgeImagesEnabled,
+  inspectKnowledgeImage,
+} from "../lib/knowledge-images";
+import { KnowledgeAssetStorageError } from "../lib/knowledge-asset-storage";
+import {
+  fetchKnowledgeSourceFromUrl,
+  GoogleSourceError,
+} from "../lib/fetch-google-source";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -47,6 +70,18 @@ const upload = multer({
       return;
     }
     cb(new Error("Only .docx and .xlsx files are supported"));
+  },
+});
+
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: KNOWLEDGE_IMAGE_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "image/png" || file.mimetype === "image/jpeg" || file.mimetype === "image/webp") {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only PNG, JPEG, and WebP images are supported"));
   },
 });
 
@@ -209,7 +244,16 @@ router.post("/sources/upload", requireAuth, requireEditor, (req, res, next) => {
   }
   if (!(await requireAgent(req.userId, agentId, res))) return;
 
-  let extracted: { kind: "document" | "spreadsheet"; text: string };
+  let extracted: {
+    kind: "document" | "spreadsheet";
+    text: string;
+    images: Array<{
+      buffer: Buffer;
+      mimeType: "image/png" | "image/jpeg" | "image/webp";
+      originalName: string;
+      position: number;
+    }>;
+  };
   try {
     extracted = await extractOfficeText({
       originalname: file.originalname,
@@ -241,8 +285,236 @@ router.post("/sources/upload", requireAuth, requireEditor, (req, res, next) => {
     })
     .returning();
 
+  try {
+    const assetIds = [];
+    for (const image of extracted.images) {
+      const asset = await createKnowledgeAsset({
+        sourceId: row.id,
+        agentId,
+        buffer: image.buffer,
+        mimeType: image.mimeType,
+        originalName: image.originalName,
+        position: image.position,
+      });
+      assetIds.push(asset.id);
+    }
+    if (assetIds.length > 0) {
+      const config = (row.connectionConfig ?? {}) as Record<string, unknown>;
+      const [updated] = await db
+        .update(knowledgeSourcesTable)
+        .set({
+          connectionConfig: {
+            ...config,
+            assetIds,
+            imageCount: assetIds.length,
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(knowledgeSourcesTable.id, row.id))
+        .returning();
+      if (updated) row.connectionConfig = updated.connectionConfig;
+    }
+  } catch (error) {
+    logger.warn({ sourceId: row.id, error }, "Could not persist document images");
+  }
+
   res.status(201).json(toSource(row));
   await db.insert(agentSourceAssignmentsTable).values({ agentId, sourceId: row.id }).onConflictDoNothing();
+  queueSourceIndex(row.id);
+});
+
+router.get("/sources/:id/assets", requireAuth, async (req, res): Promise<void> => {
+  const sourceId = uuid.safeParse(req.params.id);
+  if (!sourceId.success) {
+    res.status(400).json({ error: "Invalid source." });
+    return;
+  }
+  const [source] = await db
+    .select({ id: knowledgeSourcesTable.id })
+    .from(knowledgeSourcesTable)
+    .where(and(eq(knowledgeSourcesTable.id, sourceId.data), eq(knowledgeSourcesTable.userId, req.userId)))
+    .limit(1);
+  if (!source) {
+    res.status(404).json({ error: "Source not found" });
+    return;
+  }
+  res.json(await listKnowledgeAssets(source.id));
+});
+
+router.post("/sources/:id/assets", requireAuth, requireEditor, (req, res, next) => {
+  imageUpload.single("file")(req, res, (err: unknown) => {
+    if (err) {
+      const message = err instanceof Error ? err.message : "Could not upload the image.";
+      res.status(message.includes("File too large") ? 413 : 400).json({ error: message });
+      return;
+    }
+    next();
+  });
+}, async (req, res): Promise<void> => {
+  const sourceId = uuid.safeParse(req.params.id);
+  if (!sourceId.success || !req.file?.buffer) {
+    res.status(400).json({ error: "A valid image and source are required." });
+    return;
+  }
+  const [source] = await db
+    .select()
+    .from(knowledgeSourcesTable)
+    .where(and(eq(knowledgeSourcesTable.id, sourceId.data), eq(knowledgeSourcesTable.userId, req.userId)))
+    .limit(1);
+  if (!source || !source.agentId) {
+    res.status(404).json({ error: "Source not found" });
+    return;
+  }
+
+  let info;
+  try {
+    info = inspectKnowledgeImage(req.file.buffer, req.file.mimetype);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Invalid image." });
+    return;
+  }
+  try {
+    const assets = await listKnowledgeAssets(source.id);
+    const asset = await createKnowledgeAsset({
+      sourceId: source.id,
+      agentId: source.agentId,
+      buffer: req.file.buffer,
+      mimeType: info.mimeType,
+      originalName: req.file.originalname,
+      position: assets.length,
+      altText: typeof req.body?.altText === "string" ? req.body.altText.slice(0, 500) : "",
+    });
+    const nextAssets = [...assets.filter((item) => item.id !== asset.id), asset]
+      .sort((left, right) => left.position - right.position);
+    await db
+      .update(knowledgeSourcesTable)
+      .set({
+        connectionConfig: {
+          ...((source.connectionConfig ?? {}) as Record<string, unknown>),
+          assetIds: nextAssets.map((item) => item.id),
+          imageCount: nextAssets.length,
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(knowledgeSourcesTable.id, source.id));
+    queueSourceIndex(source.id);
+    res.status(201).json(asset);
+  } catch (error) {
+    const status = error instanceof KnowledgeAssetStorageError ? 503 : 400;
+    res.status(status).json({ error: error instanceof Error ? error.message : "Could not store the image." });
+  }
+});
+
+router.delete("/sources/assets/:assetId", requireAuth, requireEditor, async (req, res): Promise<void> => {
+  const assetId = uuid.safeParse(req.params.assetId);
+  if (!assetId.success) {
+    res.status(400).json({ error: "Invalid asset." });
+    return;
+  }
+  const [row] = await db
+    .select({ asset: knowledgeAssetsTable, source: knowledgeSourcesTable })
+    .from(knowledgeAssetsTable)
+    .innerJoin(knowledgeSourcesTable, eq(knowledgeAssetsTable.sourceId, knowledgeSourcesTable.id))
+    .where(and(eq(knowledgeAssetsTable.id, assetId.data), eq(knowledgeSourcesTable.userId, req.userId)))
+    .limit(1);
+  if (!row) {
+    res.status(404).json({ error: "Asset not found" });
+    return;
+  }
+  await deleteKnowledgeAssetById(assetId.data);
+  const remaining = await listKnowledgeAssets(row.source.id);
+  await db.update(knowledgeSourcesTable)
+    .set({
+      connectionConfig: {
+        ...((row.source.connectionConfig ?? {}) as Record<string, unknown>),
+        assetIds: remaining.map((asset) => asset.id),
+        imageCount: remaining.length,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(knowledgeSourcesTable.id, row.source.id));
+  queueSourceIndex(row.source.id);
+  res.sendStatus(204);
+});
+
+router.get("/sources/assets/:assetId/url", requireAuthOrDeployment, async (req, res): Promise<void> => {
+  if (!knowledgeImagesEnabled()) {
+    res.status(404).json({ error: "Screenshot knowledge is disabled." });
+    return;
+  }
+  const assetId = uuid.safeParse(req.params.assetId);
+  if (!assetId.success) {
+    res.status(400).json({ error: "Invalid asset." });
+    return;
+  }
+  try {
+    const result = await getAuthorizedKnowledgeAsset(assetId.data, req.userId);
+    if (!result) {
+      res.status(404).json({ error: "Asset not found" });
+      return;
+    }
+    res.json({ ...result.asset, url: result.url });
+  } catch (error) {
+    const status = error instanceof KnowledgeAssetStorageError ? 503 : 404;
+    res.status(status).json({ error: error instanceof Error ? error.message : "Could not load the image." });
+  }
+});
+
+router.post("/sources/from-url", requireAuth, requireEditor, async (req, res): Promise<void> => {
+  const parsed = CreateSourceFromUrlBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (!(await requireAgent(req.userId, parsed.data.agentId, res))) return;
+
+  let fetched;
+  try {
+    fetched = await fetchKnowledgeSourceFromUrl(parsed.data.url);
+  } catch (error) {
+    if (error instanceof GoogleSourceError) {
+      res.status(error.statusCode).json({ error: error.message });
+      return;
+    }
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "Could not import that link.",
+    });
+    return;
+  }
+
+  const sourceName = parsed.data.name?.trim() || fetched.title;
+  const [row] = await db
+    .insert(knowledgeSourcesTable)
+    .values({
+      userId: req.userId,
+      agentId: parsed.data.agentId,
+      name: sourceName,
+      sourceType: fetched.kind,
+      connectionConfig: withIndexingState(fetched.kind, {
+        url: fetched.url,
+        fileName: fetched.title,
+        mimeType: fetched.mimeType,
+        text: fetched.text,
+      }),
+      isEnabled: true,
+    })
+    .returning();
+
+  try {
+    await attachFetchedImages(row.id, parsed.data.agentId, fetched.images);
+  } catch (error) {
+    logger.warn({ sourceId: row.id, error }, "Could not persist imported images");
+  }
+  const [withImages] = await db
+    .select()
+    .from(knowledgeSourcesTable)
+    .where(eq(knowledgeSourcesTable.id, row.id))
+    .limit(1);
+  res.status(201).json(toSource(withImages ?? row));
+  await db
+    .insert(agentSourceAssignmentsTable)
+    .values({ agentId: parsed.data.agentId, sourceId: row.id })
+    .onConflictDoNothing();
   queueSourceIndex(row.id);
 });
 
@@ -282,7 +554,10 @@ router.patch("/sources/:id", requireAuth, requireEditor, async (req, res): Promi
       return;
     }
     updates.connectionConfig = isIndexableSourceType(sourceType)
-      ? withIndexingState(sourceType, incoming)
+      ? withIndexingState(sourceType, {
+          ...((existing.connectionConfig ?? {}) as Record<string, unknown>),
+          ...incoming,
+        })
       : incoming;
   }
 
@@ -310,6 +585,16 @@ router.delete("/sources/:id", requireAuth, requireEditor, async (req, res): Prom
     return;
   }
 
+  const [existing] = await db
+    .select({ id: knowledgeSourcesTable.id })
+    .from(knowledgeSourcesTable)
+    .where(eq(knowledgeSourcesTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Source not found" });
+    return;
+  }
+  await deleteKnowledgeAssetsForSource(params.data.id);
   const deleted = await db
     .delete(knowledgeSourcesTable)
     .where(eq(knowledgeSourcesTable.id, params.data.id))
@@ -458,6 +743,8 @@ function indexingState(): Record<string, unknown> {
     lastError: null,
     itemCount: 0,
     chunkCount: 0,
+    imageCount: 0,
+    imageFailedCount: 0,
     embeddingModel: null,
   };
 }
@@ -467,10 +754,25 @@ function withIndexingState(
   config: Record<string, unknown>,
 ): Record<string, unknown> {
   if (!isIndexableSourceType(sourceType)) return config;
-  return { ...config, ...indexingState() };
+  const state = indexingState();
+  return {
+    ...config,
+    ...state,
+    ...(Array.isArray(config.assetIds)
+      ? {
+          assetIds: config.assetIds,
+          imageCount: typeof config.imageCount === "number" ? config.imageCount : 0,
+          imageFailedCount:
+            typeof config.imageFailedCount === "number" ? config.imageFailedCount : 0,
+        }
+      : {}),
+  };
 }
 
 function indexErrorResponse(error: unknown): { status: number; error: string } {
+  if (error instanceof GoogleSourceError) {
+    return { status: error.statusCode, error: error.message };
+  }
   if (error instanceof EmbeddingProviderError) {
     return { status: 503, error: error.message };
   }
@@ -478,6 +780,48 @@ function indexErrorResponse(error: unknown): { status: number; error: string } {
     status: 502,
     error: error instanceof Error ? error.message : "Could not index this source.",
   };
+}
+
+async function attachFetchedImages(
+  sourceId: string,
+  agentId: string,
+  images: Array<{
+    buffer: Buffer;
+    mimeType: "image/png" | "image/jpeg" | "image/webp";
+    originalName: string;
+    position: number;
+  }>,
+): Promise<void> {
+  if (images.length === 0) return;
+  const assetIds: string[] = [];
+  for (const image of images.slice(0, 40)) {
+    const asset = await createKnowledgeAsset({
+      sourceId,
+      agentId,
+      buffer: image.buffer,
+      mimeType: image.mimeType,
+      originalName: image.originalName,
+      position: image.position,
+    });
+    assetIds.push(asset.id);
+  }
+  const [source] = await db
+    .select()
+    .from(knowledgeSourcesTable)
+    .where(eq(knowledgeSourcesTable.id, sourceId))
+    .limit(1);
+  if (!source) return;
+  await db
+    .update(knowledgeSourcesTable)
+    .set({
+      connectionConfig: {
+        ...((source.connectionConfig ?? {}) as Record<string, unknown>),
+        assetIds,
+        imageCount: assetIds.length,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(knowledgeSourcesTable.id, sourceId));
 }
 
 function queueSourceIndex(sourceId: string): void {

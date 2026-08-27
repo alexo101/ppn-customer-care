@@ -5,8 +5,15 @@ import {
   useUpdateSource,
   useDeleteSource,
   useUploadSourceDocument,
+  useUploadSourceAsset,
+  useListSourceAssets,
+  useDeleteSourceAsset,
+  useGetSourceAssetUrl,
+  getGetSourceAssetUrlQueryKey,
+  useCreateSourceFromUrl,
   useRefreshSource,
   getListSourcesQueryKey,
+  getListSourceAssetsQueryKey,
   type KnowledgeSource,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,6 +21,8 @@ import {
   AlertCircle,
   FileText,
   FileUp,
+  Image,
+  Link,
   MoreVertical,
   RefreshCw,
   Table2,
@@ -53,7 +62,7 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 
-type SourceKind = "article" | "document";
+type SourceKind = "article" | "document" | "url";
 type DialogKind = SourceKind | "edit-article" | null;
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -98,8 +107,34 @@ function chunkCount(config: Record<string, unknown> | undefined) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function imageCount(config: Record<string, unknown> | undefined) {
+  const value = configValue(config, "imageCount");
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function imageFailedCount(config: Record<string, unknown> | undefined) {
+  const value = configValue(config, "imageFailedCount");
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function truncateUrl(url: string, max = 64) {
+  let display = url.trim();
+  try {
+    const parsed = new URL(url);
+    display = `${parsed.host}${parsed.pathname}${parsed.search}`;
+  } catch {
+    display = url.replace(/^https?:\/\//i, "");
+  }
+  if (display.length <= max) return display;
+  return `${display.slice(0, max - 1)}…`;
+}
+
 function sourceScope(source: KnowledgeSource) {
   const config = source.connectionConfig;
+  const url = configString(config, "url");
+  if (url && (source.sourceType === "document" || source.sourceType === "spreadsheet")) {
+    return truncateUrl(url);
+  }
   if (source.sourceType === "article") {
     return configString(config, "body") || "Written article";
   }
@@ -119,10 +154,14 @@ function sourceSummary(source: KnowledgeSource) {
   if (error) return `${scope} · ${error}`;
   const status = syncStatus(source.connectionConfig);
   const chunks = chunkCount(source.connectionConfig);
+  const images = imageCount(source.connectionConfig);
+  const failedImages = imageFailedCount(source.connectionConfig);
+  const imageLabel = images === 1 ? "1 screenshot" : `${images} screenshots`;
+  const imageFailureLabel = failedImages === 1 ? "1 screenshot failed" : `${failedImages} screenshots failed`;
   if (status === "ready") {
-    return chunks === 1 ? `${scope} · 1 chunk indexed` : `${scope} · ${chunks} chunks indexed`;
+    return `${scope} · ${chunks === 1 ? "1 chunk" : `${chunks} chunks`} indexed${images ? ` · ${imageLabel}` : ""}${failedImages ? ` · ${imageFailureLabel}` : ""}`;
   }
-  if (status === "empty") return `${scope} · No indexable text`;
+  if (status === "empty") return `${scope} · ${images ? imageLabel : "No indexable text"}`;
   if (status === "syncing") return `${scope} · Indexing…`;
   return `${scope} · Waiting to index`;
 }
@@ -134,6 +173,25 @@ function SourceTypeIcon({ type, className }: { type: string; className?: string 
   return <FileText {...props} />;
 }
 
+function LocalImagePreview({ file }: { file: File }) {
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(previewUrl), [previewUrl]);
+  return <img src={previewUrl} alt={file.name} className="h-20 w-full rounded object-cover" />;
+}
+
+function ExistingImagePreview({ assetId, alt }: { assetId: string; alt: string }) {
+  const { data } = useGetSourceAssetUrl(assetId, {
+    query: { queryKey: getGetSourceAssetUrlQueryKey(assetId) },
+  });
+  return data?.url ? (
+    <img src={data.url} alt={alt} className="h-20 w-full rounded object-cover" />
+  ) : (
+    <div className="flex h-20 items-center justify-center rounded bg-muted text-muted-foreground">
+      <Image className="h-5 w-5" />
+    </div>
+  );
+}
+
 export function SourcesTab({ agentId }: { agentId: string }) {
   const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
@@ -142,6 +200,9 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   const updateSource = useUpdateSource();
   const deleteSource = useDeleteSource();
   const uploadDocument = useUploadSourceDocument();
+  const uploadAsset = useUploadSourceAsset();
+  const deleteAsset = useDeleteSourceAsset();
+  const createFromUrl = useCreateSourceFromUrl();
   const refreshSource = useRefreshSource();
 
   const [dialog, setDialog] = useState<DialogKind>(null);
@@ -150,9 +211,22 @@ export function SourcesTab({ agentId }: { agentId: string }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const { data: existingAssets = [] } = useListSourceAssets(editing?.id ?? "", {
+    query: {
+      enabled: Boolean(editing?.id),
+      queryKey: getListSourceAssetsQueryKey(editing?.id ?? ""),
+    },
+  });
 
-  const saving = createSource.isPending || updateSource.isPending || uploadDocument.isPending;
+  const saving =
+    createSource.isPending ||
+    updateSource.isPending ||
+    uploadDocument.isPending ||
+    createFromUrl.isPending;
 
   const invalidateSources = () => {
     queryClient.invalidateQueries({ queryKey: getListSourcesQueryKey({ agentId }) });
@@ -175,7 +249,10 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     setTitle("");
     setBody("");
     setFile(null);
+    setSourceUrl("");
+    setImageFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (imageInputRef.current) imageInputRef.current.value = "";
   };
 
   const openAdd = (kind: SourceKind) => {
@@ -183,6 +260,8 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     setTitle("");
     setBody("");
     setFile(null);
+    setSourceUrl("");
+    setImageFiles([]);
     setDialog(kind);
   };
 
@@ -209,9 +288,26 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     if (!canEdit) return;
     const name = title.trim();
     const content = body.trim();
-    if (!name || !content) return;
+    if (!name || (!content && imageFiles.length === 0)) return;
 
-    const onSuccess = () => {
+    const uploadArticleImages = async (sourceId: string) => {
+      for (const image of imageFiles) {
+        await uploadAsset.mutateAsync({
+          id: sourceId,
+          data: { file: image, altText: image.name.replace(/\.[^.]+$/, "") },
+        });
+      }
+    };
+
+    const onSuccess = async (source?: KnowledgeSource) => {
+      if (source && imageFiles.length > 0) {
+        try {
+          await uploadArticleImages(source.id);
+        } catch (error) {
+          handleCreateError(error);
+          return;
+        }
+      }
       invalidateSources();
       toast({ title: editing ? "Article updated" : "Article added" });
       resetDialog();
@@ -220,14 +316,14 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     if (editing) {
       updateSource.mutate(
         { id: editing.id, data: { name, connectionConfig: { body: content } } },
-        { onSuccess, onError: handleCreateError },
+        { onSuccess: (source) => void onSuccess(source), onError: handleCreateError },
       );
       return;
     }
 
     createSource.mutate(
       { data: { agentId, name, sourceType: "article", connectionConfig: { body: content } } },
-      { onSuccess, onError: handleCreateError },
+      { onSuccess: (source) => void onSuccess(source), onError: handleCreateError },
     );
   };
 
@@ -245,6 +341,28 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         onSuccess: () => {
           invalidateSources();
           toast({ title: "Document uploaded" });
+          resetDialog();
+        },
+        onError: handleCreateError,
+      },
+    );
+  };
+
+  const handleCreateFromUrl = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canEdit) return;
+    const url = sourceUrl.trim();
+    if (!url) {
+      toast({ title: "Paste a Google Doc or Sheet link", variant: "destructive" });
+      return;
+    }
+
+    createFromUrl.mutate(
+      { data: { agentId, url, name: title.trim() || undefined } },
+      {
+        onSuccess: () => {
+          invalidateSources();
+          toast({ title: "Link added" });
           resetDialog();
         },
         onError: handleCreateError,
@@ -279,6 +397,21 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                   ? "1 chunk indexed."
                   : `${chunks} chunks indexed.`,
           });
+        },
+        onError: handleCreateError,
+      },
+    );
+  };
+
+  const handleDeleteAsset = (assetId: string) => {
+    deleteAsset.mutate(
+      { assetId },
+      {
+        onSuccess: () => {
+          if (editing?.id) {
+            queryClient.invalidateQueries({ queryKey: getListSourceAssetsQueryKey(editing.id) });
+            invalidateSources();
+          }
         },
         onError: handleCreateError,
       },
@@ -333,12 +466,19 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         description: "Add a Word (.docx) or Excel (.xlsx) file.",
         icon: FileUp,
       },
+      {
+        kind: "url" as const,
+        title: "Paste a link",
+        description: "Google Docs or Sheets shared with Anyone with the link can view.",
+        icon: Link,
+      },
     ],
     [],
   );
 
   const articleOpen = dialog === "article" || dialog === "edit-article";
   const documentOpen = dialog === "document";
+  const urlOpen = dialog === "url";
 
   return (
     <div className="space-y-6">
@@ -347,10 +487,11 @@ export function SourcesTab({ agentId }: { agentId: string }) {
         <div>
           <h2 className="font-semibold text-base tracking-tight">Add a source</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Articles and uploaded Word or Excel files this agent can use.
+            Articles, uploaded files, and public Google Docs or Sheets. After adding a source,
+            select it on a rule that searches knowledge.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {addOptions.map((option) => {
             const Icon = option.icon;
             return (
@@ -401,7 +542,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
 
         {sources.length === 0 ? (
           <p className="text-xs text-muted-foreground py-6 text-center">
-            No sources yet. Write an article or upload a .docx or .xlsx file.
+            No sources yet. Write an article, upload a file, or paste a Google Doc or Sheet link.
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -535,8 +676,61 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="article-images" className="text-xs">Screenshots</Label>
+              <input
+                ref={imageInputRef}
+                id="article-images"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                className="sr-only"
+                onChange={(event) => {
+                  setImageFiles((current) => [...current, ...Array.from(event.target.files ?? [])].slice(0, 40));
+                  event.currentTarget.value = "";
+                }}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={() => imageInputRef.current?.click()}>
+                <Image className="mr-2 h-3.5 w-3.5" /> Add screenshots
+              </Button>
+              {imageFiles.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {imageFiles.map((image, index) => (
+                    <div key={`${image.name}-${index}`} className="rounded-md border border-border p-2 text-xs">
+                      <LocalImagePreview file={image} />
+                      <button
+                        type="button"
+                        className="mt-1 text-destructive hover:underline"
+                        onClick={() => setImageFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {existingAssets.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {existingAssets.map((asset) => (
+                    <div key={asset.id} className="rounded-md border border-border p-2 text-xs">
+                      <ExistingImagePreview assetId={asset.id} alt={asset.originalName} />
+                      <div className="mt-1 truncate">{asset.originalName}</div>
+                      <button
+                        type="button"
+                        className="text-destructive hover:underline"
+                        onClick={() => handleDeleteAsset(asset.id)}
+                        disabled={deleteAsset.isPending}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <p className="text-[11px] text-muted-foreground">PNG, JPEG, or WebP up to 8 MB each. Screenshots will be searchable in chat.</p>
+            </div>
             <DialogFooter>
-              <Button type="submit" disabled={saving || !title.trim() || !body.trim()}>
+              <Button type="submit" disabled={saving || uploadAsset.isPending || !title.trim() || (!body.trim() && imageFiles.length === 0)}>
                 {editing ? "Save changes" : "Add article"}
               </Button>
             </DialogFooter>
@@ -584,6 +778,47 @@ export function SourcesTab({ agentId }: { agentId: string }) {
             <DialogFooter>
               <Button type="submit" disabled={saving || !file}>
                 Upload document
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={canEdit && urlOpen} onOpenChange={(open) => !open && resetDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Paste a link</DialogTitle>
+            <DialogDescription>
+              The file must be shared as Anyone with the link can view. Paste a Google Docs or
+              Sheets URL. After it is indexed, select this source on a rule that searches knowledge.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateFromUrl} className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="source-url" className="text-xs">URL</Label>
+              <Input
+                id="source-url"
+                type="text"
+                inputMode="url"
+                autoComplete="off"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="https://docs.google.com/document/d/…"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="source-url-name" className="text-xs">Name (optional)</Label>
+              <Input
+                id="source-url-name"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Defaults to the document title"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={saving || !sourceUrl.trim()}>
+                Add link
               </Button>
             </DialogFooter>
           </form>

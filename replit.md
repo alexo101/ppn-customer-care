@@ -13,9 +13,12 @@ An authenticated support assistant that classifies questions, selects configured
 - Required for live orchestration and indexing: `OPENAI_API_KEY`
 - Optional LLM configuration: `CLASSIFICATION_MODEL` and `ANSWER_MODEL` (default `gpt-5-nano`), `EMBEDDING_MODEL` (verified against the OpenAI project; must produce 1,536-dimensional vectors)
 - Optional provider selectors: `CLASSIFICATION_LLM_PROVIDER`, `ANSWER_LLM_PROVIDER`, and `EMBEDDING_LLM_PROVIDER` (default `openai`)
+- Screenshot storage: set `KNOWLEDGE_ASSET_S3_BUCKET`, `KNOWLEDGE_ASSET_S3_REGION`, `KNOWLEDGE_ASSET_S3_ACCESS_KEY_ID`, and `KNOWLEDGE_ASSET_S3_SECRET_ACCESS_KEY`; use `KNOWLEDGE_ASSET_S3_ENDPOINT` and `KNOWLEDGE_ASSET_S3_FORCE_PATH_STYLE=true` for S3-compatible providers.
+- Optional screenshot models: `KNOWLEDGE_VISION_MODEL` (default `gpt-4o-mini`) describes images for search, and `VISION_ANSWER_MODEL` (default `gpt-4o-mini`) receives retrieved screenshots.
+- Set `KNOWLEDGE_IMAGES_ENABLED=false` to disable screenshot ingestion, indexing, and previews during rollback.
 - Managed API connector credentials use deployment environment variables; they are never returned to clients.
 - Before pushing the schema, enable pgvector once: `CREATE EXTENSION IF NOT EXISTS vector;`
-- This deployment is a single company: one shared set of agents, sources, and rules. Knowledge sources are in-app articles plus uploaded `.docx` and `.xlsx` files.
+- This deployment is a single company: one shared set of agents, sources, and rules. Knowledge sources are in-app articles plus uploaded or linked `.docx` and `.xlsx` files; articles and office files may include private PNG, JPEG, and WebP screenshots.
 - Agent deployment tokens require `CONNECTION_ENCRYPTION_KEY`.
 
 ## Stack
@@ -37,6 +40,7 @@ An authenticated support assistant that classifies questions, selects configured
 - `artifacts/api-server/src/lib/conversation-lifecycle.ts` — inactive-conversation auto-close sweep
 - `artifacts/api-server/src/lib/conversation-analytics.ts` — resolution and cost rollups
 - `lib/db/src/schema/` — Drizzle/Postgres source-of-truth, including `knowledge-chunks.ts`
+- `artifacts/api-server/src/lib/knowledge-assets.ts` — private screenshot records, signed previews, and source asset lifecycle
 
 ## Architecture decisions
 
@@ -52,6 +56,7 @@ An authenticated support assistant that classifies questions, selects configured
 - Configure agents, categories, rules, audience targets, and knowledge sources.
 - Inspect per-message orchestration stages, confidence, retrieved sources, and LLM logs.
 - Answer user questions with responses grounded in linked knowledge-source content.
+- Retrieved screenshots are passed to the vision answer model and shown as expiring, authorized source previews in chat.
 
 ## User preferences
 
@@ -63,6 +68,7 @@ The runtime answer and classification models should use `gpt-5-nano` in Replit b
 - Existing document and article sources are re-indexed on API startup when the verified embedding model changes. You can also run `pnpm --filter @workspace/scripts run reindex-knowledge-sources`.
 - Source indexing is queued after source creation/update; an indexing failure is logged and does not roll back the source save.
 - New connector and conversation analytics tables require the database schema push before deploying the API.
+- Configure the S3 bucket as private, allow the API origin for upload/read operations, and add lifecycle cleanup for abandoned objects. Never persist signed URLs; message citations store asset IDs only.
 - The API server runs the inactivity sweep every five minutes in non-test environments.
 
 ## Pointers

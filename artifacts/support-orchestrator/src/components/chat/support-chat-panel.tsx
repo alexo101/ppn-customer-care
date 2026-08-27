@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAppearance } from "@/components/appearance-provider";
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
+import { SourceCitations } from "@/components/chat/source-citations";
 
 const TRAINING_LOADER_STEPS = [
   "Classifying...",
@@ -283,6 +284,7 @@ export function SupportChatPanel({
                       style={isUser ? { backgroundColor: ctaColor, color: onCta } : undefined}
                     >
                       {msg.content}
+                      {!isUser && <SourceCitations metadata={msg.metadata} />}
                     </div>
                   </div>
                 );

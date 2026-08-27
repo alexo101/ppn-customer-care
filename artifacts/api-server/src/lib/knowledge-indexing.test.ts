@@ -1,5 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { chunkText, isIndexableSourceType, sourceNeedsReindex } from "./knowledge-indexing";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { fetchKnowledgeSourceFromUrl } = vi.hoisted(() => ({
+  fetchKnowledgeSourceFromUrl: vi.fn(),
+}));
+
+vi.mock("./fetch-google-source", () => ({
+  fetchKnowledgeSourceFromUrl,
+}));
+
+import {
+  chunkText,
+  isIndexableSourceType,
+  mergeRemoteSourceConfig,
+  sourceNeedsReindex,
+} from "./knowledge-indexing";
 
 describe("chunkText", () => {
   it("combines short paragraphs without exceeding the configured size", () => {
@@ -42,5 +56,42 @@ describe("sourceNeedsReindex", () => {
     expect(isIndexableSourceType("article")).toBe(true);
     expect(isIndexableSourceType("spreadsheet")).toBe(true);
     expect(isIndexableSourceType("notion")).toBe(false);
+  });
+});
+
+describe("mergeRemoteSourceConfig", () => {
+  beforeEach(() => {
+    fetchKnowledgeSourceFromUrl.mockReset();
+  });
+
+  it("re-exports linked Google files and replaces stored text", async () => {
+    fetchKnowledgeSourceFromUrl.mockResolvedValue({
+      kind: "document",
+      title: "Refund policy",
+      text: "Updated refund body",
+      url: "https://docs.google.com/document/d/1abc/edit",
+      mimeType: "text/plain",
+    });
+
+    const next = await mergeRemoteSourceConfig("document", {
+      url: "https://docs.google.com/document/d/1abc/edit",
+      text: "Old body",
+      fileName: "Old",
+    });
+
+    expect(fetchKnowledgeSourceFromUrl).toHaveBeenCalledWith(
+      "https://docs.google.com/document/d/1abc/edit",
+    );
+    expect(next).toMatchObject({
+      text: "Updated refund body",
+      fileName: "Refund policy",
+    });
+  });
+
+  it("leaves local uploads unchanged when no url is stored", async () => {
+    await expect(
+      mergeRemoteSourceConfig("spreadsheet", { text: "a,b", fileName: "rates.xlsx" }),
+    ).resolves.toBeNull();
+    expect(fetchKnowledgeSourceFromUrl).not.toHaveBeenCalled();
   });
 });

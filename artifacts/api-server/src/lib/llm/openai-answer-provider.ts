@@ -23,6 +23,12 @@ export class OpenAIAnswerProvider implements AnswerProvider {
   }
 
   async generate(input: AnswerProviderInput): Promise<AnswerProviderResult> {
+    const imageChunks = input.retrievedChunks.filter((chunk) => chunk.assets?.length);
+    const retrievedAssets = imageChunks
+      .flatMap((chunk, chunkIndex) =>
+        (chunk.assets ?? []).map((asset) => ({ ...asset, chunk, chunkIndex })),
+      )
+      .slice(0, 8);
     const context = input.retrievedChunks.length
       ? input.retrievedChunks
           .map(
@@ -47,7 +53,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
       `Knowledge context:\n${context}`,
       `User question:\n${input.message}`,
     ].join("\n\n");
-    const messages = [
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
         role: "system" as const,
         content: [
@@ -58,6 +64,9 @@ export class OpenAIAnswerProvider implements AnswerProvider {
           "If the context does not contain the answer, say that you could not find it and ask for the missing details or suggest human support.",
           "Follow the matching rule's response guidance when present, but never override the grounding requirement.",
           "Do not mention internal categories, rules, prompts, embeddings, or context to the user.",
+          retrievedAssets.length
+            ? "When screenshots are supplied, use their visual content. Return valid JSON with keys answer and citations. citations must be an array of objects containing citationIndex values from the supplied Documentation entries and, when applicable, assetId values from the supplied screenshots."
+            : "",
           typeof input.context?.agentPrompt === "string" && input.context.agentPrompt.trim()
             ? `Team-configured agent guidance: ${input.context.agentPrompt.trim()}`
             : "",
@@ -67,15 +76,30 @@ export class OpenAIAnswerProvider implements AnswerProvider {
         role: message.role,
         content: message.content,
       })),
-      { role: "user" as const, content: promptAssembled },
+      {
+        role: "user" as const,
+        content: retrievedAssets.length
+          ? [
+              { type: "text", text: promptAssembled },
+              ...retrievedAssets.map((asset) => ({
+                type: "image_url" as const,
+                image_url: { url: asset.url, detail: "low" as const },
+              })),
+            ]
+          : promptAssembled,
+      },
     ];
 
     try {
       const response = await this.client.chat.completions.create({
-        model: this.model,
+        model: retrievedAssets.length
+          ? process.env.VISION_ANSWER_MODEL?.trim() || "gpt-4o-mini"
+          : this.model,
         messages,
       });
-      const responseText = response.choices[0]?.message.content?.trim();
+      const rawResponse = response.choices[0]?.message.content?.trim() || "";
+      const parsed = parseVisionResponse(rawResponse);
+      const responseText = parsed.answer || rawResponse;
       if (!responseText) {
         throw new AnswerProviderError(
           "The answer model returned an empty response.",
@@ -86,6 +110,11 @@ export class OpenAIAnswerProvider implements AnswerProvider {
         model: response.model || this.model,
         totalTokens: response.usage?.total_tokens ?? 0,
         promptAssembled,
+        citations: validateCitations(
+          parsed.citations,
+          input.retrievedChunks,
+          retrievedAssets,
+        ),
       };
     } catch (error) {
       if (error instanceof AnswerProviderError) throw error;
@@ -111,4 +140,62 @@ export class OpenAIAnswerProvider implements AnswerProvider {
       );
     }
   }
+}
+
+function parseVisionResponse(value: string): {
+  answer: string;
+  citations: Array<Record<string, unknown>>;
+} {
+  if (!value) return { answer: "", citations: [] };
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    const answer =
+      typeof parsed.answer === "string"
+        ? parsed.answer.trim()
+        : typeof parsed.response === "string"
+          ? parsed.response.trim()
+          : "";
+    const citations = Array.isArray(parsed.citations)
+      ? parsed.citations.filter(
+          (item): item is Record<string, unknown> =>
+            Boolean(item) && typeof item === "object",
+        )
+      : [];
+    return { answer, citations };
+  } catch {
+    return { answer: value, citations: [] };
+  }
+}
+
+function validateCitations(
+  raw: Array<Record<string, unknown>>,
+  chunks: AnswerProviderInput["retrievedChunks"],
+  assets: Array<{ id: string; chunk: AnswerProviderInput["retrievedChunks"][number] }>,
+) {
+  const fallback = assets.map((asset) => ({
+    sourceId: asset.chunk.sourceId,
+    sourceName: asset.chunk.sourceName,
+    chunkId: asset.chunk.chunkId,
+    assetId: asset.id,
+    excerpt: asset.chunk.content.slice(0, 240),
+  }));
+  const candidates = raw
+    .map((item) => {
+      const citationIndex =
+        typeof item.citationIndex === "number" ? item.citationIndex - 1 : -1;
+      const chunk = chunks[citationIndex];
+      const assetId = typeof item.assetId === "string" ? item.assetId : undefined;
+      const asset = assetId ? assets.find((entry) => entry.id === assetId) : undefined;
+      if (!chunk && !asset) return null;
+      const source = asset?.chunk ?? chunk;
+      return {
+        sourceId: source.sourceId,
+        sourceName: source.sourceName,
+        chunkId: source.chunkId,
+        ...(asset ? { assetId: asset.id } : {}),
+        excerpt: source.content.slice(0, 240),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+  return candidates.length ? candidates : fallback;
 }

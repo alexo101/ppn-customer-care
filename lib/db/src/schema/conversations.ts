@@ -19,6 +19,7 @@ export const messagesTable = pgTable("messages", {
   conversationId: uuid("conversation_id").notNull().references(() => conversationsTable.id, { onDelete: "cascade" }),
   sender: text("sender").notNull(), // 'user' | 'assistant'
   content: text("content").notNull(),
+  metadata: jsonb("metadata").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

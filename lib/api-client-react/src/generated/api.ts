@@ -47,6 +47,8 @@ import type {
   InvitationStatus,
   InviteMemberInput,
   IssuedInvitation,
+  KnowledgeAsset,
+  KnowledgeAssetUrl,
   KnowledgeSource,
   ListAnalyticsLogsParams,
   ListCategoriesParams,
@@ -73,6 +75,8 @@ import type {
   RuleVocabularyUpdate,
   SendMessageInput,
   SendMessageResult,
+  SourceAssetUploadInput,
+  SourceFromUrlInput,
   SourceInput,
   SourceUpdate,
   SourceUploadInput,
@@ -3688,6 +3692,308 @@ export const useRefreshSource = <TError = ErrorType<ErrorResponse>,
       return useMutation(getRefreshSourceMutationOptions(options));
     }
 
+export const getListSourceAssetsUrl = (id: string,) => {
+
+
+
+
+  return `/api/sources/${id}/assets`
+}
+
+/**
+ * @summary List screenshots for a knowledge source
+ */
+export const listSourceAssets = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<KnowledgeAsset[]> => {
+
+  return customFetch<KnowledgeAsset[]>(getListSourceAssetsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListSourceAssetsQueryKey = (id: string,) => {
+    return [
+    `/api/sources/${id}/assets`
+    ] as const;
+    }
+
+
+export const getListSourceAssetsQueryOptions = <TData = Awaited<ReturnType<typeof listSourceAssets>>, TError = ErrorType<unknown>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSourceAssets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListSourceAssetsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listSourceAssets>>> = ({ signal }) => listSourceAssets(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listSourceAssets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListSourceAssetsQueryResult = NonNullable<Awaited<ReturnType<typeof listSourceAssets>>>
+export type ListSourceAssetsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List screenshots for a knowledge source
+ */
+
+export function useListSourceAssets<TData = Awaited<ReturnType<typeof listSourceAssets>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listSourceAssets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListSourceAssetsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUploadSourceAssetUrl = (id: string,) => {
+
+
+
+
+  return `/api/sources/${id}/assets`
+}
+
+/**
+ * @summary Upload a screenshot to a knowledge source
+ */
+export const uploadSourceAsset = async (id: string,
+    sourceAssetUploadInput: SourceAssetUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<KnowledgeAsset> => {
+    const formData = new FormData();
+formData.append(`file`, sourceAssetUploadInput.file);
+if(sourceAssetUploadInput.altText !== undefined) {
+ formData.append(`altText`, sourceAssetUploadInput.altText);
+ }
+
+  return customFetch<KnowledgeAsset>(getUploadSourceAssetUrl(id),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getUploadSourceAssetMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadSourceAsset>>, TError,{id: string;data: BodyType<SourceAssetUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadSourceAsset>>, TError,{id: string;data: BodyType<SourceAssetUploadInput>}, TContext> => {
+
+const mutationKey = ['uploadSourceAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadSourceAsset>>, {id: string;data: BodyType<SourceAssetUploadInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  uploadSourceAsset(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadSourceAssetMutationResult = NonNullable<Awaited<ReturnType<typeof uploadSourceAsset>>>
+    export type UploadSourceAssetMutationBody = BodyType<SourceAssetUploadInput>
+    export type UploadSourceAssetMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Upload a screenshot to a knowledge source
+ */
+export const useUploadSourceAsset = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadSourceAsset>>, TError,{id: string;data: BodyType<SourceAssetUploadInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadSourceAsset>>,
+        TError,
+        {id: string;data: BodyType<SourceAssetUploadInput>},
+        TContext
+      > => {
+      return useMutation(getUploadSourceAssetMutationOptions(options));
+    }
+
+export const getGetSourceAssetUrlUrl = (assetId: string,) => {
+
+
+
+
+  return `/api/sources/assets/${assetId}/url`
+}
+
+/**
+ * @summary Get a short-lived private screenshot URL
+ */
+export const getSourceAssetUrl = async (assetId: string, options?: Parameters<typeof customFetch>[1]): Promise<KnowledgeAssetUrl> => {
+
+  return customFetch<KnowledgeAssetUrl>(getGetSourceAssetUrlUrl(assetId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSourceAssetUrlQueryKey = (assetId: string,) => {
+    return [
+    `/api/sources/assets/${assetId}/url`
+    ] as const;
+    }
+
+
+export const getGetSourceAssetUrlQueryOptions = <TData = Awaited<ReturnType<typeof getSourceAssetUrl>>, TError = ErrorType<unknown>>(assetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSourceAssetUrl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSourceAssetUrlQueryKey(assetId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSourceAssetUrl>>> = ({ signal }) => getSourceAssetUrl(assetId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: assetId !== null && assetId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSourceAssetUrl>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSourceAssetUrlQueryResult = NonNullable<Awaited<ReturnType<typeof getSourceAssetUrl>>>
+export type GetSourceAssetUrlQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a short-lived private screenshot URL
+ */
+
+export function useGetSourceAssetUrl<TData = Awaited<ReturnType<typeof getSourceAssetUrl>>, TError = ErrorType<unknown>>(
+ assetId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSourceAssetUrl>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSourceAssetUrlQueryOptions(assetId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDeleteSourceAssetUrl = (assetId: string,) => {
+
+
+
+
+  return `/api/sources/assets/${assetId}`
+}
+
+/**
+ * @summary Delete a screenshot from a knowledge source
+ */
+export const deleteSourceAsset = async (assetId: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteSourceAssetUrl(assetId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteSourceAssetMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSourceAsset>>, TError,{assetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSourceAsset>>, TError,{assetId: string}, TContext> => {
+
+const mutationKey = ['deleteSourceAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSourceAsset>>, {assetId: string}> = (props) => {
+          const {assetId} = props ?? {};
+
+          return  deleteSourceAsset(assetId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSourceAssetMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSourceAsset>>>
+
+    export type DeleteSourceAssetMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a screenshot from a knowledge source
+ */
+export const useDeleteSourceAsset = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSourceAsset>>, TError,{assetId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSourceAsset>>,
+        TError,
+        {assetId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteSourceAssetMutationOptions(options));
+    }
+
 export const getUploadSourceDocumentUrl = () => {
 
 
@@ -3763,6 +4069,77 @@ export const useUploadSourceDocument = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUploadSourceDocumentMutationOptions(options));
+    }
+
+export const getCreateSourceFromUrlUrl = () => {
+
+
+
+
+  return `/api/sources/from-url`
+}
+
+/**
+ * @summary Import a public Google Doc, Google Sheet, or office file URL as a knowledge source
+ */
+export const createSourceFromUrl = async (sourceFromUrlInput: SourceFromUrlInput, options?: Parameters<typeof customFetch>[1]): Promise<KnowledgeSource> => {
+
+  return customFetch<KnowledgeSource>(getCreateSourceFromUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sourceFromUrlInput)
+  }
+);}
+
+
+
+
+
+export const getCreateSourceFromUrlMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSourceFromUrl>>, TError,{data: BodyType<SourceFromUrlInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSourceFromUrl>>, TError,{data: BodyType<SourceFromUrlInput>}, TContext> => {
+
+const mutationKey = ['createSourceFromUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSourceFromUrl>>, {data: BodyType<SourceFromUrlInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createSourceFromUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSourceFromUrlMutationResult = NonNullable<Awaited<ReturnType<typeof createSourceFromUrl>>>
+    export type CreateSourceFromUrlMutationBody = BodyType<SourceFromUrlInput>
+    export type CreateSourceFromUrlMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Import a public Google Doc, Google Sheet, or office file URL as a knowledge source
+ */
+export const useCreateSourceFromUrl = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSourceFromUrl>>, TError,{data: BodyType<SourceFromUrlInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSourceFromUrl>>,
+        TError,
+        {data: BodyType<SourceFromUrlInput>},
+        TContext
+      > => {
+      return useMutation(getCreateSourceFromUrlMutationOptions(options));
     }
 
 export const getListTargetsUrl = (params: ListTargetsParams,) => {

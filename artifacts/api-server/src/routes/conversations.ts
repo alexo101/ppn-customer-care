@@ -327,6 +327,7 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
   let answerModel = "none";
   let answerTokens = 0;
   let promptAssembled = "";
+  let citations: Array<Record<string, unknown>> = [];
   let dataSourcesQueried: string[] = [];
   let retrievalNeedsClarification = false;
   let retrievalAccessDenied = false;
@@ -512,6 +513,7 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
     answerModel = answerResult.model;
     answerTokens = answerResult.totalTokens;
     promptAssembled = answerResult.promptAssembled;
+    citations = answerResult.citations;
     const guardrailResult = applyGuardrails(responseText, {
       retrievedChunks,
       rule: answerRule,
@@ -541,7 +543,12 @@ router.post("/conversations/:id/send", requireAuth, async (req, res): Promise<vo
   // Save assistant message
   const [assistantMsg] = await db
     .insert(messagesTable)
-    .values({ conversationId: conv.id, sender: "assistant", content: responseText })
+    .values({
+      conversationId: conv.id,
+      sender: "assistant",
+      content: responseText,
+      metadata: { citations },
+    })
     .returning();
 
   // Update conversation (and capture a subject from the first user message)
@@ -998,6 +1005,7 @@ function toMessage(row: typeof messagesTable.$inferSelect) {
     conversationId: row.conversationId,
     sender: row.sender,
     content: row.content,
+    metadata: row.metadata ?? {},
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }

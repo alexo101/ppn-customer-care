@@ -1,9 +1,17 @@
 export type RetrievedChunk = {
+  chunkId?: string;
+  chunkIndex?: number;
   sourceId: string;
   sourceName: string;
   content: string;
   distance: number;
   kind?: "document" | "api";
+  assets?: Array<{
+    id: string;
+    mimeType: string;
+    altText: string;
+    url: string;
+  }>;
 };
 
 export type AnswerProviderInput = {
@@ -25,6 +33,13 @@ export type AnswerProviderResult = {
   model: string;
   totalTokens: number;
   promptAssembled: string;
+  citations?: Array<{
+    sourceId: string;
+    sourceName: string;
+    chunkId?: string;
+    assetId?: string;
+    excerpt?: string;
+  }>;
 };
 
 export interface AnswerProvider {

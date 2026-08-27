@@ -148,12 +148,23 @@ export interface TrainingQuestionBulkResult {
   limitReached: boolean;
 }
 
+export type MessageMetadata = { [key: string]: unknown };
+
 export interface Message {
   id: string;
   conversationId: string;
   sender: string;
   content: string;
+  metadata: MessageMetadata;
   createdAt: string;
+}
+
+export interface Citation {
+  sourceId: string;
+  sourceName: string;
+  chunkId?: string;
+  assetId?: string;
+  excerpt?: string;
 }
 
 export interface ConversationContext {
@@ -458,6 +469,38 @@ export interface KnowledgeSource {
   updatedAt: string;
 }
 
+export type KnowledgeAssetMimeType = typeof KnowledgeAssetMimeType[keyof typeof KnowledgeAssetMimeType];
+
+
+export const KnowledgeAssetMimeType = {
+  'image/png': 'image/png',
+  'image/jpeg': 'image/jpeg',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface KnowledgeAsset {
+  id: string;
+  sourceId: string;
+  mimeType: KnowledgeAssetMimeType;
+  originalName: string;
+  byteSize: number;
+  width?: number | null;
+  height?: number | null;
+  position: number;
+  altText: string;
+  processingStatus: string;
+}
+
+export type KnowledgeAssetUrl = KnowledgeAsset & {
+  url: string;
+};
+
+export interface SourceAssetUploadInput {
+  file: Blob;
+  /** @maxLength 500 */
+  altText?: string;
+}
+
 export type SourceInputConnectionConfig = { [key: string]: unknown };
 
 export interface SourceInput {
@@ -481,6 +524,12 @@ export interface SourceUploadInput {
   agentId: string;
   name?: string;
   file: Blob;
+}
+
+export interface SourceFromUrlInput {
+  agentId: string;
+  url: string;
+  name?: string;
 }
 
 export type TargetPersonType = typeof TargetPersonType[keyof typeof TargetPersonType];

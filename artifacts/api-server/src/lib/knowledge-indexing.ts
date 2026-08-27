@@ -2,6 +2,8 @@ import { eq, inArray } from "drizzle-orm";
 import {
   db,
   knowledgeChunksTable,
+  knowledgeChunkAssetsTable,
+  knowledgeAssetsTable,
   knowledgeSourcesTable,
 } from "@workspace/db";
 import { logger } from "./logger";
@@ -10,6 +12,16 @@ import {
   EmbeddingProviderError,
   type EmbeddingProvider,
 } from "./llm";
+import { fetchKnowledgeSourceFromUrl } from "./fetch-google-source";
+import {
+  createKnowledgeAsset,
+  deleteKnowledgeAssetById,
+  getKnowledgeAssetForProcessing,
+  listKnowledgeAssets,
+} from "./knowledge-assets";
+import { describeKnowledgeImage } from "./llm/knowledge-vision";
+import { knowledgeImagesEnabled } from "./knowledge-images";
+
 type SourceSyncStatus = "idle" | "syncing" | "ready" | "empty" | "error";
 
 const DEFAULT_MAX_CHARS = 1_200;
@@ -95,18 +107,78 @@ export function chunkText(
 
 async function resolveSourceText(
   source: typeof knowledgeSourcesTable.$inferSelect,
-): Promise<{ text: string; itemCount: number }> {
+): Promise<{ text: string; itemCount: number; assetIds: string[] }> {
   const config = (source.connectionConfig ?? {}) as Record<string, unknown>;
+  const configuredAssetIds = Array.isArray(config.assetIds)
+    ? config.assetIds.filter((value): value is string => typeof value === "string")
+    : [];
   if (
     (source.sourceType === "document" || source.sourceType === "spreadsheet")
     && typeof config.text === "string"
   ) {
-    return { text: config.text.trim(), itemCount: config.text.trim() ? 1 : 0 };
+    return { text: config.text.trim(), itemCount: config.text.trim() ? 1 : 0, assetIds: configuredAssetIds };
   }
   if (source.sourceType === "article" && typeof config.body === "string") {
-    return { text: config.body.trim(), itemCount: config.body.trim() ? 1 : 0 };
+    return { text: config.body.trim(), itemCount: config.body.trim() ? 1 : 0, assetIds: configuredAssetIds };
   }
-  return { text: "", itemCount: 0 };
+  return { text: "", itemCount: 0, assetIds: configuredAssetIds };
+}
+
+export async function mergeRemoteSourceConfig(
+  sourceType: string,
+  config: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const url = typeof config.url === "string" ? config.url.trim() : "";
+  if (!url) return null;
+  if (sourceType !== "document" && sourceType !== "spreadsheet") return null;
+  const fetched = await fetchKnowledgeSourceFromUrl(url);
+  return {
+    ...config,
+    text: fetched.text,
+    fileName: fetched.title,
+    mimeType: fetched.mimeType,
+    url: fetched.url,
+  };
+}
+
+async function refreshRemoteSourceText(
+  source: typeof knowledgeSourcesTable.$inferSelect,
+): Promise<typeof knowledgeSourcesTable.$inferSelect> {
+  const config = (source.connectionConfig ?? {}) as Record<string, unknown>;
+  const url = typeof config.url === "string" ? config.url.trim() : "";
+  if (!url || !source.agentId) return source;
+  const fetched = await fetchKnowledgeSourceFromUrl(url);
+  const existingAssets = await listKnowledgeAssets(source.id);
+  const newAssetIds: string[] = [];
+  for (const image of fetched.images) {
+    const asset = await createKnowledgeAsset({
+      sourceId: source.id,
+      agentId: source.agentId,
+      buffer: image.buffer,
+      mimeType: image.mimeType,
+      originalName: image.originalName,
+      position: image.position,
+    });
+    newAssetIds.push(asset.id);
+  }
+  const merged = {
+    ...config,
+    text: fetched.text,
+    fileName: fetched.title,
+    mimeType: fetched.mimeType,
+    url: fetched.url,
+    assetIds: newAssetIds,
+    imageCount: newAssetIds.length,
+  };
+  const patched = await patchConnectionConfig(source.id, merged);
+  if (patched) {
+    await Promise.all(
+      existingAssets
+        .filter((asset) => !newAssetIds.includes(asset.id))
+        .map((asset) => deleteKnowledgeAssetById(asset.id)),
+    );
+  }
+  return patched ?? source;
 }
 
 async function patchConnectionConfig(
@@ -135,20 +207,30 @@ async function replaceSourceChunks(
   sourceId: string,
   chunks: string[],
   embeddings: number[][],
+  assetIdsByChunk: string[][] = [],
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
       .delete(knowledgeChunksTable)
       .where(eq(knowledgeChunksTable.sourceId, sourceId));
     if (chunks.length > 0) {
-      await tx.insert(knowledgeChunksTable).values(
+      const inserted = await tx.insert(knowledgeChunksTable).values(
         chunks.map((content, index) => ({
           sourceId,
           chunkIndex: index,
           content,
           embedding: embeddings[index],
         })),
+      ).returning({ id: knowledgeChunksTable.id, chunkIndex: knowledgeChunksTable.chunkIndex });
+      const links = inserted.flatMap((chunk) =>
+        (assetIdsByChunk[chunk.chunkIndex] ?? []).map((assetId) => ({
+          chunkId: chunk.id,
+          assetId,
+        })),
       );
+      if (links.length > 0) {
+        await tx.insert(knowledgeChunkAssetsTable).values(links).onConflictDoNothing();
+      }
     }
   });
 }
@@ -200,11 +282,55 @@ export async function indexSource(
 
   try {
     const model = await embeddingProvider.resolveModel();
-    const { text, itemCount } = await resolveSourceText(source);
+    const current = await refreshRemoteSourceText(source);
+    const resolved = await resolveSourceText(current);
+    const assets = knowledgeImagesEnabled() ? await listKnowledgeAssets(current.id) : [];
+    const searchableImages: Array<{ id: string; text: string }> = [];
+    let failedImageCount = 0;
+    for (const asset of assets) {
+      let description = asset.visionDescription.trim();
+      if (!description) {
+        try {
+          const stored = await getKnowledgeAssetForProcessing(asset.id);
+          if (stored) {
+            description = await describeKnowledgeImage({
+              buffer: stored.buffer,
+              mimeType: stored.asset.mimeType as "image/png" | "image/jpeg" | "image/webp",
+              altText: stored.asset.altText,
+            });
+            await db.update(knowledgeAssetsTable)
+              .set({
+                visionDescription: description,
+                processingStatus: "ready",
+                processingError: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(knowledgeAssetsTable.id, asset.id));
+          }
+        } catch (error) {
+          failedImageCount += 1;
+          description = asset.altText.trim() || "Screenshot attached to the documentation.";
+          await db.update(knowledgeAssetsTable)
+            .set({
+              processingStatus: "failed",
+              processingError: error instanceof Error ? error.message : String(error),
+              updatedAt: new Date(),
+            })
+            .where(eq(knowledgeAssetsTable.id, asset.id));
+        }
+      }
+      if (description) searchableImages.push({ id: asset.id, text: description });
+    }
+    const imageText = searchableImages
+      .map((image) => `[[screenshot:${image.id}]] ${image.text}`)
+      .join("\n\n");
+    const text = [resolved.text.trim(), imageText].filter(Boolean).join("\n\n");
     if (!text) {
       await replaceSourceChunks(sourceId, [], []);
       await markSync(sourceId, "empty", {
-        itemCount: 0,
+        itemCount: assets.length,
+        imageCount: assets.length,
+        imageFailedCount: failedImageCount,
         chunkCount: 0,
         embeddingModel: model,
         lastError: null,
@@ -217,6 +343,11 @@ export async function indexSource(
     }
 
     const chunks = chunkText(text);
+    const assetIdsByChunk = chunks.map((chunk) =>
+      searchableImages
+        .filter((image) => chunk.includes(`[[screenshot:${image.id}]]`))
+        .map((image) => image.id),
+    );
     const embeddings: number[][] = [];
     for (let offset = 0; offset < chunks.length; offset += EMBEDDING_BATCH_SIZE) {
       const result = await embeddingProvider.embed(
@@ -228,9 +359,11 @@ export async function indexSource(
       throw new Error("Embedding count did not match knowledge chunk count.");
     }
 
-    await replaceSourceChunks(sourceId, chunks, embeddings);
+    await replaceSourceChunks(sourceId, chunks, embeddings, assetIdsByChunk);
     await markSync(sourceId, "ready", {
-      itemCount,
+      itemCount: resolved.itemCount + assets.length,
+      imageCount: assets.length,
+      imageFailedCount: failedImageCount,
       chunkCount: chunks.length,
       embeddingModel: model,
       lastError: null,

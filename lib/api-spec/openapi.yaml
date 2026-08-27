@@ -1162,6 +1162,84 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /sources/{id}/assets:
+    get:
+      operationId: listSourceAssets
+      tags: [sources]
+      summary: List screenshots for a knowledge source
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Screenshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeAsset"
+    post:
+      operationId: uploadSourceAsset
+      tags: [sources]
+      summary: Upload a screenshot to a knowledge source
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/SourceAssetUploadInput"
+      responses:
+        "201":
+          description: Screenshot uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeAsset"
+
+  /sources/assets/{assetId}/url:
+    get:
+      operationId: getSourceAssetUrl
+      tags: [sources]
+      summary: Get a short-lived private screenshot URL
+      parameters:
+        - in: path
+          name: assetId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Signed screenshot URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeAssetUrl"
+
+  /sources/assets/{assetId}:
+    delete:
+      operationId: deleteSourceAsset
+      tags: [sources]
+      summary: Delete a screenshot from a knowledge source
+      parameters:
+        - in: path
+          name: assetId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
   /sources/upload:
     post:
       operationId: uploadSourceDocument
@@ -1180,6 +1258,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KnowledgeSource"
+
+  /sources/from-url:
+    post:
+      operationId: createSourceFromUrl
+      tags: [sources]
+      summary: Import a public Google Doc, Google Sheet, or office file URL as a knowledge source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SourceFromUrlInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeSource"
+        "400":
+          description: Invalid, private, or unreadable link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # ── Audience Targets ──────────────────────────────────────────────────────
   /targets:
@@ -1884,7 +1987,7 @@ components:
     # ── Message ───────────────────────────────────────────────────────────
     Message:
       type: object
-      required: [id, conversationId, sender, content, createdAt]
+      required: [id, conversationId, sender, content, metadata, createdAt]
       properties:
         id:
           type: string
@@ -1894,7 +1997,25 @@ components:
           type: string
         content:
           type: string
+        metadata:
+          type: object
+          additionalProperties: true
         createdAt:
+          type: string
+
+    Citation:
+      type: object
+      required: [sourceId, sourceName]
+      properties:
+        sourceId:
+          type: string
+        sourceName:
+          type: string
+        chunkId:
+          type: string
+        assetId:
+          type: string
+        excerpt:
           type: string
 
     SendMessageInput:
@@ -2414,6 +2535,54 @@ components:
         updatedAt:
           type: string
 
+    KnowledgeAsset:
+      type: object
+      required: [id, sourceId, mimeType, originalName, byteSize, position, altText, processingStatus]
+      properties:
+        id:
+          type: string
+        sourceId:
+          type: string
+        mimeType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        originalName:
+          type: string
+        byteSize:
+          type: number
+        width:
+          type: number
+          nullable: true
+        height:
+          type: number
+          nullable: true
+        position:
+          type: number
+        altText:
+          type: string
+        processingStatus:
+          type: string
+
+    KnowledgeAssetUrl:
+      allOf:
+        - $ref: "#/components/schemas/KnowledgeAsset"
+        - type: object
+          required: [url]
+          properties:
+            url:
+              type: string
+
+    SourceAssetUploadInput:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+        altText:
+          type: string
+          maxLength: 500
+
     SourceInput:
       type: object
       required: [name, sourceType]
@@ -2454,6 +2623,17 @@ components:
         file:
           type: string
           format: binary
+
+    SourceFromUrlInput:
+      type: object
+      required: [agentId, url]
+      properties:
+        agentId:
+          type: string
+        url:
+          type: string
+        name:
+          type: string
 
     # ── Audience Target ───────────────────────────────────────────────────
     TargetPersonType:

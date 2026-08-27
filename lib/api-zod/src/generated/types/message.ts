@@ -5,11 +5,13 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { MessageMetadata } from './messageMetadata';
 
 export interface Message {
   id: string;
   conversationId: string;
   sender: string;
   content: string;
+  metadata: MessageMetadata;
   createdAt: string;
 }
