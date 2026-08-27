@@ -139,26 +139,6 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-            <div className="flex items-start gap-3">
-              <Inbox className="mt-0.5 h-4 w-4 text-muted-foreground" />
-              <div>
-                <Label htmlFor="escalation-enabled">
-                  Enable escalation inbox
-                </Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Create an assigned inbox conversation when a Rule escalates.
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="escalation-enabled"
-              checked={isEnabled}
-              onCheckedChange={(checked) => void save({ isEnabled: checked })}
-              disabled={!canEdit || saving}
-            />
-          </div>
-
           <div className="space-y-3">
             <div>
               <Label>Members who will receive escalations</Label>
@@ -190,6 +170,26 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
                 ))
               )}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+            <div className="flex items-start gap-3">
+              <Inbox className="mt-0.5 h-4 w-4 text-muted-foreground" />
+              <div>
+                <Label htmlFor="escalation-enabled">
+                  Enable escalation inbox
+                </Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Create an assigned inbox conversation when a Rule escalates.
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="escalation-enabled"
+              checked={isEnabled}
+              onCheckedChange={(checked) => void save({ isEnabled: checked })}
+              disabled={!canEdit || saving}
+            />
           </div>
 
           <div className="space-y-3">
