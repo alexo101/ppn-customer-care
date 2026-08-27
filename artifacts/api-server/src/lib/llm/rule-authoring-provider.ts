@@ -7,6 +7,7 @@ export type RuleAuthoringDraft = {
   escalationTrigger: boolean;
   isEnabled: boolean;
   conditionOperator: string;
+  conditionCountry?: "ES" | "FR" | "IT" | null;
   action: string;
   categoryIds?: string[];
   sourceIds?: string[];
@@ -30,6 +31,7 @@ export type RuleAuthoringContext = {
   operators: Array<{ label: string }>;
   actions: Array<{ label: string; requiresSource: boolean }>;
   audienceTargets: Array<{ id: string; name: string; description: string }>;
+  countries: Array<{ code: "ES" | "FR" | "IT"; label: string; domain: string }>;
 };
 
 export type RuleAuthoringModelResult = {

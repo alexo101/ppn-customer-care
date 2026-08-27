@@ -9,6 +9,7 @@ import type {
   RuleAuthoringDraft,
   RuleAuthoringProvider,
 } from "./llm";
+import { countryMatchesDomain, normalizeDomain } from "./rule-engine";
 
 const context: RuleAuthoringContext = {
   categories: [
@@ -27,6 +28,11 @@ const context: RuleAuthoringContext = {
   ],
   audienceTargets: [
     { id: "acme-users", name: "Acme users", description: "Users at Acme" },
+  ],
+  countries: [
+    { code: "ES", label: "Spain", domain: "app.papernest.es" },
+    { code: "FR", label: "France", domain: "app.papernest.com" },
+    { code: "IT", label: "Italy", domain: "app.papernest.it" },
   ],
 };
 
@@ -60,7 +66,7 @@ describe("authorRule", () => {
 
     expect(result.status).toBe("approved");
     expect(result.draft?.name).toBe(
-      "If Category is Billing then search answer in Help Center",
+      "When the user asks about Billing, search Help Center for an answer.",
     );
     expect(generate).not.toHaveBeenCalled();
   });
@@ -277,13 +283,36 @@ describe("authorRule", () => {
 
 describe("normalizeRuleAuthoringDraft", () => {
   it("fills missing optional arrays so previews can read length safely", () => {
-    const { audienceTargetIds: _a, sourceIds: _s, categoryIds: _c, ...rest } =
-      validDraft;
+    const {
+      audienceTargetIds: _a,
+      sourceIds: _s,
+      categoryIds: _c,
+      ...rest
+    } = validDraft;
     const normalized = normalizeRuleAuthoringDraft(rest);
 
     expect(normalized.categoryIds).toEqual([]);
     expect(normalized.sourceIds).toEqual([]);
     expect(normalized.audienceTargetIds).toEqual([]);
+  });
+});
+
+describe("country rule conditions", () => {
+  it("normalizes hostnames and matches the selected country domain", () => {
+    expect(normalizeDomain("https://www.app.papernest.es/help")).toBe(
+      "app.papernest.es",
+    );
+    expect(countryMatchesDomain("ES", "app.papernest.es")).toBe(true);
+    expect(countryMatchesDomain("ES", "app.papernest.com")).toBe(false);
+    expect(countryMatchesDomain(null, "unknown.example")).toBe(true);
+  });
+
+  it("keeps the selected country when normalizing an authoring draft", () => {
+    const normalized = normalizeRuleAuthoringDraft({
+      ...validDraft,
+      conditionCountry: "IT",
+    });
+    expect(normalized.conditionCountry).toBe("IT");
   });
 });
 

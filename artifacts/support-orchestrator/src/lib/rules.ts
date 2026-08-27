@@ -1,4 +1,13 @@
-import type { OrchestratorRule, RuleAuthoringDraft } from "@workspace/api-client-react";
+import type {
+  OrchestratorRule,
+  RuleAuthoringDraft,
+} from "@workspace/api-client-react";
+
+export const RULE_COUNTRIES = [
+  { code: "ES", label: "Spain", domain: "app.papernest.es" },
+  { code: "FR", label: "France", domain: "app.papernest.com" },
+  { code: "IT", label: "Italy", domain: "app.papernest.it" },
+] as const;
 
 export function emptyRuleDraft(priority = 0): RuleAuthoringDraft {
   return normalizeDraft({
@@ -28,6 +37,7 @@ export function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
     escalationTrigger: rule.escalationTrigger,
     isEnabled: rule.isEnabled,
     conditionOperator: rule.conditionOperator,
+    conditionCountry: rule.conditionCountry ?? null,
     action: rule.action,
     categoryIds: rule.categoryIds,
     sourceIds: rule.sourceIds,
@@ -44,6 +54,7 @@ export function normalizeDraft(draft: RuleAuthoringDraft): RuleAuthoringDraft {
     promptTemplate: draft.promptTemplate ?? "",
     requiresClarificationPrompt: draft.requiresClarificationPrompt ?? "",
     conditionOperator: draft.conditionOperator?.trim() || "is",
+    conditionCountry: draft.conditionCountry ?? null,
     action: draft.action?.trim() || "search answer",
     categoryIds: draft.categoryIds ?? [],
     sourceIds: draft.sourceIds ?? [],
@@ -74,24 +85,84 @@ export function formatRuleSentence(input: {
   sourceNames: string[];
   requiresSource?: boolean;
   audienceTargetNames?: string[];
+  countryLabel?: string;
+  connectorNames?: string[];
+  promptTemplate?: string;
+  clarificationPrompt?: string;
 }): string {
-  const operator = input.operator.trim() || "is";
   const action = input.action.trim() || "search answer";
-  const categories = joinNames(input.categoryNames, "a category");
+  const categoryNames = input.categoryNames
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (
+    categoryNames.length > 1 &&
+    categoryNames[1]?.startsWith(`${categoryNames[0]} / `)
+  ) {
+    categoryNames[1] = categoryNames[1].slice(categoryNames[0].length + 3);
+  }
+  const categories =
+    categoryNames.length > 1 && categoryNames[1]
+      ? `${categoryNames[0]} → ${categoryNames[1]}`
+      : joinNames(categoryNames, "a category");
   const includeSource = input.requiresSource ?? actionUsesSource(action);
-  const thenClause = includeSource
-    ? `then ${action} in ${joinNames(input.sourceNames, "a source")}`
-    : `then ${action}`;
-  const audienceClause = input.audienceTargetNames?.length
-    ? ` for ${joinNames(input.audienceTargetNames, "an audience")}`
+  const kind = action.toLowerCase();
+  const countryClause = input.countryLabel?.trim()
+    ? `the user is accessing ${input.countryLabel.trim()}`
     : "";
-  return `If Category ${operator} ${categories} ${thenClause}${audienceClause}`;
+  const categoryClause = `${countryClause ? "" : "the user "}asks about ${categories}`;
+  const audienceClause = input.audienceTargetNames?.length
+    ? `belongs to ${joinNames(input.audienceTargetNames, "an audience")}`
+    : "";
+  let actionClause: string;
+  if (
+    kind.includes("live data") ||
+    kind.includes("query") ||
+    kind.includes("lookup")
+  ) {
+    actionClause = `call ${joinNames(input.connectorNames ?? [], "the API")} to retrieve ${input.promptTemplate?.trim() || "the requested data"}`;
+  } else if (kind.includes("template") || kind.includes("generate")) {
+    actionClause = `answer using the ${input.promptTemplate?.trim() || "configured"} template`;
+  } else if (kind.includes("clarif")) {
+    actionClause = input.clarificationPrompt?.trim()
+      ? `ask: "${input.clarificationPrompt.trim()}"`
+      : "ask a clarification question";
+  } else if (
+    kind.includes("escalat") ||
+    kind.includes("human") ||
+    kind.includes("transfer")
+  ) {
+    actionClause = "escalate to a human agent";
+  } else if (
+    kind.includes("search") ||
+    kind.includes("answer") ||
+    kind.includes("retrieve")
+  ) {
+    actionClause = `search ${joinNames(input.sourceNames, "the knowledge source")} for an answer`;
+  } else {
+    actionClause = action;
+  }
+  const clauses = [countryClause, categoryClause, audienceClause].filter(
+    Boolean,
+  );
+  const prefix =
+    clauses.length === 0
+      ? "When"
+      : `When ${clauses.length === 1 ? clauses[0] : `${clauses.slice(0, -1).join(", ")}, and ${clauses.at(-1)}`}`;
+  return `${prefix}, ${actionClause}.`;
 }
 
-export function actionUsesSource(action: string, requiresSource?: boolean): boolean {
+export function actionUsesSource(
+  action: string,
+  requiresSource?: boolean,
+): boolean {
   if (typeof requiresSource === "boolean") return requiresSource;
   const value = action.trim().toLowerCase();
-  if (value.includes("escalat") || value.includes("clarif") || value.includes("template")) return false;
+  if (
+    value.includes("escalat") ||
+    value.includes("clarif") ||
+    value.includes("template")
+  )
+    return false;
   return true;
 }
 

@@ -6,7 +6,9 @@ import { updateConversationAnalytics } from "./conversation-analytics";
 const INACTIVITY_MS = 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
-export async function closeInactiveConversations(now = new Date()): Promise<number> {
+export async function closeInactiveConversations(
+  now = new Date(),
+): Promise<number> {
   const cutoff = new Date(now.getTime() - INACTIVITY_MS);
   const rows = await db
     .update(conversationsTable)
@@ -14,6 +16,7 @@ export async function closeInactiveConversations(now = new Date()): Promise<numb
     .where(
       and(
         ne(conversationsTable.status, "closed"),
+        ne(conversationsTable.status, "escalated"),
         lt(conversationsTable.lastActivityAt, cutoff),
       ),
     )

@@ -16,17 +16,23 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { MutatingControls } from "@/components/workspace-access";
 import {
   actionIsEscalation,
-  actionUsesSource,
   formatCategoryPath,
   formatRuleSentence,
   normalizeDraft,
+  RULE_COUNTRIES,
 } from "@/lib/rules";
 
 type VocabularyKind = "operator" | "action";
@@ -58,7 +64,13 @@ export function ManualRuleForm({
   const update = (patch: Partial<RuleAuthoringDraft>) =>
     onDraftChange(normalizeDraft({ ...normalized, ...patch }));
   const categoryNames = useMemo(
-    () => Object.fromEntries(categories.map((category) => [category.id, formatCategoryPath(category.id, categories)])),
+    () =>
+      Object.fromEntries(
+        categories.map((category) => [
+          category.id,
+          formatCategoryPath(category.id, categories),
+        ]),
+      ),
     [categories],
   );
   const sourceNames = useMemo(
@@ -66,12 +78,64 @@ export function ManualRuleForm({
     [sources],
   );
   const targetNames = useMemo(
-    () => Object.fromEntries(audienceTargets.map((target) => [target.id, target.name])),
+    () =>
+      Object.fromEntries(
+        audienceTargets.map((target) => [target.id, target.name]),
+      ),
     [audienceTargets],
   );
-  const needsSource = actionUsesSource(normalized.action);
-  const needsConnector = normalized.action.trim().toLowerCase().includes("live data");
-  const canSave = Boolean(normalized.name.trim() && normalized.categoryIds?.length);
+  const actionKind = normalized.action.trim().toLowerCase();
+  const isCustomAction =
+    !actionKind.includes("search") &&
+    !actionKind.includes("answer") &&
+    !actionKind.includes("live data") &&
+    !actionKind.includes("query") &&
+    !actionKind.includes("lookup") &&
+    !actionKind.includes("template") &&
+    !actionKind.includes("generate") &&
+    !actionKind.includes("clarif") &&
+    !actionKind.includes("escalat") &&
+    !actionKind.includes("human") &&
+    !actionKind.includes("transfer");
+  const needsSource = actionKind.includes("search") || isCustomAction;
+  const needsConnector =
+    actionKind.includes("live data") ||
+    actionKind.includes("query") ||
+    actionKind.includes("lookup");
+  const topLevelCategories = useMemo(
+    () => categories.filter((category) => !category.parentId),
+    [categories],
+  );
+  const selectedCategoryId = useMemo(() => {
+    const selected = normalized.categoryIds ?? [];
+    return (
+      selected.find((id) =>
+        topLevelCategories.some((category) => category.id === id),
+      ) ?? ""
+    );
+  }, [normalized.categoryIds, topLevelCategories]);
+  const subcategories = useMemo(
+    () =>
+      categories.filter((category) => category.parentId === selectedCategoryId),
+    [categories, selectedCategoryId],
+  );
+  const selectedSubcategoryId =
+    (normalized.categoryIds ?? []).find((id) =>
+      subcategories.some((category) => category.id === id),
+    ) ?? "";
+  const selectedCountry = RULE_COUNTRIES.find(
+    (country) => country.code === normalized.conditionCountry,
+  );
+  const previewCategoryNames = useMemo(
+    () =>
+      [selectedCategoryId, selectedSubcategoryId]
+        .map((id) => categories.find((category) => category.id === id)?.name)
+        .filter((name): name is string => Boolean(name)),
+    [categories, selectedCategoryId, selectedSubcategoryId],
+  );
+  const canSave = Boolean(
+    normalized.name.trim() && normalized.categoryIds?.length,
+  );
 
   return (
     <form
@@ -83,14 +147,11 @@ export function ManualRuleForm({
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-3xl space-y-5">
-          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
-            Build the rule yourself by choosing every condition and response setting. You can switch to
-            <span className="font-medium text-foreground"> Describe to AI </span>
-            at any time.
-          </div>
-
-          <section className="space-y-3">
-            <SectionHeading title="Rule details" description="Give this rule a name and explain what it should do." />
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Name this rule so you can find it later. The guided sentence below
+              shows exactly when it runs.
+            </p>
             <Field label="Name" required>
               <Input
                 value={normalized.name}
@@ -102,116 +163,229 @@ export function ManualRuleForm({
             <Field label="Description">
               <Textarea
                 value={normalized.description}
-                onChange={(event) => update({ description: event.target.value })}
+                onChange={(event) =>
+                  update({ description: event.target.value })
+                }
                 placeholder="When should this rule apply?"
                 className="min-h-20 resize-y"
               />
             </Field>
-          </section>
+          </div>
 
-          <section className="space-y-3">
-            <SectionHeading
-              title="When should it run?"
-              description="Choose the operator and at least one category or subcategory."
-            />
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,220px)_1fr]">
+          <div className="rounded-xl bg-muted/20 px-4 py-5 text-sm leading-9">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <span className="font-semibold text-primary">When</span>
+              <span>Country is</span>
+              <InlineSelect
+                value={normalized.conditionCountry ?? "NOT_RELEVANT"}
+                placeholder="Select country"
+                options={[
+                  { value: "NOT_RELEVANT", label: "Not relevant" },
+                  ...RULE_COUNTRIES.map((country) => ({
+                    value: country.code,
+                    label: country.label,
+                  })),
+                ]}
+                onChange={(value) =>
+                  update({
+                    conditionCountry:
+                      value === "NOT_RELEVANT"
+                        ? null
+                        : (value as "ES" | "FR" | "IT"),
+                  })
+                }
+              />
+              <span className="font-medium text-muted-foreground">and</span>
+              <span>Category is</span>
+              <InlineSelect
+                value={selectedCategoryId}
+                placeholder="Select category"
+                options={topLevelCategories.map((category) => ({
+                  value: category.id,
+                  label: category.name,
+                }))}
+                onChange={(categoryId) =>
+                  update({ categoryIds: categoryId ? [categoryId] : [] })
+                }
+              />
+              <span className="font-medium text-muted-foreground">and</span>
+              <span>Subcategory is</span>
+              <InlineSelect
+                value={selectedSubcategoryId || "__any__"}
+                placeholder={
+                  selectedCategoryId
+                    ? "Any subcategory"
+                    : "Select category first"
+                }
+                disabled={!selectedCategoryId}
+                options={[
+                  { value: "__any__", label: "Any subcategory" },
+                  ...subcategories.map((category) => ({
+                    value: category.id,
+                    label: category.name,
+                  })),
+                ]}
+                onChange={(subcategoryId) =>
+                  update({
+                    categoryIds: selectedCategoryId
+                      ? [
+                          selectedCategoryId,
+                          ...(subcategoryId === "__any__"
+                            ? []
+                            : [subcategoryId]),
+                        ]
+                      : [],
+                  })
+                }
+              />
+              <span className="font-medium text-muted-foreground">and</span>
+              <span>Target is</span>
+              <InlineSelect
+                value={normalized.audienceTargetIds?.[0] ?? "__everyone__"}
+                placeholder="Everyone"
+                options={[
+                  { value: "__everyone__", label: "Everyone" },
+                  ...audienceTargets.map((target) => ({
+                    value: target.id,
+                    label: target.name,
+                  })),
+                ]}
+                onChange={(targetId) =>
+                  update({
+                    audienceTargetIds:
+                      targetId === "__everyone__" ? [] : [targetId],
+                  })
+                }
+              />
+              <span className="font-medium text-muted-foreground">then</span>
               <VocabPicker
                 agentId={agentId}
-                kind="operator"
-                label="Operator"
-                value={normalized.conditionOperator}
-                onChange={(value) => update({ conditionOperator: value })}
-              />
-              <CategoryHierarchyPicker
-                categories={categories}
-                values={normalized.categoryIds ?? []}
-                onChange={(categoryIds) => update({ categoryIds })}
+                kind="action"
+                label="Action"
+                value={normalized.action}
+                onChange={(value) =>
+                  update({
+                    action: value,
+                    escalationTrigger: actionIsEscalation(value)
+                      ? true
+                      : normalized.escalationTrigger,
+                  })
+                }
               />
             </div>
-          </section>
 
-          <section className="space-y-3">
-            <SectionHeading title="What should happen?" description="Choose the action and configure its response." />
-            <VocabPicker
-              agentId={agentId}
-              kind="action"
-              label="Action"
-              value={normalized.action}
-              onChange={(value) =>
-                update({
-                  action: value,
-                  escalationTrigger: actionIsEscalation(value) ? true : normalized.escalationTrigger,
-                })
-              }
-            />
-            {needsSource && (
-              <MultiCheckList
-                label="Sources"
-                hint="Select the knowledge sources used to produce the answer."
-                options={sources.map((source) => ({ id: source.id, name: source.name }))}
-                values={normalized.sourceIds ?? []}
-                onChange={(sourceIds) => update({ sourceIds })}
-                emptyMessage="No sources are available for this agent."
-              />
-            )}
-            {needsConnector && (
-              <MultiCheckList
-                label="API connectors"
-                hint="Select approved API connectors used to retrieve live data."
-                options={connectors.map((connector) => ({ id: connector.id, name: connector.name }))}
-                values={normalized.connectorIds ?? []}
-                onChange={(connectorIds) => update({ connectorIds })}
-                emptyMessage="No API connectors are available for this agent."
-              />
-            )}
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Field label="Response template" hint="Optional instructions or template for the response.">
-                <Textarea
-                  value={normalized.promptTemplate}
-                  onChange={(event) => update({ promptTemplate: event.target.value })}
-                  placeholder="Use the relevant source content to answer clearly..."
-                  className="min-h-24 resize-y"
+            <div className="ml-4 mt-3 border-l-2 border-primary/25 pl-4">
+              {needsSource && (
+                <MultiCheckList
+                  label={
+                    actionKind.includes("live data")
+                      ? "Data sources"
+                      : "Knowledge sources"
+                  }
+                  hint="Choose only the sources this action needs."
+                  options={sources.map((source) => ({
+                    id: source.id,
+                    name: source.name,
+                  }))}
+                  values={normalized.sourceIds ?? []}
+                  onChange={(sourceIds) => update({ sourceIds })}
+                  emptyMessage="No sources are available for this agent."
                 />
-              </Field>
-              <Field label="Clarification question" hint="Optional question to ask when the request is ambiguous.">
-                <Textarea
-                  value={normalized.requiresClarificationPrompt}
-                  onChange={(event) => update({ requiresClarificationPrompt: event.target.value })}
-                  placeholder="Could you share your order number?"
-                  className="min-h-24 resize-y"
-                />
-              </Field>
+              )}
+              {(needsConnector || isCustomAction) && (
+                <Field
+                  label={`API${isCustomAction ? " (optional)" : ""}`}
+                  hint="Choose the approved API connector."
+                >
+                  <InlineSelect
+                    value={normalized.connectorIds?.[0] ?? "__none__"}
+                    placeholder="No API"
+                    options={[
+                      { value: "__none__", label: "No API" },
+                      ...connectors.map((connector) => ({
+                        value: connector.id,
+                        label: connector.name,
+                      })),
+                    ]}
+                    onChange={(connectorId) =>
+                      update({
+                        connectorIds:
+                          connectorId === "__none__" ? [] : [connectorId],
+                      })
+                    }
+                  />
+                </Field>
+              )}
+              {(actionKind.includes("live data") ||
+                actionKind.includes("query") ||
+                actionKind.includes("lookup") ||
+                isCustomAction) && (
+                <Field
+                  label="Data to retrieve"
+                  hint="Describe the data the API should return."
+                >
+                  <Textarea
+                    value={normalized.promptTemplate}
+                    onChange={(event) =>
+                      update({ promptTemplate: event.target.value })
+                    }
+                    placeholder="Transaction status"
+                    className="min-h-20 resize-y"
+                  />
+                </Field>
+              )}
+              {(actionKind.includes("template") ||
+                actionKind.includes("generate")) && (
+                <Field
+                  label="Template"
+                  hint="Instructions for the answer generated from this template."
+                >
+                  <Textarea
+                    value={normalized.promptTemplate}
+                    onChange={(event) =>
+                      update({ promptTemplate: event.target.value })
+                    }
+                    placeholder="Answer clearly using the configured template..."
+                    className="min-h-20 resize-y"
+                  />
+                </Field>
+              )}
+              {(actionKind.includes("clarif") || isCustomAction) && (
+                <Field label="Clarification question">
+                  <Textarea
+                    value={normalized.requiresClarificationPrompt}
+                    onChange={(event) =>
+                      update({
+                        requiresClarificationPrompt: event.target.value,
+                      })
+                    }
+                    placeholder="Could you share your order number?"
+                    className="min-h-20 resize-y"
+                  />
+                </Field>
+              )}
+              {actionKind.includes("escalat") && (
+                <p className="text-xs text-muted-foreground">
+                  This action will hand the conversation to a human agent.
+                </p>
+              )}
             </div>
-          </section>
+          </div>
 
-          <section className="space-y-3">
-            <SectionHeading title="Who does it apply to?" description="Leave this empty to apply the rule to everyone." />
-            <MultiCheckList
-              label="Audience targets"
-              options={audienceTargets.map((target) => ({ id: target.id, name: target.name }))}
-              values={normalized.audienceTargetIds ?? []}
-              onChange={(audienceTargetIds) => update({ audienceTargetIds })}
-              emptyMessage="No audience targets are configured."
+          <div className="flex flex-wrap gap-x-6 gap-y-3 px-1">
+            <ToggleField
+              id="manual-rule-enabled"
+              label="Enabled"
+              checked={normalized.isEnabled}
+              onChange={(isEnabled) => update({ isEnabled })}
             />
-          </section>
-
-          <section className="space-y-3">
-            <SectionHeading title="Settings" description="Control whether the rule is active and how it handles escalation." />
-            <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-lg border border-border p-4">
-              <ToggleField
-                id="manual-rule-enabled"
-                label="Enabled"
-                checked={normalized.isEnabled}
-                onChange={(isEnabled) => update({ isEnabled })}
-              />
-              <ToggleField
-                id="manual-rule-escalation"
-                label="Escalate to a human"
-                checked={normalized.escalationTrigger}
-                onChange={(escalationTrigger) => update({ escalationTrigger })}
-              />
-            </div>
-          </section>
+            <ToggleField
+              id="manual-rule-escalation"
+              label="Escalate to a human"
+              checked={normalized.escalationTrigger}
+              onChange={(escalationTrigger) => update({ escalationTrigger })}
+            />
+          </div>
 
           <div className="rounded-lg border border-primary/20 bg-card p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -220,11 +394,28 @@ export function ManualRuleForm({
                 <p className="mt-1 text-sm leading-6">
                   {formatRuleSentence({
                     operator: normalized.conditionOperator,
-                    categoryNames: (normalized.categoryIds ?? []).map((id) => categoryNames[id] ?? id),
+                    categoryNames:
+                      previewCategoryNames.length > 0
+                        ? previewCategoryNames
+                        : (normalized.categoryIds ?? []).map(
+                            (id) => categoryNames[id] ?? id,
+                          ),
                     action: normalized.action,
-                    sourceNames: (normalized.sourceIds ?? []).map((id) => sourceNames[id] ?? id),
+                    sourceNames: (normalized.sourceIds ?? []).map(
+                      (id) => sourceNames[id] ?? id,
+                    ),
                     requiresSource: needsSource,
-                    audienceTargetNames: (normalized.audienceTargetIds ?? []).map((id) => targetNames[id] ?? id),
+                    audienceTargetNames: (
+                      normalized.audienceTargetIds ?? []
+                    ).map((id) => targetNames[id] ?? id),
+                    countryLabel: selectedCountry?.label,
+                    connectorNames: (normalized.connectorIds ?? []).map(
+                      (id) =>
+                        connectors.find((connector) => connector.id === id)
+                          ?.name ?? id,
+                    ),
+                    promptTemplate: normalized.promptTemplate,
+                    clarificationPrompt: normalized.requiresClarificationPrompt,
                   })}
                 </p>
               </div>
@@ -237,7 +428,9 @@ export function ManualRuleForm({
       </div>
       <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card px-6 py-4">
         <p className="text-xs text-muted-foreground">
-          {canSave ? "Ready to save this rule." : "Add a name and at least one category or subcategory to save."}
+          {canSave
+            ? "Ready to save this rule."
+            : "Add a name and at least one category or subcategory to save."}
         </p>
         <MutatingControls>
           <Button type="submit" disabled={saving || !canSave}>
@@ -250,12 +443,47 @@ export function ManualRuleForm({
   );
 }
 
-function SectionHeading({ title, description }: { title: string; description: string }) {
+function SectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
   return (
     <div>
       <h3 className="text-sm font-semibold">{title}</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
     </div>
+  );
+}
+
+function InlineSelect({
+  value,
+  placeholder,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className="inline-flex h-8 w-auto min-w-32 bg-card px-2.5 text-xs">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -277,7 +505,9 @@ function Field({
         {required ? <span className="ml-1 text-destructive">*</span> : null}
       </Label>
       {children}
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className="text-[11px] text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -296,7 +526,9 @@ function ToggleField({
   return (
     <div className="flex items-center gap-2">
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
-      <Label htmlFor={id} className="text-xs">{label}</Label>
+      <Label htmlFor={id} className="text-xs">
+        {label}
+      </Label>
     </div>
   );
 }
@@ -324,13 +556,19 @@ function CategoryHierarchyPicker({
     }
     return grouped;
   }, [categories]);
-  const parentIds = useMemo(() => new Set(parents.map((category) => category.id)), [parents]);
+  const parentIds = useMemo(
+    () => new Set(parents.map((category) => category.id)),
+    [parents],
+  );
   const categoryById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
     [categories],
   );
   const orphaned = useMemo(
-    () => categories.filter((category) => category.parentId && !parentIds.has(category.parentId)),
+    () =>
+      categories.filter(
+        (category) => category.parentId && !parentIds.has(category.parentId),
+      ),
     [categories, parentIds],
   );
 
@@ -356,7 +594,8 @@ function CategoryHierarchyPicker({
         <span className="ml-1 text-destructive">*</span>
       </Label>
       <p className="text-[11px] text-muted-foreground">
-        Subcategories are nested inside their parent category. Select a category, a subcategory, or both.
+        Subcategories are nested inside their parent category. Select a
+        category, a subcategory, or both.
       </p>
       {parents.length === 0 && orphaned.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
@@ -367,15 +606,25 @@ function CategoryHierarchyPicker({
           {parents.map((parent) => {
             const children = childrenByParent.get(parent.id) ?? [];
             return (
-              <div key={parent.id} className="overflow-hidden rounded-md border border-border bg-card">
+              <div
+                key={parent.id}
+                className="overflow-hidden rounded-md border border-border bg-card"
+              >
                 <label className="flex cursor-pointer items-center gap-2 bg-muted/40 px-3 py-2">
                   <Checkbox
                     checked={values.includes(parent.id)}
-                    onCheckedChange={(checked) => toggle(parent.id, checked === true)}
+                    onCheckedChange={(checked) =>
+                      toggle(parent.id, checked === true)
+                    }
                   />
                   <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-xs font-medium">{parent.name}</span>
-                  <Badge variant="outline" className="h-5 shrink-0 text-[10px] font-medium">
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                    {parent.name}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="h-5 shrink-0 text-[10px] font-medium"
+                  >
                     Category
                   </Badge>
                 </label>
@@ -386,13 +635,23 @@ function CategoryHierarchyPicker({
                     </p>
                     <div className="space-y-1.5 border-l-2 border-border ml-2 pl-4">
                       {children.map((child) => (
-                        <label key={child.id} className="flex min-w-0 cursor-pointer items-center gap-2 py-0.5">
+                        <label
+                          key={child.id}
+                          className="flex min-w-0 cursor-pointer items-center gap-2 py-0.5"
+                        >
                           <Checkbox
                             checked={values.includes(child.id)}
-                            onCheckedChange={(checked) => toggle(child.id, checked === true)}
+                            onCheckedChange={(checked) =>
+                              toggle(child.id, checked === true)
+                            }
                           />
-                          <span className="min-w-0 flex-1 truncate text-xs">{child.name}</span>
-                          <Badge variant="secondary" className="h-5 shrink-0 text-[10px] font-normal">
+                          <span className="min-w-0 flex-1 truncate text-xs">
+                            {child.name}
+                          </span>
+                          <Badge
+                            variant="secondary"
+                            className="h-5 shrink-0 text-[10px] font-normal"
+                          >
                             Subcategory
                           </Badge>
                         </label>
@@ -410,17 +669,29 @@ function CategoryHierarchyPicker({
           {orphaned.length > 0 ? (
             <div className="overflow-hidden rounded-md border border-border bg-card">
               <div className="bg-muted/40 px-3 py-2">
-                <p className="text-xs font-medium">Subcategories without a parent</p>
+                <p className="text-xs font-medium">
+                  Subcategories without a parent
+                </p>
               </div>
               <div className="space-y-1.5 px-3 py-2">
                 {orphaned.map((child) => (
-                  <label key={child.id} className="flex min-w-0 cursor-pointer items-center gap-2">
+                  <label
+                    key={child.id}
+                    className="flex min-w-0 cursor-pointer items-center gap-2"
+                  >
                     <Checkbox
                       checked={values.includes(child.id)}
-                      onCheckedChange={(checked) => toggle(child.id, checked === true)}
+                      onCheckedChange={(checked) =>
+                        toggle(child.id, checked === true)
+                      }
                     />
-                    <span className="min-w-0 flex-1 truncate text-xs">{child.name}</span>
-                    <Badge variant="secondary" className="h-5 shrink-0 text-[10px] font-normal">
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      {child.name}
+                    </span>
+                    <Badge
+                      variant="secondary"
+                      className="h-5 shrink-0 text-[10px] font-normal"
+                    >
                       Subcategory
                     </Badge>
                   </label>
@@ -431,7 +702,9 @@ function CategoryHierarchyPicker({
         </div>
       )}
       {selectedCount > 0 ? (
-        <p className="text-[11px] text-muted-foreground">{selectedCount} selected</p>
+        <p className="text-[11px] text-muted-foreground">
+          {selectedCount} selected
+        </p>
       ) : null}
     </div>
   );
@@ -455,7 +728,9 @@ function MultiCheckList({
   required?: boolean;
 }) {
   const toggle = (id: string, checked: boolean) => {
-    const next = checked ? [...new Set([...values, id])] : values.filter((value) => value !== id);
+    const next = checked
+      ? [...new Set([...values, id])]
+      : values.filter((value) => value !== id);
     onChange(next);
   };
 
@@ -465,7 +740,9 @@ function MultiCheckList({
         {label}
         {required ? <span className="ml-1 text-destructive">*</span> : null}
       </Label>
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className="text-[11px] text-muted-foreground">{hint}</p>
+      ) : null}
       {options.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
           {emptyMessage}
@@ -473,10 +750,15 @@ function MultiCheckList({
       ) : (
         <div className="grid max-h-36 gap-2 overflow-y-auto rounded-md border border-border p-3 sm:grid-cols-2">
           {options.map((option) => (
-            <label key={option.id} className="flex min-w-0 items-center gap-2 text-xs">
+            <label
+              key={option.id}
+              className="flex min-w-0 items-center gap-2 text-xs"
+            >
               <Checkbox
                 checked={values.includes(option.id)}
-                onCheckedChange={(checked) => toggle(option.id, checked === true)}
+                onCheckedChange={(checked) =>
+                  toggle(option.id, checked === true)
+                }
               />
               <span className="truncate">{option.name}</span>
             </label>
@@ -484,7 +766,9 @@ function MultiCheckList({
         </div>
       )}
       {values.length > 0 ? (
-        <p className="text-[11px] text-muted-foreground">{values.length} selected</p>
+        <p className="text-[11px] text-muted-foreground">
+          {values.length} selected
+        </p>
       ) : null}
     </div>
   );
@@ -536,7 +820,9 @@ function VocabPicker({
           onChange(created.label);
           setCustomLabel("");
           setAdding(false);
-          queryClient.invalidateQueries({ queryKey: getListRuleVocabulariesQueryKey({ agentId, kind }) });
+          queryClient.invalidateQueries({
+            queryKey: getListRuleVocabulariesQueryKey({ agentId, kind }),
+          });
           toast({ title: `${label} added` });
         },
         onError: (error) => {
@@ -559,7 +845,9 @@ function VocabPicker({
         </SelectTrigger>
         <SelectContent>
           {entries.map((entry) => (
-            <SelectItem key={entry.label} value={entry.label}>{entry.label}</SelectItem>
+            <SelectItem key={entry.label} value={entry.label}>
+              {entry.label}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -590,10 +878,22 @@ function VocabPicker({
               if (event.key === "Escape") setAdding(false);
             }}
           />
-          <Button type="button" size="sm" className="h-8 text-xs" onClick={addCustom} disabled={!customLabel.trim()}>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={addCustom}
+            disabled={!customLabel.trim()}
+          >
             Add
           </Button>
-          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAdding(false)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setAdding(false)}
+          >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>

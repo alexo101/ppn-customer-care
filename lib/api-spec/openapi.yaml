@@ -34,6 +34,8 @@ tags:
     description: Signed-in workspace member identity
   - name: members
     description: Papernest.com team invites and roles
+  - name: escalations
+    description: Agent escalation groups and assigned support inbox
 paths:
   /healthz:
     get:
@@ -285,6 +287,141 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeploymentToken"
+
+  /agents/{id}/escalation:
+    get:
+      operationId: getAgentEscalation
+      tags: [escalations]
+      summary: Get escalation routing for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Escalation routing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentEscalation"
+    patch:
+      operationId: updateAgentEscalation
+      tags: [escalations]
+      summary: Update escalation routing for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentEscalationInput"
+      responses:
+        "200":
+          description: Updated escalation routing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentEscalation"
+
+  /inbox/escalations:
+    get:
+      operationId: listInboxEscalations
+      tags: [escalations]
+      summary: List escalations assigned to the current member
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, resolved, all], default: open }
+        - in: query
+          name: unreadOnly
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Assigned escalations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InboxEscalation"
+
+  /inbox/escalations/unread-count:
+    get:
+      operationId: getInboxUnreadCount
+      tags: [escalations]
+      summary: Count unread assigned escalations
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+
+  /inbox/escalations/{id}/read:
+    post:
+      operationId: markEscalationRead
+      tags: [escalations]
+      summary: Mark an assigned escalation as read
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscalationAssignment"
+
+  /inbox/escalations/{id}/reply:
+    post:
+      operationId: replyToEscalation
+      tags: [escalations]
+      summary: Reply to an assigned escalation as a human
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscalationReplyInput"
+      responses:
+        "201":
+          description: Human message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  /inbox/escalations/{id}/resolve:
+    post:
+      operationId: resolveEscalation
+      tags: [escalations]
+      summary: Resolve an assigned escalation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Resolved escalation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxEscalation"
 
   /agents/{agentId}/sources/{sourceId}:
     post:
@@ -1778,7 +1915,8 @@ components:
   schemas:
     AgentSettings:
       type: object
-      required: [agentId, prompt, targetAudience, llmProvider, llmModel, temperature]
+      required:
+        [agentId, prompt, targetAudience, llmProvider, llmModel, temperature]
       properties:
         agentId: { type: string }
         prompt: { type: string }
@@ -1831,6 +1969,128 @@ components:
         - success
 
     # ── Agent ─────────────────────────────────────────────────────────────
+    AgentEscalationMember:
+      type: object
+      required: [id, email, role, status]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role:
+          $ref: "#/components/schemas/MemberRole"
+        status:
+          $ref: "#/components/schemas/MemberStatus"
+
+    AgentEscalation:
+      type: object
+      required:
+        [
+          agentId,
+          name,
+          isEnabled,
+          createInboxConversation,
+          notifyAssignedMembers,
+          members,
+        ]
+      properties:
+        agentId: { type: string }
+        name: { type: string }
+        isEnabled: { type: boolean }
+        createInboxConversation: { type: boolean }
+        notifyAssignedMembers: { type: boolean }
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentEscalationMember"
+
+    AgentEscalationInput:
+      type: object
+      required:
+        [
+          name,
+          isEnabled,
+          createInboxConversation,
+          notifyAssignedMembers,
+          memberIds,
+        ]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        isEnabled: { type: boolean }
+        createInboxConversation: { type: boolean }
+        notifyAssignedMembers: { type: boolean }
+        memberIds:
+          type: array
+          items: { type: string }
+
+    EscalationAssignment:
+      type: object
+      required: [id, escalationId, memberId, isRead, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        escalationId: { type: string }
+        memberId: { type: string }
+        isRead: { type: boolean }
+        revokedAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    InboxEscalation:
+      type: object
+      required:
+        [
+          id,
+          conversationId,
+          agentId,
+          agentName,
+          status,
+          reason,
+          category,
+          subcategory,
+          retrievedInformation,
+          previousAnswer,
+          context,
+          isRead,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id: { type: string }
+        conversationId: { type: string }
+        agentId: { type: string }
+        agentName: { type: string }
+        status: { type: string, enum: [open, resolved] }
+        reason: { type: string }
+        category: { type: string }
+        subcategory: { type: string }
+        retrievedInformation:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        previousAnswer: { type: string }
+        context:
+          type: object
+          additionalProperties: true
+        isRead: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        resolvedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    EscalationReplyInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 20000 }
+
+    UnreadCount:
+      type: object
+      required: [count]
+      properties:
+        count: { type: number }
+
     Agent:
       type: object
       required: [id, name, description, isEnabled, createdAt, updatedAt]
@@ -1910,7 +2170,8 @@ components:
 
     Question:
       type: object
-      required: [id, conversationId, content, type, conversationStatus, createdAt]
+      required:
+        [id, conversationId, content, type, conversationStatus, createdAt]
       properties:
         id:
           type: string
@@ -2033,6 +2294,8 @@ components:
       properties:
         currentUrl:
           type: string
+        pageDomain:
+          type: string
         userRole:
           type: string
         referredClientId:
@@ -2086,7 +2349,8 @@ components:
 
     ClassificationResult:
       type: object
-      required: [primaryCategory, confidence, secondaryCategories, entities, rule]
+      required:
+        [primaryCategory, confidence, secondaryCategories, entities, rule]
       properties:
         primaryCategory:
           type: string
@@ -2108,7 +2372,16 @@ components:
 
     OrchestratorLog:
       type: object
-      required: [id, conversationId, detectedCategory, confidenceScore, ruleUsed, resolutionStatus, createdAt]
+      required:
+        [
+          id,
+          conversationId,
+          detectedCategory,
+          confidenceScore,
+          ruleUsed,
+          resolutionStatus,
+          createdAt,
+        ]
       properties:
         id:
           type: string
@@ -2153,7 +2426,19 @@ components:
     # ── Intent Category ───────────────────────────────────────────────────
     IntentCategory:
       type: object
-      required: [id, name, description, examples, confidenceThreshold, keywords, isEnabled, sortOrder, createdAt, updatedAt]
+      required:
+        [
+          id,
+          name,
+          description,
+          examples,
+          confidenceThreshold,
+          keywords,
+          isEnabled,
+          sortOrder,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id:
           type: string
@@ -2238,7 +2523,24 @@ components:
     # ── Orchestrator Rule ─────────────────────────────────────────────────
     OrchestratorRule:
       type: object
-      required: [id, name, description, promptTemplate, priority, escalationTrigger, isEnabled, conditionOperator, action, categoryIds, sourceIds, connectorIds, audienceTargetIds, createdAt, updatedAt]
+      required:
+        [
+          id,
+          name,
+          description,
+          promptTemplate,
+          priority,
+          escalationTrigger,
+          isEnabled,
+          conditionOperator,
+          action,
+          categoryIds,
+          sourceIds,
+          connectorIds,
+          audienceTargetIds,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id:
           type: string
@@ -2258,6 +2560,9 @@ components:
           type: boolean
         conditionOperator:
           type: string
+        conditionCountry:
+          type: ["string", "null"]
+          enum: [ES, FR, IT, null]
         action:
           type: string
         categoryIds:
@@ -2303,6 +2608,9 @@ components:
           type: boolean
         conditionOperator:
           type: string
+        conditionCountry:
+          type: ["string", "null"]
+          enum: [ES, FR, IT, null]
         action:
           type: string
         categoryIds:
@@ -2341,6 +2649,9 @@ components:
           type: boolean
         conditionOperator:
           type: string
+        conditionCountry:
+          type: ["string", "null"]
+          enum: [ES, FR, IT, null]
         action:
           type: string
         categoryIds:
@@ -2374,7 +2685,18 @@ components:
 
     RuleAuthoringDraft:
       type: object
-      required: [name, description, promptTemplate, priority, requiresClarificationPrompt, escalationTrigger, isEnabled, conditionOperator, action]
+      required:
+        [
+          name,
+          description,
+          promptTemplate,
+          priority,
+          requiresClarificationPrompt,
+          escalationTrigger,
+          isEnabled,
+          conditionOperator,
+          action,
+        ]
       properties:
         name:
           type: string
@@ -2394,6 +2716,9 @@ components:
           type: boolean
         conditionOperator:
           type: string
+        conditionCountry:
+          type: ["string", "null"]
+          enum: [ES, FR, IT, null]
         action:
           type: string
         categoryIds:
@@ -2454,7 +2779,18 @@ components:
 
     RuleVocabulary:
       type: object
-      required: [id, kind, label, slug, requiresSource, isBuiltin, sortOrder, createdAt, updatedAt]
+      required:
+        [
+          id,
+          kind,
+          label,
+          slug,
+          requiresSource,
+          isBuiltin,
+          sortOrder,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id:
           type: string
@@ -2517,7 +2853,16 @@ components:
     # ── Knowledge Source ──────────────────────────────────────────────────
     KnowledgeSource:
       type: object
-      required: [id, name, sourceType, connectionConfig, isEnabled, createdAt, updatedAt]
+      required:
+        [
+          id,
+          name,
+          sourceType,
+          connectionConfig,
+          isEnabled,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id:
           type: string
@@ -2537,7 +2882,17 @@ components:
 
     KnowledgeAsset:
       type: object
-      required: [id, sourceId, mimeType, originalName, byteSize, position, altText, processingStatus]
+      required:
+        [
+          id,
+          sourceId,
+          mimeType,
+          originalName,
+          byteSize,
+          position,
+          altText,
+          processingStatus,
+        ]
       properties:
         id:
           type: string
@@ -2702,7 +3057,17 @@ components:
 
     Target:
       type: object
-      required: [id, name, description, matchMode, isEnabled, conditions, createdAt, updatedAt]
+      required:
+        [
+          id,
+          name,
+          description,
+          matchMode,
+          isEnabled,
+          conditions,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id:
           type: string
@@ -2771,7 +3136,17 @@ components:
     # ── API Connector ─────────────────────────────────────────────────────
     ApiConnector:
       type: object
-      required: [id, name, endpointPattern, authType, authConfig, isEnabled, createdAt, updatedAt]
+      required:
+        [
+          id,
+          name,
+          endpointPattern,
+          authType,
+          authConfig,
+          isEnabled,
+          createdAt,
+          updatedAt,
+        ]
       properties:
         id:
           type: string
@@ -2827,7 +3202,20 @@ components:
     # ── Analytics ─────────────────────────────────────────────────────────
     AnalyticsSummary:
       type: object
-      required: [totalConversations, activeConversations, resolvedConversations, escalatedConversations, avgConfidenceScore, totalMessages, positiveRatings, negativeRatings, avgResolutionTimeMs, avgInteractionsPerConversation, estimatedTotalCostUsd]
+      required:
+        [
+          totalConversations,
+          activeConversations,
+          resolvedConversations,
+          escalatedConversations,
+          avgConfidenceScore,
+          totalMessages,
+          positiveRatings,
+          negativeRatings,
+          avgResolutionTimeMs,
+          avgInteractionsPerConversation,
+          estimatedTotalCostUsd,
+        ]
       properties:
         totalConversations:
           type: number
@@ -2964,7 +3352,18 @@ components:
 
     IssuedInvitation:
       type: object
-      required: [id, email, role, status, createdAt, updatedAt, token, expiresAt, invitePath]
+      required:
+        [
+          id,
+          email,
+          role,
+          status,
+          createdAt,
+          updatedAt,
+          token,
+          expiresAt,
+          invitePath,
+        ]
       properties:
         id:
           type: string

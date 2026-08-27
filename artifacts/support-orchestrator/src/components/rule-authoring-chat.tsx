@@ -22,7 +22,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { apiErrorMessage } from "@/lib/rules";
+import { apiErrorMessage, RULE_COUNTRIES } from "@/lib/rules";
 
 export type ChatMessage = {
   role: "user" | "assistant";
@@ -322,6 +322,16 @@ function RulePreview({
           label="Categories"
           value={categoryIds.map((id) => categoryNames[id] ?? id).join(", ")}
         />
+        {draft.conditionCountry && (
+          <PreviewValue
+            label="Country"
+            value={
+              RULE_COUNTRIES.find(
+                (country) => country.code === draft.conditionCountry,
+              )?.label ?? draft.conditionCountry
+            }
+          />
+        )}
         <PreviewValue label="Action" value={draft.action} />
         {sourceIds.length > 0 && (
           <PreviewValue
@@ -377,6 +387,7 @@ function PreviewValue({ label, value }: { label: string; value: string }) {
 export function normalizeDraft(draft: RuleAuthoringDraft): RuleAuthoringDraft {
   return {
     ...draft,
+    conditionCountry: draft.conditionCountry ?? null,
     categoryIds: draft.categoryIds ?? [],
     sourceIds: draft.sourceIds ?? [],
     audienceTargetIds: draft.audienceTargetIds ?? [],
@@ -393,6 +404,7 @@ function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
     escalationTrigger: rule.escalationTrigger,
     isEnabled: rule.isEnabled,
     conditionOperator: rule.conditionOperator,
+    conditionCountry: rule.conditionCountry ?? null,
     action: rule.action,
     categoryIds: rule.categoryIds,
     sourceIds: rule.sourceIds,
@@ -437,7 +449,10 @@ export function RuleAuthoringPanel({
   const authorRule = useSendRuleAuthoringMessage();
   const scrollRef = useRef<HTMLDivElement>(null);
   const categoryNames = useMemo(
-    () => Object.fromEntries(categories.map((category) => [category.id, category.name])),
+    () =>
+      Object.fromEntries(
+        categories.map((category) => [category.id, category.name]),
+      ),
     [categories],
   );
   const sourceNames = useMemo(
@@ -447,7 +462,8 @@ export function RuleAuthoringPanel({
   const isBusy = busy || authorRule.isPending;
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (scrollRef.current)
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, status]);
 
   const sendMessage = (content: string) => {
@@ -499,12 +515,18 @@ export function RuleAuthoringPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-5 py-5">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-5 py-5"
+      >
         <div className="mx-auto max-w-2xl space-y-4">
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             return (
-              <div key={`${message.role}-${index}`} className={cn("flex gap-2", isUser && "justify-end")}>
+              <div
+                key={`${message.role}-${index}`}
+                className={cn("flex gap-2", isUser && "justify-end")}
+              >
                 {!isUser && (
                   <span className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <Bot className="h-4 w-4" />
@@ -580,7 +602,11 @@ export function RuleAuthoringPanel({
             disabled={!input.trim() || isBusy || status === "approved"}
             aria-label="Send message"
           >
-            {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {isBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </Button>
         </div>
         <p className="mx-auto mt-2 max-w-2xl text-[11px] text-muted-foreground">

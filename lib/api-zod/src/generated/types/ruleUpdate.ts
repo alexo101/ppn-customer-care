@@ -5,6 +5,7 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { RuleUpdateConditionCountry } from './ruleUpdateConditionCountry';
 
 export interface RuleUpdate {
   name?: string;
@@ -15,6 +16,8 @@ export interface RuleUpdate {
   escalationTrigger?: boolean;
   isEnabled?: boolean;
   conditionOperator?: string;
+  /** @nullable */
+  conditionCountry?: RuleUpdateConditionCountry;
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];

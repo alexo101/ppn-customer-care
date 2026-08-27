@@ -2,6 +2,7 @@ import {
   actionUsesSources,
   formatRuleSentence,
   normalizeAction,
+  RULE_COUNTRIES,
 } from "./rule-engine";
 import type {
   NormalizedRuleAuthoringDraft,
@@ -130,6 +131,7 @@ export function normalizeRuleAuthoringDraft(
 ): NormalizedRuleAuthoringDraft {
   return {
     ...draft,
+    conditionCountry: draft.conditionCountry ?? null,
     categoryIds: asStringArray(draft.categoryIds),
     sourceIds: asStringArray(draft.sourceIds),
     audienceTargetIds: asStringArray(draft.audienceTargetIds),
@@ -154,6 +156,14 @@ export function validateDraft(
 
   const operator = findLabel(normalized.conditionOperator, context.operators);
   if (!operator) unresolvedFields.push("conditionOperator");
+  if (
+    normalized.conditionCountry !== null &&
+    !RULE_COUNTRIES.some(
+      (country) => country.code === normalized.conditionCountry,
+    )
+  ) {
+    unresolvedFields.push("conditionCountry");
+  }
 
   const action = findLabel(normalized.action, context.actions);
   if (!action) unresolvedFields.push("action");
@@ -217,8 +227,7 @@ export function validateDraft(
     .filter((name): name is string => Boolean(name));
   const audienceTargetNames = audienceTargetIds
     .map(
-      (id) =>
-        context.audienceTargets.find((target) => target.id === id)?.name,
+      (id) => context.audienceTargets.find((target) => target.id === id)?.name,
     )
     .filter((name): name is string => Boolean(name));
   const sentence = formatRuleSentence({
@@ -228,6 +237,11 @@ export function validateDraft(
     sourceNames,
     requiresSource,
     audienceTargetNames,
+    countryLabel: RULE_COUNTRIES.find(
+      (country) => country.code === normalized.conditionCountry,
+    )?.label,
+    promptTemplate: normalized.promptTemplate,
+    clarificationPrompt: normalized.requiresClarificationPrompt,
   });
 
   return {
@@ -236,10 +250,12 @@ export function validateDraft(
       description: sentence,
       promptTemplate: normalized.promptTemplate.trim(),
       priority,
-      requiresClarificationPrompt: normalized.requiresClarificationPrompt.trim(),
+      requiresClarificationPrompt:
+        normalized.requiresClarificationPrompt.trim(),
       escalationTrigger: normalizeAction(action.label) === "escalate",
       isEnabled: normalized.isEnabled,
       conditionOperator: operator.label,
+      conditionCountry: normalized.conditionCountry,
       action: action.label,
       categoryIds,
       sourceIds: requiresSource ? sourceIds : [],

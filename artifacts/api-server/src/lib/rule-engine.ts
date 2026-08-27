@@ -1,11 +1,5 @@
 export type OperatorKind =
-  | "is"
-  | "is_not"
-  | "contains"
-  | "starts_with"
-  | "ends_with"
-  | "matches"
-  | "in";
+  "is" | "is_not" | "contains" | "starts_with" | "ends_with" | "matches" | "in";
 
 export type ActionKind =
   | "search_answer"
@@ -20,21 +14,59 @@ export type NamedTarget = {
   name: string;
 };
 
+export const RULE_COUNTRIES = [
+  { code: "ES", label: "Spain", domain: "app.papernest.es" },
+  { code: "FR", label: "France", domain: "app.papernest.com" },
+  { code: "IT", label: "Italy", domain: "app.papernest.it" },
+] as const;
+
+export type RuleCountryCode = (typeof RULE_COUNTRIES)[number]["code"];
+
 export const DEFAULT_OPERATORS = [
   { label: "is", slug: "is", requiresSource: false, sortOrder: 1 },
   { label: "is not", slug: "is_not", requiresSource: false, sortOrder: 2 },
   { label: "contains", slug: "contains", requiresSource: false, sortOrder: 3 },
-  { label: "starts with", slug: "starts_with", requiresSource: false, sortOrder: 4 },
-  { label: "ends with", slug: "ends_with", requiresSource: false, sortOrder: 5 },
+  {
+    label: "starts with",
+    slug: "starts_with",
+    requiresSource: false,
+    sortOrder: 4,
+  },
+  {
+    label: "ends with",
+    slug: "ends_with",
+    requiresSource: false,
+    sortOrder: 5,
+  },
   { label: "matches", slug: "matches", requiresSource: false, sortOrder: 6 },
   { label: "in", slug: "in", requiresSource: false, sortOrder: 7 },
 ] as const;
 
 export const DEFAULT_ACTIONS = [
-  { label: "search answer", slug: "search_answer", requiresSource: true, sortOrder: 1 },
-  { label: "query live data", slug: "query_live_data", requiresSource: true, sortOrder: 2 },
-  { label: "generate from template", slug: "generate_from_template", requiresSource: false, sortOrder: 3 },
-  { label: "ask clarification", slug: "ask_clarification", requiresSource: false, sortOrder: 4 },
+  {
+    label: "search answer",
+    slug: "search_answer",
+    requiresSource: true,
+    sortOrder: 1,
+  },
+  {
+    label: "query live data",
+    slug: "query_live_data",
+    requiresSource: true,
+    sortOrder: 2,
+  },
+  {
+    label: "generate from template",
+    slug: "generate_from_template",
+    requiresSource: false,
+    sortOrder: 3,
+  },
+  {
+    label: "ask clarification",
+    slug: "ask_clarification",
+    requiresSource: false,
+    sortOrder: 4,
+  },
   { label: "escalate", slug: "escalate", requiresSource: false, sortOrder: 5 },
 ] as const;
 
@@ -51,7 +83,14 @@ export function normalizeOperator(label: string): OperatorKind {
   const value = label.trim().toLowerCase();
   const slug = slugifyLabel(value);
 
-  if (slug === "is" || slug === "equals" || slug === "eq" || value === "=" || value === "==") return "is";
+  if (
+    slug === "is" ||
+    slug === "equals" ||
+    slug === "eq" ||
+    value === "=" ||
+    value === "=="
+  )
+    return "is";
   if (
     slug === "is_not" ||
     slug === "isnt" ||
@@ -63,19 +102,46 @@ export function normalizeOperator(label: string): OperatorKind {
   ) {
     return "is_not";
   }
-  if (slug === "contains" || slug === "includes" || value.includes("contain") || value.includes("include")) {
+  if (
+    slug === "contains" ||
+    slug === "includes" ||
+    value.includes("contain") ||
+    value.includes("include")
+  ) {
     return "contains";
   }
-  if (slug === "starts_with" || slug === "prefix" || value.includes("start") || value.includes("prefix")) {
+  if (
+    slug === "starts_with" ||
+    slug === "prefix" ||
+    value.includes("start") ||
+    value.includes("prefix")
+  ) {
     return "starts_with";
   }
-  if (slug === "ends_with" || slug === "suffix" || value.includes("end") || value.includes("suffix")) {
+  if (
+    slug === "ends_with" ||
+    slug === "suffix" ||
+    value.includes("end") ||
+    value.includes("suffix")
+  ) {
     return "ends_with";
   }
-  if (slug === "matches" || slug === "like" || slug === "regex" || value.includes("match") || value.includes("like")) {
+  if (
+    slug === "matches" ||
+    slug === "like" ||
+    slug === "regex" ||
+    value.includes("match") ||
+    value.includes("like")
+  ) {
     return "matches";
   }
-  if (slug === "in" || slug === "any_of" || slug === "one_of" || /\bin\b/.test(value)) return "in";
+  if (
+    slug === "in" ||
+    slug === "any_of" ||
+    slug === "one_of" ||
+    /\bin\b/.test(value)
+  )
+    return "in";
   return "is";
 }
 
@@ -83,7 +149,12 @@ export function normalizeAction(label: string): ActionKind {
   const value = label.trim().toLowerCase();
   const slug = slugifyLabel(value);
 
-  if (slug === "escalate" || value.includes("escalate") || value.includes("human") || value.includes("transfer")) {
+  if (
+    slug === "escalate" ||
+    value.includes("escalate") ||
+    value.includes("human") ||
+    value.includes("transfer")
+  ) {
     return "escalate";
   }
   if (slug === "ask_clarification" || value.includes("clarif")) {
@@ -116,10 +187,45 @@ export function normalizeAction(label: string): ActionKind {
   return "custom";
 }
 
-export function actionUsesSources(label: string, requiresSource?: boolean): boolean {
+export function actionUsesSources(
+  label: string,
+  requiresSource?: boolean,
+): boolean {
   if (typeof requiresSource === "boolean") return requiresSource;
   const kind = normalizeAction(label);
-  return kind === "search_answer" || kind === "query_live_data" || kind === "custom";
+  return (
+    kind === "search_answer" || kind === "query_live_data" || kind === "custom"
+  );
+}
+
+export function normalizeDomain(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(
+      trimmed.includes("://") ? trimmed : `https://${trimmed}`,
+    );
+    return url.hostname.replace(/^www\./, "");
+  } catch {
+    return trimmed
+      .replace(/^[a-z]+:\/\//, "")
+      .split("/")[0]
+      .split("?")[0]
+      .split("#")[0]
+      .replace(/^www\./, "");
+  }
+}
+
+export function countryMatchesDomain(
+  conditionCountry: string | null | undefined,
+  requestDomain: unknown,
+): boolean {
+  if (!conditionCountry) return true;
+  const country = RULE_COUNTRIES.find(
+    (item) => item.code === conditionCountry.trim().toUpperCase(),
+  );
+  return Boolean(country && normalizeDomain(requestDomain) === country.domain);
 }
 
 export function categoryMatchesOperator(
@@ -132,7 +238,9 @@ export function categoryMatchesOperator(
   const kind = normalizeOperator(operator);
   const classifiedName = classified.name.trim().toLowerCase();
   const targetIds = new Set(targets.map((target) => target.id));
-  const targetNames = targets.map((target) => target.name.trim().toLowerCase()).filter(Boolean);
+  const targetNames = targets
+    .map((target) => target.name.trim().toLowerCase())
+    .filter(Boolean);
 
   switch (kind) {
     case "is":
@@ -142,12 +250,19 @@ export function categoryMatchesOperator(
       return !targetIds.has(classified.id);
     case "contains":
       return targetNames.some(
-        (name) => classifiedName.includes(name) || name.includes(classifiedName),
+        (name) =>
+          classifiedName.includes(name) || name.includes(classifiedName),
       );
     case "starts_with":
-      return targetNames.some((name) => classifiedName.startsWith(name) || name.startsWith(classifiedName));
+      return targetNames.some(
+        (name) =>
+          classifiedName.startsWith(name) || name.startsWith(classifiedName),
+      );
     case "ends_with":
-      return targetNames.some((name) => classifiedName.endsWith(name) || name.endsWith(classifiedName));
+      return targetNames.some(
+        (name) =>
+          classifiedName.endsWith(name) || name.endsWith(classifiedName),
+      );
     case "matches":
       return targetNames.some((name) => {
         try {
@@ -168,18 +283,60 @@ export function formatRuleSentence(input: {
   sourceNames: string[];
   requiresSource?: boolean;
   audienceTargetNames?: string[];
+  countryLabel?: string;
+  connectorNames?: string[];
+  promptTemplate?: string;
+  clarificationPrompt?: string;
 }): string {
-  const operator = input.operator.trim() || "is";
   const action = input.action.trim() || "search answer";
-  const categories = joinNames(input.categoryNames, "a category");
+  const categoryNames = input.categoryNames
+    .map((name) => name.trim())
+    .filter(Boolean);
+  if (
+    categoryNames.length > 1 &&
+    categoryNames[1]?.startsWith(`${categoryNames[0]} / `)
+  ) {
+    categoryNames[1] = categoryNames[1].slice(categoryNames[0].length + 3);
+  }
+  const categories =
+    categoryNames.length > 1 && categoryNames[1]
+      ? `${categoryNames[0]} → ${categoryNames[1]}`
+      : joinNames(categoryNames, "a category");
   const includeSource = actionUsesSources(action, input.requiresSource);
-  const thenClause = includeSource
-    ? `then ${action} in ${joinNames(input.sourceNames, "a source")}`
-    : `then ${action}`;
-  const audienceClause = input.audienceTargetNames?.length
-    ? ` for ${joinNames(input.audienceTargetNames, "an audience")}`
+  const kind = normalizeAction(action);
+  const countryClause = input.countryLabel?.trim()
+    ? `the user is accessing ${input.countryLabel.trim()}`
     : "";
-  return `If Category ${operator} ${categories} ${thenClause}${audienceClause}`;
+  const categoryClause = `${countryClause ? "" : "the user "}asks about ${categories}`;
+  const audienceClause = input.audienceTargetNames?.length
+    ? `belongs to ${joinNames(input.audienceTargetNames, "an audience")}`
+    : "";
+  let actionClause: string;
+  if (kind === "query_live_data") {
+    const connector = joinNames(input.connectorNames ?? [], "the API");
+    const data = input.promptTemplate?.trim() || "the requested data";
+    actionClause = `call ${connector} to retrieve ${data}`;
+  } else if (kind === "generate_from_template") {
+    actionClause = `answer using the ${input.promptTemplate?.trim() || "configured"} template`;
+  } else if (kind === "ask_clarification") {
+    actionClause = input.clarificationPrompt?.trim()
+      ? `ask: "${input.clarificationPrompt.trim()}"`
+      : "ask a clarification question";
+  } else if (kind === "escalate") {
+    actionClause = "escalate to a human agent";
+  } else if (kind === "search_answer") {
+    actionClause = `search ${joinNames(input.sourceNames, "the knowledge source")} for an answer`;
+  } else {
+    actionClause = action;
+  }
+  const clauses = [countryClause, categoryClause, audienceClause].filter(
+    Boolean,
+  );
+  const prefix =
+    clauses.length === 0
+      ? "When"
+      : `When ${clauses.length === 1 ? clauses[0] : `${clauses.slice(0, -1).join(", ")}, and ${clauses.at(-1)}`}`;
+  return `${prefix}, ${actionClause}.`;
 }
 
 function joinNames(names: string[], fallback: string): string {

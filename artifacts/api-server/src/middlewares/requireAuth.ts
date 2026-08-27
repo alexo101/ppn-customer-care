@@ -1,7 +1,12 @@
 import { getAuth } from "@clerk/express";
 import type { Request, Response, NextFunction } from "express";
 import { and, eq } from "drizzle-orm";
-import { db, agentDeploymentsTable, agentsTable, type MemberRole } from "@workspace/db";
+import {
+  db,
+  agentDeploymentsTable,
+  agentsTable,
+  type MemberRole,
+} from "@workspace/db";
 import { hashDeploymentToken } from "../lib/connection-secrets";
 import { resolveUserEmail } from "../lib/identity";
 import {
@@ -14,6 +19,7 @@ declare global {
     interface Request {
       userId: string;
       userEmail?: string;
+      workspaceMemberId?: string;
       memberRole?: MemberRole;
       file?: Express.Multer.File;
     }
@@ -31,6 +37,7 @@ async function attachWorkspaceMember(
     const member = await ensureWorkspaceMember(userId, email);
     req.userId = userId;
     req.userEmail = member.email;
+    req.workspaceMemberId = member.id;
     req.memberRole = member.role as MemberRole;
     return true;
   } catch (error) {
@@ -74,10 +81,12 @@ export async function requireAuthOrDeployment(
     .select({ agent: agentsTable, deployment: agentDeploymentsTable })
     .from(agentDeploymentsTable)
     .innerJoin(agentsTable, eq(agentsTable.id, agentDeploymentsTable.agentId))
-    .where(and(
-      eq(agentDeploymentsTable.tokenHash, hashDeploymentToken(rawToken)),
-      eq(agentDeploymentsTable.isActive, true),
-    ))
+    .where(
+      and(
+        eq(agentDeploymentsTable.tokenHash, hashDeploymentToken(rawToken)),
+        eq(agentDeploymentsTable.isActive, true),
+      ),
+    )
     .limit(1);
   if (!deployment || deployment.deployment.revokedAt) {
     res.status(401).json({ error: "Invalid deployment token" });
@@ -118,7 +127,9 @@ export function requireEditor(
     return;
   }
   if (req.memberRole !== "editor") {
-    res.status(403).json({ error: "You need edit access to change this workspace." });
+    res
+      .status(403)
+      .json({ error: "You need edit access to change this workspace." });
     return;
   }
   next();

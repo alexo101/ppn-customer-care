@@ -5,6 +5,7 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { RuleAuthoringDraftConditionCountry } from './ruleAuthoringDraftConditionCountry';
 
 export interface RuleAuthoringDraft {
   name: string;
@@ -19,6 +20,8 @@ export interface RuleAuthoringDraft {
   escalationTrigger: boolean;
   isEnabled: boolean;
   conditionOperator: string;
+  /** @nullable */
+  conditionCountry?: RuleAuthoringDraftConditionCountry;
   action: string;
   categoryIds?: string[];
   sourceIds?: string[];

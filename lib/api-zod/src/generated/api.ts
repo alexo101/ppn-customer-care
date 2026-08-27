@@ -235,6 +235,170 @@ export const CreateAgentDeploymentTokenResponse = zod.object({
 
 
 /**
+ * @summary Get escalation routing for an agent
+ */
+export const GetAgentEscalationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetAgentEscalationResponse = zod.object({
+  "agentId": zod.string(),
+  "name": zod.string(),
+  "isEnabled": zod.boolean(),
+  "createInboxConversation": zod.boolean(),
+  "notifyAssignedMembers": zod.boolean(),
+  "members": zod.array(zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer']),
+  "status": zod.enum(['invited', 'active'])
+}))
+})
+
+
+/**
+ * @summary Update escalation routing for an agent
+ */
+export const UpdateAgentEscalationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateAgentEscalationBodyNameMax = 160;
+
+
+
+export const UpdateAgentEscalationBody = zod.object({
+  "name": zod.string().min(1).max(updateAgentEscalationBodyNameMax),
+  "isEnabled": zod.boolean(),
+  "createInboxConversation": zod.boolean(),
+  "notifyAssignedMembers": zod.boolean(),
+  "memberIds": zod.array(zod.string())
+})
+
+export const UpdateAgentEscalationResponse = zod.object({
+  "agentId": zod.string(),
+  "name": zod.string(),
+  "isEnabled": zod.boolean(),
+  "createInboxConversation": zod.boolean(),
+  "notifyAssignedMembers": zod.boolean(),
+  "members": zod.array(zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['editor', 'viewer']),
+  "status": zod.enum(['invited', 'active'])
+}))
+})
+
+
+/**
+ * @summary List escalations assigned to the current member
+ */
+export const listInboxEscalationsQueryStatusDefault = `open`;
+export const listInboxEscalationsQueryUnreadOnlyDefault = false;
+
+export const ListInboxEscalationsQueryParams = zod.object({
+  "status": zod.enum(['open', 'resolved', 'all']).default(listInboxEscalationsQueryStatusDefault),
+  "unreadOnly": zod.coerce.boolean().default(listInboxEscalationsQueryUnreadOnlyDefault)
+})
+
+export const ListInboxEscalationsResponseItem = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "agentId": zod.string(),
+  "agentName": zod.string(),
+  "status": zod.enum(['open', 'resolved']),
+  "reason": zod.string(),
+  "category": zod.string(),
+  "subcategory": zod.string(),
+  "retrievedInformation": zod.array(zod.record(zod.string(), zod.unknown())),
+  "previousAnswer": zod.string(),
+  "context": zod.record(zod.string(), zod.unknown()),
+  "isRead": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullish()
+})
+export const ListInboxEscalationsResponse = zod.array(ListInboxEscalationsResponseItem)
+
+
+/**
+ * @summary Count unread assigned escalations
+ */
+export const GetInboxUnreadCountResponse = zod.object({
+  "count": zod.number()
+})
+
+
+/**
+ * @summary Mark an assigned escalation as read
+ */
+export const MarkEscalationReadParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const MarkEscalationReadResponse = zod.object({
+  "id": zod.string(),
+  "escalationId": zod.string(),
+  "memberId": zod.string(),
+  "isRead": zod.boolean(),
+  "revokedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reply to an assigned escalation as a human
+ */
+export const ReplyToEscalationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const replyToEscalationBodyContentMax = 20000;
+
+
+
+export const ReplyToEscalationBody = zod.object({
+  "content": zod.string().min(1).max(replyToEscalationBodyContentMax)
+})
+
+export const ReplyToEscalationResponse = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "sender": zod.string(),
+  "content": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Resolve an assigned escalation
+ */
+export const ResolveEscalationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ResolveEscalationResponse = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "agentId": zod.string(),
+  "agentName": zod.string(),
+  "status": zod.enum(['open', 'resolved']),
+  "reason": zod.string(),
+  "category": zod.string(),
+  "subcategory": zod.string(),
+  "retrievedInformation": zod.array(zod.record(zod.string(), zod.unknown())),
+  "previousAnswer": zod.string(),
+  "context": zod.record(zod.string(), zod.unknown()),
+  "isRead": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullish()
+})
+
+
+/**
  * @summary Assign a knowledge source to an agent
  */
 export const assignAgentSourcePathAgentIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
@@ -364,6 +528,7 @@ export const SendMessageBody = zod.object({
   "content": zod.string(),
   "context": zod.object({
   "currentUrl": zod.string().optional(),
+  "pageDomain": zod.string().optional(),
   "userRole": zod.string().optional(),
   "referredClientId": zod.string().optional(),
   "referredContractId": zod.string().optional()
@@ -685,6 +850,7 @@ export const ListRulesResponseItem = zod.object({
   "escalationTrigger": zod.boolean(),
   "isEnabled": zod.boolean(),
   "conditionOperator": zod.string(),
+  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
@@ -709,6 +875,7 @@ export const CreateRuleBody = zod.object({
   "escalationTrigger": zod.boolean().optional(),
   "isEnabled": zod.boolean().optional(),
   "conditionOperator": zod.string().optional(),
+  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
   "action": zod.string().optional(),
   "categoryIds": zod.array(zod.string()).optional(),
   "sourceIds": zod.array(zod.string()).optional(),
@@ -726,6 +893,7 @@ export const CreateRuleResponse = zod.object({
   "escalationTrigger": zod.boolean(),
   "isEnabled": zod.boolean(),
   "conditionOperator": zod.string(),
+  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),
@@ -773,6 +941,7 @@ export const SendRuleAuthoringMessageBody = zod.object({
   "escalationTrigger": zod.boolean(),
   "isEnabled": zod.boolean(),
   "conditionOperator": zod.string(),
+  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftCategoryIdsDefault),
   "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftSourceIdsDefault),
@@ -802,6 +971,7 @@ export const SendRuleAuthoringMessageResponse = zod.object({
   "escalationTrigger": zod.boolean(),
   "isEnabled": zod.boolean(),
   "conditionOperator": zod.string(),
+  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftCategoryIdsDefault),
   "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftSourceIdsDefault),
@@ -828,6 +998,7 @@ export const UpdateRuleBody = zod.object({
   "escalationTrigger": zod.boolean().optional(),
   "isEnabled": zod.boolean().optional(),
   "conditionOperator": zod.string().optional(),
+  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
   "action": zod.string().optional(),
   "categoryIds": zod.array(zod.string()).optional(),
   "sourceIds": zod.array(zod.string()).optional(),
@@ -845,6 +1016,7 @@ export const UpdateRuleResponse = zod.object({
   "escalationTrigger": zod.boolean(),
   "isEnabled": zod.boolean(),
   "conditionOperator": zod.string(),
+  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
   "action": zod.string(),
   "categoryIds": zod.array(zod.string()),
   "sourceIds": zod.array(zod.string()),

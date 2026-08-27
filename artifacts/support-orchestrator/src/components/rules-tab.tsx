@@ -12,7 +12,14 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Reorder, useDragControls } from "framer-motion";
-import { GripVertical, PenLine, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import {
+  GripVertical,
+  PenLine,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,9 +35,17 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RuleEditorDialog } from "@/components/rule-editor-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { formatCategoryPath, formatRuleSentence, apiErrorMessage } from "@/lib/rules";
+import {
+  formatCategoryPath,
+  formatRuleSentence,
+  apiErrorMessage,
+  RULE_COUNTRIES,
+} from "@/lib/rules";
 import { cn } from "@/lib/utils";
-import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
+import {
+  MutatingControls,
+  useWorkspaceAccess,
+} from "@/components/workspace-access";
 
 export function RulesTab({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
@@ -60,7 +75,10 @@ export function RulesTab({ agentId }: { agentId: string }) {
   const categoryNames = useMemo(
     () =>
       Object.fromEntries(
-        categories.map((category) => [category.id, formatCategoryPath(category.id, categories)]),
+        categories.map((category) => [
+          category.id,
+          formatCategoryPath(category.id, categories),
+        ]),
       ),
     [categories],
   );
@@ -69,7 +87,10 @@ export function RulesTab({ agentId }: { agentId: string }) {
     [sources],
   );
   const audienceTargetNames = useMemo(
-    () => Object.fromEntries(audienceTargets.map((target) => [target.id, target.name])),
+    () =>
+      Object.fromEntries(
+        audienceTargets.map((target) => [target.id, target.name]),
+      ),
     [audienceTargets],
   );
 
@@ -83,9 +104,14 @@ export function RulesTab({ agentId }: { agentId: string }) {
         rule.name,
         rule.conditionOperator,
         rule.action,
+        RULE_COUNTRIES.find((country) => country.code === rule.conditionCountry)
+          ?.label ?? "",
         ...rule.categoryIds.map((id) => categoryNames[id] ?? ""),
         ...rule.sourceIds.map((id) => sourceNames[id] ?? ""),
-        ...(rule.connectorIds ?? []).map((id) => connectors.find((connector) => connector.id === id)?.name ?? ""),
+        ...(rule.connectorIds ?? []).map(
+          (id) =>
+            connectors.find((connector) => connector.id === id)?.name ?? "",
+        ),
       ]
         .join(" ")
         .toLowerCase()
@@ -175,7 +201,10 @@ export function RulesTab({ agentId }: { agentId: string }) {
 
     Promise.all(
       changed.map(({ rule, newPriority }) =>
-        updateRule.mutateAsync({ id: rule.id, data: { priority: newPriority } }),
+        updateRule.mutateAsync({
+          id: rule.id,
+          data: { priority: newPriority },
+        }),
       ),
     ).catch((error) => {
       invalidateRules();
@@ -222,15 +251,6 @@ export function RulesTab({ agentId }: { agentId: string }) {
           </div>
         </div>
 
-        <div className="flex items-start gap-2 rounded-lg border border-primary/15 bg-primary/5 p-3">
-          <PenLine className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <p className="text-xs leading-5 text-muted-foreground">
-            Create rules by filling in the fields yourself, or describe them in
-            plain language and let the assistant draft them. You can switch
-            methods and review the rule before saving.
-          </p>
-        </div>
-
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -252,6 +272,12 @@ export function RulesTab({ agentId }: { agentId: string }) {
                   categoryNames={categoryNames}
                   sourceNames={sourceNames}
                   audienceTargetNames={audienceTargetNames}
+                  connectorNames={Object.fromEntries(
+                    connectors.map((connector) => [
+                      connector.id,
+                      connector.name,
+                    ]),
+                  )}
                   draggable={false}
                   onEdit={() => openAuthoring(rule)}
                   onDelete={() => setRuleToDelete(rule)}
@@ -281,6 +307,12 @@ export function RulesTab({ agentId }: { agentId: string }) {
                   categoryNames={categoryNames}
                   sourceNames={sourceNames}
                   audienceTargetNames={audienceTargetNames}
+                  connectorNames={Object.fromEntries(
+                    connectors.map((connector) => [
+                      connector.id,
+                      connector.name,
+                    ]),
+                  )}
                   onEdit={() => openAuthoring(rule)}
                   onDelete={() => setRuleToDelete(rule)}
                   onToggle={(enabled) => handleToggle(rule, enabled)}
@@ -309,7 +341,9 @@ export function RulesTab({ agentId }: { agentId: string }) {
         open={chatOpen}
         initialMode={editorMode}
         suggestedPriority={
-          rules.length > 0 ? Math.max(...rules.map((rule) => rule.priority)) + 1 : 0
+          rules.length > 0
+            ? Math.max(...rules.map((rule) => rule.priority)) + 1
+            : 0
         }
         onOpenChange={(next) => {
           setChatOpen(next);
@@ -354,6 +388,7 @@ type RowProps = {
   categoryNames: Record<string, string>;
   sourceNames: Record<string, string>;
   audienceTargetNames: Record<string, string>;
+  connectorNames: Record<string, string>;
   draggable: boolean;
   dragControls?: ReturnType<typeof useDragControls>;
   onEdit: () => void;
@@ -366,6 +401,7 @@ function RuleRow({
   categoryNames,
   sourceNames,
   audienceTargetNames,
+  connectorNames,
   draggable,
   dragControls,
   onEdit,
@@ -386,6 +422,14 @@ function RuleRow({
     audienceTargetNames: (rule.audienceTargetIds ?? [])
       .map((id) => audienceTargetNames[id])
       .filter((name): name is string => Boolean(name)),
+    countryLabel: RULE_COUNTRIES.find(
+      (country) => country.code === rule.conditionCountry,
+    )?.label,
+    connectorNames: (rule.connectorIds ?? [])
+      .map((id) => connectorNames[id])
+      .filter((name): name is string => Boolean(name)),
+    promptTemplate: rule.promptTemplate,
+    clarificationPrompt: rule.requiresClarificationPrompt,
   });
 
   return (
@@ -427,7 +471,9 @@ function RuleRow({
         </button>
       ) : (
         <div className="min-w-0 flex-1 py-3 pr-2">
-          <p className="text-sm font-medium leading-6 text-foreground">{sentence}</p>
+          <p className="text-sm font-medium leading-6 text-foreground">
+            {sentence}
+          </p>
         </div>
       )}
 
@@ -482,4 +528,3 @@ function ReorderRuleRow(props: ReorderRowProps) {
     </Reorder.Item>
   );
 }
-

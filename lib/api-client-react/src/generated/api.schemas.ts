@@ -47,6 +47,104 @@ export interface SuccessResponse {
   success: boolean;
 }
 
+export type MemberRole = typeof MemberRole[keyof typeof MemberRole];
+
+
+export const MemberRole = {
+  editor: 'editor',
+  viewer: 'viewer',
+} as const;
+
+export type MemberStatus = typeof MemberStatus[keyof typeof MemberStatus];
+
+
+export const MemberStatus = {
+  invited: 'invited',
+  active: 'active',
+} as const;
+
+export interface AgentEscalationMember {
+  id: string;
+  email: string;
+  role: MemberRole;
+  status: MemberStatus;
+}
+
+export interface AgentEscalation {
+  agentId: string;
+  name: string;
+  isEnabled: boolean;
+  createInboxConversation: boolean;
+  notifyAssignedMembers: boolean;
+  members: AgentEscalationMember[];
+}
+
+export interface AgentEscalationInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  name: string;
+  isEnabled: boolean;
+  createInboxConversation: boolean;
+  notifyAssignedMembers: boolean;
+  memberIds: string[];
+}
+
+export interface EscalationAssignment {
+  id: string;
+  escalationId: string;
+  memberId: string;
+  isRead: boolean;
+  /** @nullable */
+  revokedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type InboxEscalationStatus = typeof InboxEscalationStatus[keyof typeof InboxEscalationStatus];
+
+
+export const InboxEscalationStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
+export type InboxEscalationRetrievedInformationItem = { [key: string]: unknown };
+
+export type InboxEscalationContext = { [key: string]: unknown };
+
+export interface InboxEscalation {
+  id: string;
+  conversationId: string;
+  agentId: string;
+  agentName: string;
+  status: InboxEscalationStatus;
+  reason: string;
+  category: string;
+  subcategory: string;
+  retrievedInformation: InboxEscalationRetrievedInformationItem[];
+  previousAnswer: string;
+  context: InboxEscalationContext;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  resolvedAt?: string | null;
+}
+
+export interface EscalationReplyInput {
+  /**
+     * @minLength 1
+     * @maxLength 20000
+     */
+  content: string;
+}
+
+export interface UnreadCount {
+  count: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -169,6 +267,7 @@ export interface Citation {
 
 export interface ConversationContext {
   currentUrl?: string;
+  pageDomain?: string;
   userRole?: string;
   referredClientId?: string;
   referredContractId?: string;
@@ -290,6 +389,18 @@ export interface CategoryUpdate {
   sortOrder?: number;
 }
 
+/**
+ * @nullable
+ */
+export type OrchestratorRuleConditionCountry = typeof OrchestratorRuleConditionCountry[keyof typeof OrchestratorRuleConditionCountry] | null;
+
+
+export const OrchestratorRuleConditionCountry = {
+  ES: 'ES',
+  FR: 'FR',
+  IT: 'IT',
+} as const;
+
 export interface OrchestratorRule {
   id: string;
   name: string;
@@ -300,6 +411,8 @@ export interface OrchestratorRule {
   escalationTrigger: boolean;
   isEnabled: boolean;
   conditionOperator: string;
+  /** @nullable */
+  conditionCountry?: OrchestratorRuleConditionCountry;
   action: string;
   categoryIds: string[];
   sourceIds: string[];
@@ -308,6 +421,18 @@ export interface OrchestratorRule {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * @nullable
+ */
+export type RuleInputConditionCountry = typeof RuleInputConditionCountry[keyof typeof RuleInputConditionCountry] | null;
+
+
+export const RuleInputConditionCountry = {
+  ES: 'ES',
+  FR: 'FR',
+  IT: 'IT',
+} as const;
 
 export interface RuleInput {
   name: string;
@@ -319,12 +444,26 @@ export interface RuleInput {
   escalationTrigger?: boolean;
   isEnabled?: boolean;
   conditionOperator?: string;
+  /** @nullable */
+  conditionCountry?: RuleInputConditionCountry;
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
   connectorIds?: string[];
   audienceTargetIds?: string[];
 }
+
+/**
+ * @nullable
+ */
+export type RuleUpdateConditionCountry = typeof RuleUpdateConditionCountry[keyof typeof RuleUpdateConditionCountry] | null;
+
+
+export const RuleUpdateConditionCountry = {
+  ES: 'ES',
+  FR: 'FR',
+  IT: 'IT',
+} as const;
 
 export interface RuleUpdate {
   name?: string;
@@ -335,6 +474,8 @@ export interface RuleUpdate {
   escalationTrigger?: boolean;
   isEnabled?: boolean;
   conditionOperator?: string;
+  /** @nullable */
+  conditionCountry?: RuleUpdateConditionCountry;
   action?: string;
   categoryIds?: string[];
   sourceIds?: string[];
@@ -359,6 +500,18 @@ export interface RuleAuthoringMessage {
   content: string;
 }
 
+/**
+ * @nullable
+ */
+export type RuleAuthoringDraftConditionCountry = typeof RuleAuthoringDraftConditionCountry[keyof typeof RuleAuthoringDraftConditionCountry] | null;
+
+
+export const RuleAuthoringDraftConditionCountry = {
+  ES: 'ES',
+  FR: 'FR',
+  IT: 'IT',
+} as const;
+
 export interface RuleAuthoringDraft {
   name: string;
   description: string;
@@ -372,6 +525,8 @@ export interface RuleAuthoringDraft {
   escalationTrigger: boolean;
   isEnabled: boolean;
   conditionOperator: string;
+  /** @nullable */
+  conditionCountry?: RuleAuthoringDraftConditionCountry;
   action: string;
   categoryIds?: string[];
   sourceIds?: string[];
@@ -722,22 +877,6 @@ export interface ImportAppearanceResult {
   logoCandidates?: string[];
 }
 
-export type MemberRole = typeof MemberRole[keyof typeof MemberRole];
-
-
-export const MemberRole = {
-  editor: 'editor',
-  viewer: 'viewer',
-} as const;
-
-export type MemberStatus = typeof MemberStatus[keyof typeof MemberStatus];
-
-
-export const MemberStatus = {
-  invited: 'invited',
-  active: 'active',
-} as const;
-
 export interface CurrentMember {
   email: string;
   role: MemberRole;
@@ -792,6 +931,20 @@ export interface RedeemInvitationInput {
 export interface UpdateMemberInput {
   role: MemberRole;
 }
+
+export type ListInboxEscalationsParams = {
+status?: ListInboxEscalationsStatus;
+unreadOnly?: boolean;
+};
+
+export type ListInboxEscalationsStatus = typeof ListInboxEscalationsStatus[keyof typeof ListInboxEscalationsStatus];
+
+
+export const ListInboxEscalationsStatus = {
+  open: 'open',
+  resolved: 'resolved',
+  all: 'all',
+} as const;
 
 export type ListConversationsParams = {
 agentId?: string;

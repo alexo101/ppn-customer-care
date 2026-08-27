@@ -5,6 +5,7 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { OrchestratorRuleConditionCountry } from './orchestratorRuleConditionCountry';
 
 export interface OrchestratorRule {
   id: string;
@@ -16,6 +17,8 @@ export interface OrchestratorRule {
   escalationTrigger: boolean;
   isEnabled: boolean;
   conditionOperator: string;
+  /** @nullable */
+  conditionCountry?: OrchestratorRuleConditionCountry;
   action: string;
   categoryIds: string[];
   sourceIds: string[];

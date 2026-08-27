@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth, useClerk, useUser } from "@clerk/react";
-import { LayoutDashboard, Network, Bot, LogOutIcon, Menu, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  Network,
+  Bot,
+  Inbox,
+  LogOutIcon,
+  Menu,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +23,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { useListAgents } from "@workspace/api-client-react";
+import {
+  getGetInboxUnreadCountQueryKey,
+  useGetInboxUnreadCount,
+  useListAgents,
+} from "@workspace/api-client-react";
 import { agentConfigHref, parseAgentConfigLocation } from "@/lib/agent-config";
 import { AgentConfigSidebar } from "@/components/layout/agent-config-sidebar";
 import { getUserAgentsQueryKey } from "@/lib/agents-query";
@@ -39,11 +51,13 @@ function NavLinks({
   agents,
   agentConfigHrefFn,
   onNavigate,
+  unreadCount,
 }: {
   location: string;
   agents: { id: string; name: string }[];
   agentConfigHrefFn: (id: string) => string;
   onNavigate?: () => void;
+  unreadCount: number;
 }) {
   return (
     <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-1.5">
@@ -65,6 +79,27 @@ function NavLinks({
         )}
         <LayoutDashboard className="w-4 h-4 shrink-0" />
         Dashboard
+      </Link>
+      <Link
+        href="/inbox"
+        onClick={onNavigate}
+        className={cn(
+          "relative flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-colors",
+          location.startsWith("/inbox")
+            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+        )}
+      >
+        {location.startsWith("/inbox") && (
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-sidebar-primary" />
+        )}
+        <Inbox className="w-4 h-4 shrink-0" />
+        Inbox
+        {unreadCount > 0 ? (
+          <span className="ml-auto min-w-5 rounded-full bg-destructive px-1.5 py-0.5 text-center text-[10px] font-semibold text-destructive-foreground">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        ) : null}
       </Link>
       <Link
         href="/team"
@@ -156,6 +191,13 @@ export function AppShell({
       staleTime: 0,
     },
   });
+  const { data: unreadData } = useGetInboxUnreadCount({
+    query: {
+      queryKey: getGetInboxUnreadCountQueryKey(),
+      refetchInterval: 10000,
+    },
+  });
+  const unreadCount = unreadData?.count ?? 0;
 
   const agentConfig = parseAgentConfigLocation(location);
 
@@ -189,6 +231,7 @@ export function AppShell({
             location={location}
             agents={agents}
             agentConfigHrefFn={agentConfigHref}
+            unreadCount={unreadCount}
           />
 
           <div className="p-3 border-t border-sidebar-border flex items-center justify-between gap-1">
@@ -229,6 +272,7 @@ export function AppShell({
               location={location}
               agents={agents}
               agentConfigHrefFn={agentConfigHref}
+              unreadCount={unreadCount}
               onNavigate={() => setMobileNavOpen(false)}
             />
             <div className="p-3 border-t border-sidebar-border flex items-center justify-between gap-1">
@@ -275,7 +319,8 @@ export function AppShell({
         <main className="flex-1 flex flex-col min-w-0 bg-background relative z-10 overflow-hidden">
           {!canEdit && (
             <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs text-amber-900 dark:text-amber-200">
-              View only — you can browse this workspace but cannot change configuration.
+              View only — you can browse this workspace but cannot change
+              configuration.
             </div>
           )}
           {children}

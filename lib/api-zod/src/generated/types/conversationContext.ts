@@ -8,6 +8,7 @@
 
 export interface ConversationContext {
   currentUrl?: string;
+  pageDomain?: string;
   userRole?: string;
   referredClientId?: string;
   referredContractId?: string;

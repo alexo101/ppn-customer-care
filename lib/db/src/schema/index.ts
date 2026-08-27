@@ -12,3 +12,4 @@ export * from "./knowledge-assets";
 export * from "./assignments";
 export * from "./agent-settings";
 export * from "./members";
+export * from "./escalations";

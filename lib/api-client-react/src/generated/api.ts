@@ -21,6 +21,8 @@ import type {
 
 import type {
   Agent,
+  AgentEscalation,
+  AgentEscalationInput,
   AgentInput,
   AgentSettings,
   AgentSettingsInput,
@@ -39,10 +41,13 @@ import type {
   CurrentMember,
   DeploymentToken,
   ErrorResponse,
+  EscalationAssignment,
+  EscalationReplyInput,
   FeedbackInput,
   HealthStatus,
   ImportAppearanceInput,
   ImportAppearanceResult,
+  InboxEscalation,
   IntentCategory,
   InvitationStatus,
   InviteMemberInput,
@@ -54,6 +59,7 @@ import type {
   ListCategoriesParams,
   ListConnectorsParams,
   ListConversationsParams,
+  ListInboxEscalationsParams,
   ListQuestionsParams,
   ListRuleVocabulariesParams,
   ListRulesParams,
@@ -89,6 +95,7 @@ import type {
   TrainingQuestionBulkResult,
   TrainingQuestionInput,
   TrainingQuestionUpdate,
+  UnreadCount,
   UpdateMemberInput,
   WorkspaceMember
 } from './api.schemas';
@@ -1005,6 +1012,530 @@ export const useCreateAgentDeploymentToken = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateAgentDeploymentTokenMutationOptions(options));
+    }
+
+export const getGetAgentEscalationUrl = (id: string,) => {
+
+
+
+
+  return `/api/agents/${id}/escalation`
+}
+
+/**
+ * @summary Get escalation routing for an agent
+ */
+export const getAgentEscalation = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<AgentEscalation> => {
+
+  return customFetch<AgentEscalation>(getGetAgentEscalationUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAgentEscalationQueryKey = (id: string,) => {
+    return [
+    `/api/agents/${id}/escalation`
+    ] as const;
+    }
+
+
+export const getGetAgentEscalationQueryOptions = <TData = Awaited<ReturnType<typeof getAgentEscalation>>, TError = ErrorType<unknown>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentEscalation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAgentEscalationQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentEscalation>>> = ({ signal }) => getAgentEscalation(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgentEscalation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAgentEscalationQueryResult = NonNullable<Awaited<ReturnType<typeof getAgentEscalation>>>
+export type GetAgentEscalationQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get escalation routing for an agent
+ */
+
+export function useGetAgentEscalation<TData = Awaited<ReturnType<typeof getAgentEscalation>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentEscalation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAgentEscalationQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAgentEscalationUrl = (id: string,) => {
+
+
+
+
+  return `/api/agents/${id}/escalation`
+}
+
+/**
+ * @summary Update escalation routing for an agent
+ */
+export const updateAgentEscalation = async (id: string,
+    agentEscalationInput: AgentEscalationInput, options?: Parameters<typeof customFetch>[1]): Promise<AgentEscalation> => {
+
+  return customFetch<AgentEscalation>(getUpdateAgentEscalationUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentEscalationInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAgentEscalationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentEscalation>>, TError,{id: string;data: BodyType<AgentEscalationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAgentEscalation>>, TError,{id: string;data: BodyType<AgentEscalationInput>}, TContext> => {
+
+const mutationKey = ['updateAgentEscalation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAgentEscalation>>, {id: string;data: BodyType<AgentEscalationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAgentEscalation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAgentEscalationMutationResult = NonNullable<Awaited<ReturnType<typeof updateAgentEscalation>>>
+    export type UpdateAgentEscalationMutationBody = BodyType<AgentEscalationInput>
+    export type UpdateAgentEscalationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update escalation routing for an agent
+ */
+export const useUpdateAgentEscalation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentEscalation>>, TError,{id: string;data: BodyType<AgentEscalationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAgentEscalation>>,
+        TError,
+        {id: string;data: BodyType<AgentEscalationInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAgentEscalationMutationOptions(options));
+    }
+
+export const getListInboxEscalationsUrl = (params?: ListInboxEscalationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/inbox/escalations?${stringifiedParams}` : `/api/inbox/escalations`
+}
+
+/**
+ * @summary List escalations assigned to the current member
+ */
+export const listInboxEscalations = async (params?: ListInboxEscalationsParams, options?: Parameters<typeof customFetch>[1]): Promise<InboxEscalation[]> => {
+
+  return customFetch<InboxEscalation[]>(getListInboxEscalationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListInboxEscalationsQueryKey = (params?: ListInboxEscalationsParams,) => {
+    return [
+    `/api/inbox/escalations`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListInboxEscalationsQueryOptions = <TData = Awaited<ReturnType<typeof listInboxEscalations>>, TError = ErrorType<unknown>>(params?: ListInboxEscalationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInboxEscalations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListInboxEscalationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listInboxEscalations>>> = ({ signal }) => listInboxEscalations(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listInboxEscalations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListInboxEscalationsQueryResult = NonNullable<Awaited<ReturnType<typeof listInboxEscalations>>>
+export type ListInboxEscalationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List escalations assigned to the current member
+ */
+
+export function useListInboxEscalations<TData = Awaited<ReturnType<typeof listInboxEscalations>>, TError = ErrorType<unknown>>(
+ params?: ListInboxEscalationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listInboxEscalations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListInboxEscalationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetInboxUnreadCountUrl = () => {
+
+
+
+
+  return `/api/inbox/escalations/unread-count`
+}
+
+/**
+ * @summary Count unread assigned escalations
+ */
+export const getInboxUnreadCount = async ( options?: Parameters<typeof customFetch>[1]): Promise<UnreadCount> => {
+
+  return customFetch<UnreadCount>(getGetInboxUnreadCountUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInboxUnreadCountQueryKey = () => {
+    return [
+    `/api/inbox/escalations/unread-count`
+    ] as const;
+    }
+
+
+export const getGetInboxUnreadCountQueryOptions = <TData = Awaited<ReturnType<typeof getInboxUnreadCount>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInboxUnreadCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInboxUnreadCountQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInboxUnreadCount>>> = ({ signal }) => getInboxUnreadCount({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInboxUnreadCount>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInboxUnreadCountQueryResult = NonNullable<Awaited<ReturnType<typeof getInboxUnreadCount>>>
+export type GetInboxUnreadCountQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Count unread assigned escalations
+ */
+
+export function useGetInboxUnreadCount<TData = Awaited<ReturnType<typeof getInboxUnreadCount>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInboxUnreadCount>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInboxUnreadCountQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkEscalationReadUrl = (id: string,) => {
+
+
+
+
+  return `/api/inbox/escalations/${id}/read`
+}
+
+/**
+ * @summary Mark an assigned escalation as read
+ */
+export const markEscalationRead = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<EscalationAssignment> => {
+
+  return customFetch<EscalationAssignment>(getMarkEscalationReadUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkEscalationReadMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markEscalationRead>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markEscalationRead>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['markEscalationRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markEscalationRead>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  markEscalationRead(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkEscalationReadMutationResult = NonNullable<Awaited<ReturnType<typeof markEscalationRead>>>
+
+    export type MarkEscalationReadMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark an assigned escalation as read
+ */
+export const useMarkEscalationRead = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markEscalationRead>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markEscalationRead>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getMarkEscalationReadMutationOptions(options));
+    }
+
+export const getReplyToEscalationUrl = (id: string,) => {
+
+
+
+
+  return `/api/inbox/escalations/${id}/reply`
+}
+
+/**
+ * @summary Reply to an assigned escalation as a human
+ */
+export const replyToEscalation = async (id: string,
+    escalationReplyInput: EscalationReplyInput, options?: Parameters<typeof customFetch>[1]): Promise<Message> => {
+
+  return customFetch<Message>(getReplyToEscalationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(escalationReplyInput)
+  }
+);}
+
+
+
+
+
+export const getReplyToEscalationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replyToEscalation>>, TError,{id: string;data: BodyType<EscalationReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replyToEscalation>>, TError,{id: string;data: BodyType<EscalationReplyInput>}, TContext> => {
+
+const mutationKey = ['replyToEscalation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replyToEscalation>>, {id: string;data: BodyType<EscalationReplyInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  replyToEscalation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplyToEscalationMutationResult = NonNullable<Awaited<ReturnType<typeof replyToEscalation>>>
+    export type ReplyToEscalationMutationBody = BodyType<EscalationReplyInput>
+    export type ReplyToEscalationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reply to an assigned escalation as a human
+ */
+export const useReplyToEscalation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replyToEscalation>>, TError,{id: string;data: BodyType<EscalationReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replyToEscalation>>,
+        TError,
+        {id: string;data: BodyType<EscalationReplyInput>},
+        TContext
+      > => {
+      return useMutation(getReplyToEscalationMutationOptions(options));
+    }
+
+export const getResolveEscalationUrl = (id: string,) => {
+
+
+
+
+  return `/api/inbox/escalations/${id}/resolve`
+}
+
+/**
+ * @summary Resolve an assigned escalation
+ */
+export const resolveEscalation = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<InboxEscalation> => {
+
+  return customFetch<InboxEscalation>(getResolveEscalationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResolveEscalationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveEscalation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveEscalation>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['resolveEscalation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveEscalation>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resolveEscalation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveEscalationMutationResult = NonNullable<Awaited<ReturnType<typeof resolveEscalation>>>
+
+    export type ResolveEscalationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Resolve an assigned escalation
+ */
+export const useResolveEscalation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveEscalation>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveEscalation>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getResolveEscalationMutationOptions(options));
     }
 
 export const getAssignAgentSourceUrl = (agentId: string,

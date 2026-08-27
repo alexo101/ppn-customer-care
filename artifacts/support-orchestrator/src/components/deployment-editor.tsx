@@ -14,7 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
+import {
+  MutatingControls,
+  useWorkspaceAccess,
+} from "@/components/workspace-access";
 
 const IFRAME_STYLE =
   "position:fixed;right:0;bottom:0;border:0;z-index:2147483647;width:420px;height:720px;background:transparent;";
@@ -38,7 +41,7 @@ function htmlSnippet(widgetUrl: string): Snippet {
     code: `<script>
   (function () {
     var iframe = document.createElement("iframe");
-    iframe.src = ${JSON.stringify(widgetUrl)};
+    iframe.src = ${JSON.stringify(widgetUrl)} + "&pageDomain=" + encodeURIComponent(window.location.hostname);
     iframe.title = "Support chat";
     iframe.style.cssText = ${JSON.stringify(IFRAME_STYLE)};
     document.body.appendChild(iframe);
@@ -59,7 +62,7 @@ const IFRAME_STYLE = ${JSON.stringify(IFRAME_STYLE)};
 export function SupportWidget() {
   useEffect(() => {
     const iframe = document.createElement("iframe");
-    iframe.src = WIDGET_URL;
+    iframe.src = WIDGET_URL + "&pageDomain=" + encodeURIComponent(window.location.hostname);
     iframe.title = "Support chat";
     iframe.style.cssText = IFRAME_STYLE;
     document.body.appendChild(iframe);
@@ -87,7 +90,7 @@ let iframe;
 
 onMounted(() => {
   iframe = document.createElement("iframe");
-  iframe.src = WIDGET_URL;
+  iframe.src = WIDGET_URL + "&pageDomain=" + encodeURIComponent(window.location.hostname);
   iframe.title = "Support chat";
   iframe.style.cssText = IFRAME_STYLE;
   document.body.appendChild(iframe);
@@ -121,7 +124,7 @@ export class SupportWidgetComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.iframe = document.createElement("iframe");
-    this.iframe.src = WIDGET_URL;
+    this.iframe.src = WIDGET_URL + "&pageDomain=" + encodeURIComponent(window.location.hostname);
     this.iframe.title = "Support chat";
     this.iframe.style.cssText = IFRAME_STYLE;
     document.body.appendChild(this.iframe);
@@ -165,8 +168,17 @@ function CopyButton({ code }: { code: string }) {
   };
 
   return (
-    <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={copySnippet}>
-      {copied ? <Check className="w-3.5 h-3.5 mr-1" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-8 text-xs shrink-0"
+      onClick={copySnippet}
+    >
+      {copied ? (
+        <Check className="w-3.5 h-3.5 mr-1" />
+      ) : (
+        <Copy className="w-3.5 h-3.5 mr-1" />
+      )}
       {copied ? "Copied" : "Copy snippet"}
     </Button>
   );
@@ -185,7 +197,9 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
     try {
       await updateAgent.mutateAsync({ id: agentId, data: { isEnabled } });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetAgentQueryKey(agentId) }),
+        queryClient.invalidateQueries({
+          queryKey: getGetAgentQueryKey(agentId),
+        }),
         queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() }),
       ]);
       toast({
@@ -204,7 +218,11 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
   };
 
   if (isLoading || !agent) {
-    return <p className="text-sm text-muted-foreground">Loading deployment settings...</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        Loading deployment settings...
+      </p>
+    );
   }
 
   return (
@@ -213,12 +231,15 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
         <div className="pb-3 border-b border-border">
           <h3 className="text-sm font-medium">Agent status</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            New agents stay inactive until you enable them. Enable this agent when you are ready to go live.
+            New agents stay inactive until you enable them. Enable this agent
+            when you are ready to go live.
           </p>
         </div>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium">{enabled ? "Active" : "Inactive"}</p>
+            <p className="text-sm font-medium">
+              {enabled ? "Active" : "Inactive"}
+            </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {enabled
                 ? "This agent is enabled and can be embedded on your site."
@@ -244,7 +265,8 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
         <div className="pb-3 border-b border-border">
           <h3 className="text-sm font-medium">Embed snippet</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Choose your stack and paste the snippet into your app to add the chat widget.
+            Choose your stack and paste the snippet into your app to add the
+            chat widget.
           </p>
         </div>
 
@@ -253,7 +275,11 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
             {FRAMEWORKS.map((framework) => {
               const Icon = framework.icon;
               return (
-                <TabsTrigger key={framework.id} value={framework.id} className="gap-1.5">
+                <TabsTrigger
+                  key={framework.id}
+                  value={framework.id}
+                  className="gap-1.5"
+                >
                   <Icon className="w-3.5 h-3.5" />
                   {framework.label}
                 </TabsTrigger>
@@ -264,11 +290,20 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
           {FRAMEWORKS.map((framework) => {
             const snippet = framework.snippet(widgetUrl);
             return (
-              <TabsContent key={framework.id} value={framework.id} className="mt-3 space-y-3">
+              <TabsContent
+                key={framework.id}
+                value={framework.id}
+                className="mt-3 space-y-3"
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <Label htmlFor={`embed-snippet-${framework.id}`} className="text-xs">
+                  <Label
+                    htmlFor={`embed-snippet-${framework.id}`}
+                    className="text-xs"
+                  >
                     {snippet.language}
-                    <span className="ml-1.5 text-muted-foreground font-normal">{snippet.filename}</span>
+                    <span className="ml-1.5 text-muted-foreground font-normal">
+                      {snippet.filename}
+                    </span>
                   </Label>
                   <CopyButton code={snippet.code} />
                 </div>

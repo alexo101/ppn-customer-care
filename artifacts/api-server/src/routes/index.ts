@@ -11,6 +11,7 @@ import authRouter from "./auth";
 import membersRouter from "./members";
 import agentsRouter from "./agents";
 import trainingQuestionsRouter from "./training-questions";
+import escalationsRouter from "./escalations";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(analyticsRouter);
 router.use(appearanceRouter);
 router.use(authRouter);
 router.use(membersRouter);
+router.use(escalationsRouter);
 
 export default router;

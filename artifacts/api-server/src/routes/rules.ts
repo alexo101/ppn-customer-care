@@ -54,6 +54,7 @@ import {
   DEFAULT_ACTIONS,
   DEFAULT_OPERATORS,
   normalizeAction,
+  RULE_COUNTRIES,
   slugifyLabel,
 } from "../lib/rule-engine";
 
@@ -89,85 +90,88 @@ router.get("/rules", requireAuth, async (req, res): Promise<void> => {
   try {
     res.json(await toRules(rows));
   } catch (error) {
-    logger.error(
-      { err: databaseErrorDetails(error) },
-      "Failed to list rules",
-    );
+    logger.error({ err: databaseErrorDetails(error) }, "Failed to list rules");
     res.status(500).json({ error: "Could not load rules. Please try again." });
   }
 });
 
-router.post("/rules", requireAuth, requireEditor, async (req, res): Promise<void> => {
-  const parsed = CreateRuleBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+router.post(
+  "/rules",
+  requireAuth,
+  requireEditor,
+  async (req, res): Promise<void> => {
+    const parsed = CreateRuleBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
 
-  let agentId = parsed.data.agentId ?? null;
-  if (!agentId) {
-    res.status(400).json({ error: "agentId is required." });
-    return;
-  }
-  const agent = await getOwnedAgent(req.userId, agentId);
-  if (!agent) {
-    res.status(404).json({ error: "Agent not found" });
-    return;
-  }
+    let agentId = parsed.data.agentId ?? null;
+    if (!agentId) {
+      res.status(400).json({ error: "agentId is required." });
+      return;
+    }
+    const agent = await getOwnedAgent(req.userId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
 
-  const allowed = await validateRuleTargets(
-    agentId,
-    parsed.data.categoryIds,
-    parsed.data.sourceIds,
-    parsed.data.connectorIds,
-    parsed.data.audienceTargetIds,
-    res,
-  );
-  if (!allowed) return;
-
-  try {
-    const row = await db.transaction(async (tx) => {
-      const [created] = await tx
-        .insert(orchestratorRulesTable)
-        .values({
-          userId: req.userId,
-          agentId,
-          name: parsed.data.name,
-          description: parsed.data.description ?? "",
-          promptTemplate: parsed.data.promptTemplate ?? "",
-          priority: parsed.data.priority ?? 0,
-          requiresClarificationPrompt:
-            parsed.data.requiresClarificationPrompt ?? "",
-          escalationTrigger:
-            parsed.data.escalationTrigger ??
-            normalizeAction(parsed.data.action ?? "") === "escalate",
-          isEnabled: parsed.data.isEnabled ?? true,
-          conditionOperator: parsed.data.conditionOperator?.trim() || "is",
-          action: parsed.data.action?.trim() || "search answer",
-        })
-        .returning();
-
-      await replaceRuleLinks(
-        tx,
-        created.id,
-        parsed.data.categoryIds,
-        parsed.data.sourceIds,
-        parsed.data.connectorIds,
-        parsed.data.audienceTargetIds,
-      );
-      return created;
-    });
-
-    const [created] = await toRules([row]);
-    res.status(201).json(created);
-  } catch (error) {
-    logger.error(
-      { err: databaseErrorDetails(error) },
-      "Failed to create rule",
+    const allowed = await validateRuleTargets(
+      agentId,
+      parsed.data.categoryIds,
+      parsed.data.sourceIds,
+      parsed.data.connectorIds,
+      parsed.data.audienceTargetIds,
+      res,
     );
-    res.status(500).json({ error: ruleSaveClientMessage(error) });
-  }
-});
+    if (!allowed) return;
+
+    try {
+      const row = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(orchestratorRulesTable)
+          .values({
+            userId: req.userId,
+            agentId,
+            name: parsed.data.name,
+            description: parsed.data.description ?? "",
+            promptTemplate: parsed.data.promptTemplate ?? "",
+            priority: parsed.data.priority ?? 0,
+            requiresClarificationPrompt:
+              parsed.data.requiresClarificationPrompt ?? "",
+            escalationTrigger:
+              parsed.data.escalationTrigger ??
+              normalizeAction(parsed.data.action ?? "") === "escalate",
+            isEnabled: parsed.data.isEnabled ?? true,
+            conditionOperator: parsed.data.conditionOperator?.trim() || "is",
+            conditionCountry: parsed.data.conditionCountry ?? null,
+            action: parsed.data.action?.trim() || "search answer",
+          })
+          .returning();
+
+        await replaceRuleLinks(
+          tx,
+          created.id,
+          parsed.data.categoryIds,
+          parsed.data.sourceIds,
+          parsed.data.connectorIds,
+          parsed.data.audienceTargetIds,
+        );
+        return created;
+      });
+
+      const [created] = await toRules([row]);
+      res.status(201).json(created);
+    } catch (error) {
+      logger.error(
+        { err: databaseErrorDetails(error) },
+        "Failed to create rule",
+      );
+      res.status(500).json({ error: ruleSaveClientMessage(error) });
+    }
+  },
+);
 router.post(
   "/agents/:agentId/rule-authoring/messages",
   requireAuth,
@@ -210,51 +214,52 @@ router.post(
     }
 
     await ensureBuiltinVocabularies();
-    const [categories, sources, vocabularies, audienceTargets] = await Promise.all([
-      db
-        .select({
-          id: intentCategoriesTable.id,
-          name: intentCategoriesTable.name,
-        })
-        .from(intentCategoriesTable)
-        .where(eq(intentCategoriesTable.agentId, params.data.agentId)),
-      db
-        .select({
-          id: knowledgeSourcesTable.id,
-          name: knowledgeSourcesTable.name,
-        })
-        .from(knowledgeSourcesTable)
-        .where(eq(knowledgeSourcesTable.agentId, params.data.agentId)),
-      db
-        .select({
-          kind: ruleVocabulariesTable.kind,
-          label: ruleVocabulariesTable.label,
-          requiresSource: ruleVocabulariesTable.requiresSource,
-        })
-        .from(ruleVocabulariesTable)
-        .where(
-          or(
-            and(
-              isNull(ruleVocabulariesTable.agentId),
-              eq(ruleVocabulariesTable.isBuiltin, true),
+    const [categories, sources, vocabularies, audienceTargets] =
+      await Promise.all([
+        db
+          .select({
+            id: intentCategoriesTable.id,
+            name: intentCategoriesTable.name,
+          })
+          .from(intentCategoriesTable)
+          .where(eq(intentCategoriesTable.agentId, params.data.agentId)),
+        db
+          .select({
+            id: knowledgeSourcesTable.id,
+            name: knowledgeSourcesTable.name,
+          })
+          .from(knowledgeSourcesTable)
+          .where(eq(knowledgeSourcesTable.agentId, params.data.agentId)),
+        db
+          .select({
+            kind: ruleVocabulariesTable.kind,
+            label: ruleVocabulariesTable.label,
+            requiresSource: ruleVocabulariesTable.requiresSource,
+          })
+          .from(ruleVocabulariesTable)
+          .where(
+            or(
+              and(
+                isNull(ruleVocabulariesTable.agentId),
+                eq(ruleVocabulariesTable.isBuiltin, true),
+              ),
+              eq(ruleVocabulariesTable.agentId, params.data.agentId),
             ),
-            eq(ruleVocabulariesTable.agentId, params.data.agentId),
           ),
-        ),
-      db
-        .select({
-          id: audienceTargetsTable.id,
-          name: audienceTargetsTable.name,
-          description: audienceTargetsTable.description,
-        })
-        .from(audienceTargetsTable)
-        .where(
-          and(
-            eq(audienceTargetsTable.agentId, params.data.agentId),
-            eq(audienceTargetsTable.isEnabled, true),
+        db
+          .select({
+            id: audienceTargetsTable.id,
+            name: audienceTargetsTable.name,
+            description: audienceTargetsTable.description,
+          })
+          .from(audienceTargetsTable)
+          .where(
+            and(
+              eq(audienceTargetsTable.agentId, params.data.agentId),
+              eq(audienceTargetsTable.isEnabled, true),
+            ),
           ),
-        ),
-    ]);
+      ]);
 
     try {
       const result = await authorRule(
@@ -276,6 +281,11 @@ router.post(
               requiresSource: item.requiresSource,
             })),
             audienceTargets,
+            countries: RULE_COUNTRIES.map(({ code, label, domain }) => ({
+              code,
+              label,
+              domain,
+            })),
           },
         },
         createRuleAuthoringProvider(),
@@ -291,133 +301,154 @@ router.post(
   },
 );
 
-router.patch("/rules/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
-  const params = UpdateRuleParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-
-  const parsed = UpdateRuleBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const [existing] = await db
-    .select()
-    .from(orchestratorRulesTable)
-    .where(eq(orchestratorRulesTable.id, params.data.id))
-    .limit(1);
-
-  if (!existing) {
-    res.status(404).json({ error: "Rule not found" });
-    return;
-  }
-
-  const allowed = await validateRuleTargets(
-    existing.agentId,
-    parsed.data.categoryIds,
-    parsed.data.sourceIds,
-    parsed.data.connectorIds,
-    parsed.data.audienceTargetIds,
-    res,
-  );
-  if (!allowed) return;
-
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
-  const d = parsed.data as Record<string, unknown>;
-  for (const key of [
-    "name",
-    "description",
-    "promptTemplate",
-    "priority",
-    "requiresClarificationPrompt",
-    "escalationTrigger",
-    "isEnabled",
-    "conditionOperator",
-    "action",
-  ]) {
-    if (d[key] !== undefined) updates[key] = d[key];
-  }
-  if (typeof updates.conditionOperator === "string") {
-    updates.conditionOperator = updates.conditionOperator.trim() || "is";
-  }
-  if (typeof updates.action === "string") {
-    const action = updates.action.trim() || "search answer";
-    updates.action = action;
-    if (parsed.data.escalationTrigger === undefined) {
-      updates.escalationTrigger = normalizeAction(action) === "escalate";
+router.patch(
+  "/rules/:id",
+  requireAuth,
+  requireEditor,
+  async (req, res): Promise<void> => {
+    const params = UpdateRuleParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
     }
-  }
 
-  try {
-    const shouldReplaceLinks =
-      parsed.data.categoryIds !== undefined ||
-      parsed.data.sourceIds !== undefined ||
-      parsed.data.connectorIds !== undefined ||
-      parsed.data.audienceTargetIds !== undefined;
+    const parsed = UpdateRuleBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
 
-    const current = shouldReplaceLinks ? (await toRules([existing]))[0] : null;
+    const [existing] = await db
+      .select()
+      .from(orchestratorRulesTable)
+      .where(eq(orchestratorRulesTable.id, params.data.id))
+      .limit(1);
 
-    const row = await db.transaction(async (tx) => {
-      const [updated] = await tx
-        .update(orchestratorRulesTable)
-        .set(updates)
-        .where(eq(orchestratorRulesTable.id, params.data.id))
-        .returning();
-
-      if (!updated) return null;
-
-      if (shouldReplaceLinks && current) {
-        await replaceRuleLinks(
-          tx,
-          updated.id,
-          parsed.data.categoryIds ?? current.categoryIds,
-          parsed.data.sourceIds ?? current.sourceIds,
-          parsed.data.connectorIds ?? current.connectorIds,
-          parsed.data.audienceTargetIds ?? current.audienceTargetIds,
-        );
-      }
-
-      return updated;
-    });
-
-    if (!row) {
+    if (!existing) {
       res.status(404).json({ error: "Rule not found" });
       return;
     }
 
-    const [updated] = await toRules([row]);
-    res.json(updated);
-  } catch (error) {
-    logger.error(
-      { err: databaseErrorDetails(error) },
-      "Failed to update rule",
+    const allowed = await validateRuleTargets(
+      existing.agentId,
+      parsed.data.categoryIds,
+      parsed.data.sourceIds,
+      parsed.data.connectorIds,
+      parsed.data.audienceTargetIds,
+      res,
     );
-    res.status(500).json({ error: ruleSaveClientMessage(error) });
-  }
-});
+    if (!allowed) return;
 
-router.delete("/rules/:id", requireAuth, requireEditor, async (req, res): Promise<void> => {
-  const params = DeleteRuleParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    const d = parsed.data as Record<string, unknown>;
+    for (const key of [
+      "name",
+      "description",
+      "promptTemplate",
+      "priority",
+      "requiresClarificationPrompt",
+      "escalationTrigger",
+      "isEnabled",
+      "conditionOperator",
+      "conditionCountry",
+      "action",
+    ]) {
+      if (d[key] !== undefined) updates[key] = d[key];
+    }
+    if (typeof updates.conditionOperator === "string") {
+      updates.conditionOperator = updates.conditionOperator.trim() || "is";
+    }
+    if (
+      updates.conditionCountry !== null &&
+      updates.conditionCountry !== undefined
+    ) {
+      updates.conditionCountry = String(updates.conditionCountry)
+        .trim()
+        .toUpperCase();
+    }
+    if (typeof updates.action === "string") {
+      const action = updates.action.trim() || "search answer";
+      updates.action = action;
+      if (parsed.data.escalationTrigger === undefined) {
+        updates.escalationTrigger = normalizeAction(action) === "escalate";
+      }
+    }
 
-  const deleted = await db
-    .delete(orchestratorRulesTable)
-    .where(eq(orchestratorRulesTable.id, params.data.id))
-    .returning({ id: orchestratorRulesTable.id });
+    try {
+      const shouldReplaceLinks =
+        parsed.data.categoryIds !== undefined ||
+        parsed.data.sourceIds !== undefined ||
+        parsed.data.connectorIds !== undefined ||
+        parsed.data.audienceTargetIds !== undefined;
 
-  if (deleted.length === 0) {
-    res.status(404).json({ error: "Rule not found" });
-    return;
-  }
+      const current = shouldReplaceLinks
+        ? (await toRules([existing]))[0]
+        : null;
 
-  res.sendStatus(204);
-});
+      const row = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(orchestratorRulesTable)
+          .set(updates)
+          .where(eq(orchestratorRulesTable.id, params.data.id))
+          .returning();
+
+        if (!updated) return null;
+
+        if (shouldReplaceLinks && current) {
+          await replaceRuleLinks(
+            tx,
+            updated.id,
+            parsed.data.categoryIds ?? current.categoryIds,
+            parsed.data.sourceIds ?? current.sourceIds,
+            parsed.data.connectorIds ?? current.connectorIds,
+            parsed.data.audienceTargetIds ?? current.audienceTargetIds,
+          );
+        }
+
+        return updated;
+      });
+
+      if (!row) {
+        res.status(404).json({ error: "Rule not found" });
+        return;
+      }
+
+      const [updated] = await toRules([row]);
+      res.json(updated);
+    } catch (error) {
+      logger.error(
+        { err: databaseErrorDetails(error) },
+        "Failed to update rule",
+      );
+      res.status(500).json({ error: ruleSaveClientMessage(error) });
+    }
+  },
+);
+
+router.delete(
+  "/rules/:id",
+  requireAuth,
+  requireEditor,
+  async (req, res): Promise<void> => {
+    const params = DeleteRuleParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const deleted = await db
+      .delete(orchestratorRulesTable)
+      .where(eq(orchestratorRulesTable.id, params.data.id))
+      .returning({ id: orchestratorRulesTable.id });
+
+    if (deleted.length === 0) {
+      res.status(404).json({ error: "Rule not found" });
+      return;
+    }
+
+    res.sendStatus(204);
+  },
+);
 
 router.get(
   "/rules/:id/categories",
@@ -808,7 +839,9 @@ async function validateRuleTargets(
       res.status(400).json({ error: "One or more connectors were not found." });
       return false;
     }
-    if (connectors.some((connector) => agentId && connector.agentId !== agentId)) {
+    if (
+      connectors.some((connector) => agentId && connector.agentId !== agentId)
+    ) {
       res.status(400).json({ error: "Connectors must belong to this agent." });
       return false;
     }
@@ -824,11 +857,15 @@ async function validateRuleTargets(
       .from(audienceTargetsTable)
       .where(inArray(audienceTargetsTable.id, uniqueIds));
     if (targets.length !== uniqueIds.length) {
-      res.status(400).json({ error: "One or more audience targets were not found." });
+      res
+        .status(400)
+        .json({ error: "One or more audience targets were not found." });
       return false;
     }
     if (targets.some((target) => agentId && target.agentId !== agentId)) {
-      res.status(400).json({ error: "Audience targets must belong to this agent." });
+      res
+        .status(400)
+        .json({ error: "Audience targets must belong to this agent." });
       return false;
     }
   }
@@ -839,24 +876,25 @@ async function validateRuleTargets(
 async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
-  const [categoryLinks, sourceLinks, connectorLinks, audienceTargetLinks] = await Promise.all([
-    db
-      .select()
-      .from(ruleCategoryLinksTable)
-      .where(inArray(ruleCategoryLinksTable.ruleId, ids)),
-    db
-      .select()
-      .from(ruleSourceLinksTable)
-      .where(inArray(ruleSourceLinksTable.ruleId, ids)),
-    db
-      .select()
-      .from(ruleConnectorLinksTable)
-      .where(inArray(ruleConnectorLinksTable.ruleId, ids)),
-    db
-      .select()
-      .from(ruleAudienceTargetLinksTable)
-      .where(inArray(ruleAudienceTargetLinksTable.ruleId, ids)),
-  ]);
+  const [categoryLinks, sourceLinks, connectorLinks, audienceTargetLinks] =
+    await Promise.all([
+      db
+        .select()
+        .from(ruleCategoryLinksTable)
+        .where(inArray(ruleCategoryLinksTable.ruleId, ids)),
+      db
+        .select()
+        .from(ruleSourceLinksTable)
+        .where(inArray(ruleSourceLinksTable.ruleId, ids)),
+      db
+        .select()
+        .from(ruleConnectorLinksTable)
+        .where(inArray(ruleConnectorLinksTable.ruleId, ids)),
+      db
+        .select()
+        .from(ruleAudienceTargetLinksTable)
+        .where(inArray(ruleAudienceTargetLinksTable.ruleId, ids)),
+    ]);
 
   const categoriesByRule = new Map<string, string[]>();
   for (const link of categoryLinks) {
@@ -893,6 +931,7 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
     escalationTrigger: row.escalationTrigger,
     isEnabled: row.isEnabled,
     conditionOperator: row.conditionOperator || "is",
+    conditionCountry: row.conditionCountry ?? null,
     action: row.action || "search answer",
     agentId: row.agentId ?? null,
     categoryIds: categoriesByRule.get(row.id) ?? [],
@@ -932,8 +971,12 @@ function uniqueVocabularyLabels<T extends { label: string }>(rows: T[]): T[] {
   return unique;
 }
 
-function uniqueVocabularies(rows: Array<typeof ruleVocabulariesTable.$inferSelect>) {
-  const ranked = [...rows].sort((left, right) => Number(right.isBuiltin) - Number(left.isBuiltin));
+function uniqueVocabularies(
+  rows: Array<typeof ruleVocabulariesTable.$inferSelect>,
+) {
+  const ranked = [...rows].sort(
+    (left, right) => Number(right.isBuiltin) - Number(left.isBuiltin),
+  );
   const seen = new Set<string>();
   const unique: typeof ranked = [];
   for (const row of ranked) {
@@ -943,7 +986,8 @@ function uniqueVocabularies(rows: Array<typeof ruleVocabulariesTable.$inferSelec
     unique.push(row);
   }
   return unique.sort(
-    (left, right) => left.sortOrder - right.sortOrder || left.label.localeCompare(right.label),
+    (left, right) =>
+      left.sortOrder - right.sortOrder || left.label.localeCompare(right.label),
   );
 }
 
