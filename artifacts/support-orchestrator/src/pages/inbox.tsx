@@ -21,6 +21,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getInboxEscalationsQueryOptions } from "@/lib/escalation-query-options";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,10 +40,7 @@ export default function InboxPage() {
   const { data: escalations = [], isLoading } = useListInboxEscalations(
     { status: statusFilter },
     {
-      query: {
-        queryKey: getListInboxEscalationsQueryKey({ status: statusFilter }),
-        refetchInterval: 10000,
-      },
+      query: getInboxEscalationsQueryOptions(statusFilter),
     },
   );
   const markRead = useMarkEscalationRead();

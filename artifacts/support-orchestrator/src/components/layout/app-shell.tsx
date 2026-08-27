@@ -29,6 +29,7 @@ import {
   useListAgents,
 } from "@workspace/api-client-react";
 import { agentConfigHref, parseAgentConfigLocation } from "@/lib/agent-config";
+import { getInboxUnreadCountQueryOptions } from "@/lib/escalation-query-options";
 import { AgentConfigSidebar } from "@/components/layout/agent-config-sidebar";
 import { getUserAgentsQueryKey } from "@/lib/agents-query";
 import { useWorkspaceAccess } from "@/components/workspace-access";
@@ -192,10 +193,7 @@ export function AppShell({
     },
   });
   const { data: unreadData } = useGetInboxUnreadCount({
-    query: {
-      queryKey: getGetInboxUnreadCountQueryKey(),
-      refetchInterval: 10000,
-    },
+    query: getInboxUnreadCountQueryOptions(),
   });
   const unreadCount = unreadData?.count ?? 0;
 

@@ -24,12 +24,15 @@ import {
   MutatingControls,
   useWorkspaceAccess,
 } from "@/components/workspace-access";
+import { getAgentEscalationQueryOptions } from "@/lib/escalation-query-options";
 import { toast } from "@/hooks/use-toast";
 
 export function EscalationEditor({ agentId }: { agentId: string }) {
   const { canEdit } = useWorkspaceAccess();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useGetAgentEscalation(agentId);
+  const { data, isLoading } = useGetAgentEscalation(agentId, {
+    query: getAgentEscalationQueryOptions(agentId),
+  });
   const { data: members = [] } = useListMembers();
   const updateEscalation = useUpdateAgentEscalation();
   const [name, setName] = useState("Escalation team");
