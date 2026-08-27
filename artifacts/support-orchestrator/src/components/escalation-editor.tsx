@@ -63,12 +63,19 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
     }
   };
 
-  const save = async () => {
+  const save = async (
+    overrides: Pick<Partial<AgentEscalationInput>, "isEnabled"> = {},
+  ) => {
+    const previousIsEnabled = isEnabled;
+    const nextIsEnabled = overrides.isEnabled ?? isEnabled;
+    const toggled = overrides.isEnabled !== undefined;
+
     if (!name.trim()) {
       toast({ title: "Enter a team name", variant: "destructive" });
       return;
     }
-    if (isEnabled && createInboxConversation && memberIds.length === 0) {
+    if (nextIsEnabled && createInboxConversation && memberIds.length === 0) {
+      if (toggled) setIsEnabled(previousIsEnabled);
       toast({
         title: "Select at least one member",
         description: "Enabled escalations need an inbox recipient.",
@@ -76,9 +83,10 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
       });
       return;
     }
+    if (toggled) setIsEnabled(nextIsEnabled);
     const input: AgentEscalationInput = {
       name: name.trim(),
-      isEnabled,
+      isEnabled: nextIsEnabled,
       createInboxConversation,
       notifyAssignedMembers,
       memberIds,
@@ -90,6 +98,7 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
       });
       toast({ title: "Escalation settings saved" });
     } catch (error) {
+      if (toggled) setIsEnabled(previousIsEnabled);
       toast({
         title: "Could not save escalation settings",
         description: error instanceof Error ? error.message : "Try again.",
@@ -145,8 +154,8 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
             <Switch
               id="escalation-enabled"
               checked={isEnabled}
-              onCheckedChange={setIsEnabled}
-              disabled={!canEdit}
+              onCheckedChange={(checked) => void save({ isEnabled: checked })}
+              disabled={!canEdit || saving}
             />
           </div>
 
