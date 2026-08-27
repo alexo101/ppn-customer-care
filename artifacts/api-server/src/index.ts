@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureEveryoneTargetsForAllAgents } from "./lib/agents";
+import { ensureAgentEscalationInboxesForAllAgents } from "./lib/escalations";
 import { startConversationLifecycleSweep } from "./lib/conversation-lifecycle";
 import { prepareKnowledgeEmbeddings } from "./lib/knowledge-indexing";
 
@@ -35,5 +36,14 @@ app.listen(port, (err) => {
     })
     .catch((error) => {
       logger.error({ error }, "Failed to add Everyone target to existing agents");
+    });
+  void ensureAgentEscalationInboxesForAllAgents()
+    .then((created) => {
+      if (created > 0) {
+        logger.info({ created }, "Added escalation inbox to existing agents");
+      }
+    })
+    .catch((error) => {
+      logger.error({ error }, "Failed to add escalation inbox to existing agents");
     });
 });

@@ -1983,19 +1983,10 @@ components:
     AgentEscalation:
       type: object
       required:
-        [
-          agentId,
-          name,
-          isEnabled,
-          createInboxConversation,
-          notifyAssignedMembers,
-          members,
-        ]
+        [agentId, name, notifyAssignedMembers, members]
       properties:
         agentId: { type: string }
         name: { type: string }
-        isEnabled: { type: boolean }
-        createInboxConversation: { type: boolean }
         notifyAssignedMembers: { type: boolean }
         members:
           type: array
@@ -2004,18 +1995,9 @@ components:
 
     AgentEscalationInput:
       type: object
-      required:
-        [
-          name,
-          isEnabled,
-          createInboxConversation,
-          notifyAssignedMembers,
-          memberIds,
-        ]
+      required: [name, notifyAssignedMembers, memberIds]
       properties:
         name: { type: string, minLength: 1, maxLength: 160 }
-        isEnabled: { type: boolean }
-        createInboxConversation: { type: boolean }
         notifyAssignedMembers: { type: boolean }
         memberIds:
           type: array

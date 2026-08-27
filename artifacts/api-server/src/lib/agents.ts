@@ -10,6 +10,7 @@ import {
   knowledgeSourcesTable,
   orchestratorRulesTable,
 } from "@workspace/db";
+import { ensureAgentEscalationInbox } from "./escalations";
 import { EVERYONE_TARGET_DESCRIPTION, EVERYONE_TARGET_NAME } from "./targets";
 
 export async function getAgent(agentId: string) {
@@ -107,7 +108,14 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
 
   if (existing[0]) {
     await attachUnscopedRows(userId, existing[0].id);
-    await Promise.all(existing.map((agent) => ensureEveryoneTarget(userId, agent.id)));
+    await Promise.all(
+      existing.map((agent) =>
+        Promise.all([
+          ensureEveryoneTarget(userId, agent.id),
+          ensureAgentEscalationInbox(agent.id),
+        ]),
+      ),
+    );
     return existing[0];
   }
 
@@ -124,6 +132,7 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
 
   await attachUnscopedRows(userId, created.id);
   await ensureEveryoneTarget(userId, created.id);
+  await ensureAgentEscalationInbox(created.id);
   return created;
 }
 

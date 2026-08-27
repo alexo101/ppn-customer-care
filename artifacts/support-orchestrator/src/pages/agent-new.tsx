@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, Redirect, useLocation } from "wouter";
-import { useCreateAgent, getListAgentsQueryKey } from "@workspace/api-client-react";
+import { useCreateAgent } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@clerk/react";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { CategoriesTab, RulesTab, SourcesTab, TargetsTab } from "@/pages/admin";
 import { AppearanceEditor } from "@/components/appearance-editor";
 import { cn } from "@/lib/utils";
 import { useWorkspaceAccess } from "@/components/workspace-access";
+import { getUserAgentsQueryKey } from "@/lib/agents-query";
 
 const STEPS = [
   { id: "appearance", label: "Appearance" },
@@ -23,6 +25,7 @@ const STEPS = [
 export default function CreateAgentPage() {
   const [, setLocation] = useLocation();
   const { canEdit } = useWorkspaceAccess();
+  const { userId } = useAuth();
   const queryClient = useQueryClient();
   const createAgent = useCreateAgent();
   const [step, setStep] = useState(0);
@@ -43,7 +46,9 @@ export default function CreateAgentPage() {
           data: { name: name.trim(), description: description.trim() },
         });
         setAgentId(created.id);
-        queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });
+        await queryClient.invalidateQueries({
+          queryKey: getUserAgentsQueryKey(userId),
+        });
         return;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not create agent.");

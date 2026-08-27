@@ -73,8 +73,6 @@ export interface AgentEscalationMember {
 export interface AgentEscalation {
   agentId: string;
   name: string;
-  isEnabled: boolean;
-  createInboxConversation: boolean;
   notifyAssignedMembers: boolean;
   members: AgentEscalationMember[];
 }
@@ -85,8 +83,6 @@ export interface AgentEscalationInput {
      * @maxLength 160
      */
   name: string;
-  isEnabled: boolean;
-  createInboxConversation: boolean;
   notifyAssignedMembers: boolean;
   memberIds: string[];
 }

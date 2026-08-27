@@ -18,10 +18,6 @@ export const agentEscalationSettingsTable = pgTable(
       .primaryKey()
       .references(() => agentsTable.id, { onDelete: "cascade" }),
     name: text("name").notNull().default("Escalation team"),
-    isEnabled: boolean("is_enabled").notNull().default(false),
-    createInboxConversation: boolean("create_inbox_conversation")
-      .notNull()
-      .default(true),
     notifyAssignedMembers: boolean("notify_assigned_members")
       .notNull()
       .default(true),

@@ -34,12 +34,56 @@ export class EscalationError extends Error {
   }
 }
 
-export async function getAgentEscalation(agentId: string) {
-  const [settings] = await db
+type EscalationExecutor = Pick<typeof db, "select" | "insert">;
+
+export async function ensureAgentEscalationInbox(
+  agentId: string,
+  executor: EscalationExecutor = db,
+) {
+  const [existing] = await executor
     .select()
     .from(agentEscalationSettingsTable)
     .where(eq(agentEscalationSettingsTable.agentId, agentId))
     .limit(1);
+  if (existing) return existing;
+
+  const [created] = await executor
+    .insert(agentEscalationSettingsTable)
+    .values({ agentId })
+    .onConflictDoNothing()
+    .returning();
+  if (created) return created;
+
+  const [retry] = await executor
+    .select()
+    .from(agentEscalationSettingsTable)
+    .where(eq(agentEscalationSettingsTable.agentId, agentId))
+    .limit(1);
+  if (!retry) {
+    throw new EscalationError("Could not create escalation inbox.", 500);
+  }
+  return retry;
+}
+
+export async function ensureAgentEscalationInboxesForAllAgents() {
+  const agents = await db.select({ id: agentsTable.id }).from(agentsTable);
+  if (agents.length === 0) return 0;
+
+  const existing = await db
+    .select({ agentId: agentEscalationSettingsTable.agentId })
+    .from(agentEscalationSettingsTable);
+  const hasInbox = new Set(existing.map((row) => row.agentId));
+  const missing = agents.filter((agent) => !hasInbox.has(agent.id));
+  if (missing.length === 0) return 0;
+
+  await db
+    .insert(agentEscalationSettingsTable)
+    .values(missing.map((agent) => ({ agentId: agent.id })));
+  return missing.length;
+}
+
+export async function getAgentEscalation(agentId: string) {
+  const settings = await ensureAgentEscalationInbox(agentId);
   const members = await db
     .select({ member: workspaceMembersTable })
     .from(agentEscalationMembersTable)
@@ -61,8 +105,6 @@ export async function updateAgentEscalation(
   agentId: string,
   input: {
     name: string;
-    isEnabled: boolean;
-    createInboxConversation: boolean;
     notifyAssignedMembers: boolean;
     memberIds: string[];
   },
@@ -70,13 +112,6 @@ export async function updateAgentEscalation(
   const name = input.name.trim();
   const memberIds = [...new Set(input.memberIds)];
   if (!name) throw new EscalationError("Enter an escalation team name.");
-  if (
-    input.isEnabled &&
-    input.createInboxConversation &&
-    memberIds.length === 0
-  ) {
-    throw new EscalationError("Select at least one active escalation member.");
-  }
 
   return db.transaction(async (tx) => {
     const members = memberIds.length
@@ -101,16 +136,12 @@ export async function updateAgentEscalation(
       .values({
         agentId,
         name,
-        isEnabled: input.isEnabled,
-        createInboxConversation: input.createInboxConversation,
         notifyAssignedMembers: input.notifyAssignedMembers,
       })
       .onConflictDoUpdate({
         target: agentEscalationSettingsTable.agentId,
         set: {
           name,
-          isEnabled: input.isEnabled,
-          createInboxConversation: input.createInboxConversation,
           notifyAssignedMembers: input.notifyAssignedMembers,
           updatedAt: new Date(),
         },
@@ -189,12 +220,7 @@ export async function upsertEscalationForConversation(input: {
   const agentId = input.agentId;
 
   return db.transaction(async (tx) => {
-    const [settings] = await tx
-      .select()
-      .from(agentEscalationSettingsTable)
-      .where(eq(agentEscalationSettingsTable.agentId, agentId))
-      .limit(1);
-    if (!settings?.isEnabled || !settings.createInboxConversation) return null;
+    const settings = await ensureAgentEscalationInbox(agentId, tx);
 
     const [existing] = await tx
       .select()
@@ -520,8 +546,6 @@ function toAgentEscalation(
   return {
     agentId,
     name: settings?.name ?? "Escalation team",
-    isEnabled: settings?.isEnabled ?? false,
-    createInboxConversation: settings?.createInboxConversation ?? true,
     notifyAssignedMembers: settings?.notifyAssignedMembers ?? true,
     members: members.map(toMemberDto),
   };

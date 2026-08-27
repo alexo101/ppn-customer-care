@@ -11,6 +11,7 @@ import {
   DeleteAgentParams,
 } from "@workspace/api-zod";
 import { ensureDefaultAgentIfNeeded, ensureEveryoneTarget, getOwnedAgent, toAgent } from "../lib/agents";
+import { ensureAgentEscalationInbox } from "../lib/escalations";
 import { hashDeploymentToken, newDeploymentToken } from "../lib/connection-secrets";
 
 const router: IRouter = Router();
@@ -42,6 +43,7 @@ router.post("/agents", requireAuth, requireEditor, async (req, res): Promise<voi
     .returning();
 
   await ensureEveryoneTarget(req.userId, row.id);
+  await ensureAgentEscalationInbox(row.id);
   res.status(201).json(toAgent(row));
 });
 

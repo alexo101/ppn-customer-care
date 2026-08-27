@@ -10,8 +10,6 @@ import type { AgentEscalationMember } from './agentEscalationMember';
 export interface AgentEscalation {
   agentId: string;
   name: string;
-  isEnabled: boolean;
-  createInboxConversation: boolean;
   notifyAssignedMembers: boolean;
   members: AgentEscalationMember[];
 }

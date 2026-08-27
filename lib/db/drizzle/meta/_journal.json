@@ -15,6 +15,13 @@
       "when": 1787843300551,
       "tag": "0001_worried_ken_ellis",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787844000000,
+      "tag": "0002_always_on_escalation_inbox",
+      "breakpoints": true
     }
   ]
 }

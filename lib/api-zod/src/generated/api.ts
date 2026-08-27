@@ -244,8 +244,6 @@ export const GetAgentEscalationParams = zod.object({
 export const GetAgentEscalationResponse = zod.object({
   "agentId": zod.string(),
   "name": zod.string(),
-  "isEnabled": zod.boolean(),
-  "createInboxConversation": zod.boolean(),
   "notifyAssignedMembers": zod.boolean(),
   "members": zod.array(zod.object({
   "id": zod.string(),
@@ -269,8 +267,6 @@ export const updateAgentEscalationBodyNameMax = 160;
 
 export const UpdateAgentEscalationBody = zod.object({
   "name": zod.string().min(1).max(updateAgentEscalationBodyNameMax),
-  "isEnabled": zod.boolean(),
-  "createInboxConversation": zod.boolean(),
   "notifyAssignedMembers": zod.boolean(),
   "memberIds": zod.array(zod.string())
 })
@@ -278,8 +274,6 @@ export const UpdateAgentEscalationBody = zod.object({
 export const UpdateAgentEscalationResponse = zod.object({
   "agentId": zod.string(),
   "name": zod.string(),
-  "isEnabled": zod.boolean(),
-  "createInboxConversation": zod.boolean(),
   "notifyAssignedMembers": zod.boolean(),
   "members": zod.array(zod.object({
   "id": zod.string(),

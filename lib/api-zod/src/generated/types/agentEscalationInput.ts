@@ -12,8 +12,6 @@ export interface AgentEscalationInput {
      * @maxLength 160
      */
   name: string;
-  isEnabled: boolean;
-  createInboxConversation: boolean;
   notifyAssignedMembers: boolean;
   memberIds: string[];
 }

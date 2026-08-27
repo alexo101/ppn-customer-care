@@ -7,7 +7,7 @@ import {
   useUpdateAgentEscalation,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Inbox, Save } from "lucide-react";
+import { Bell, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,7 +19,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   MutatingControls,
   useWorkspaceAccess,
@@ -36,16 +35,12 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
   const { data: members = [] } = useListMembers();
   const updateEscalation = useUpdateAgentEscalation();
   const [name, setName] = useState("Escalation team");
-  const [isEnabled, setIsEnabled] = useState(false);
-  const [createInboxConversation, setCreateInboxConversation] = useState(true);
   const [notifyAssignedMembers, setNotifyAssignedMembers] = useState(true);
   const [memberIds, setMemberIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!data) return;
     setName(data.name);
-    setIsEnabled(data.isEnabled);
-    setCreateInboxConversation(data.createInboxConversation);
     setNotifyAssignedMembers(data.notifyAssignedMembers);
     setMemberIds(data.members.map((member) => member.id));
   }, [data]);
@@ -63,31 +58,13 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
     }
   };
 
-  const save = async (
-    overrides: Pick<Partial<AgentEscalationInput>, "isEnabled"> = {},
-  ) => {
-    const previousIsEnabled = isEnabled;
-    const nextIsEnabled = overrides.isEnabled ?? isEnabled;
-    const toggled = overrides.isEnabled !== undefined;
-
+  const save = async () => {
     if (!name.trim()) {
       toast({ title: "Enter a team name", variant: "destructive" });
       return;
     }
-    if (nextIsEnabled && createInboxConversation && memberIds.length === 0) {
-      if (toggled) setIsEnabled(previousIsEnabled);
-      toast({
-        title: "Select at least one member",
-        description: "Enabled escalations need an inbox recipient.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (toggled) setIsEnabled(nextIsEnabled);
     const input: AgentEscalationInput = {
       name: name.trim(),
-      isEnabled: nextIsEnabled,
-      createInboxConversation,
       notifyAssignedMembers,
       memberIds,
     };
@@ -98,7 +75,6 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
       });
       toast({ title: "Escalation settings saved" });
     } catch (error) {
-      if (toggled) setIsEnabled(previousIsEnabled);
       toast({
         title: "Could not save escalation settings",
         description: error instanceof Error ? error.message : "Try again.",
@@ -121,8 +97,8 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
         <CardHeader>
           <CardTitle className="text-base">Escalation destination</CardTitle>
           <CardDescription>
-            Choose the support group that receives conversations this Agent
-            cannot resolve. This membership is separate from platform access
+            Choose the people who receive conversations this Agent cannot
+            resolve. This membership is separate from platform access
             permissions.
           </CardDescription>
         </CardHeader>
@@ -172,48 +148,15 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-            <div className="flex items-start gap-3">
-              <Inbox className="mt-0.5 h-4 w-4 text-muted-foreground" />
-              <div>
-                <Label htmlFor="escalation-enabled">
-                  Enable escalation inbox
-                </Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Create an assigned inbox conversation when a Rule escalates.
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="escalation-enabled"
-              checked={isEnabled}
-              onCheckedChange={(checked) => void save({ isEnabled: checked })}
-              disabled={!canEdit || saving}
-            />
-          </div>
-
           <div className="space-y-3">
-            <Label>Notification</Label>
-            <label className="flex items-center gap-3">
-              <Checkbox
-                checked={createInboxConversation}
-                onCheckedChange={(checked) =>
-                  setCreateInboxConversation(checked === true)
-                }
-                disabled={!canEdit}
-              />
-              <span className="flex items-center gap-2 text-sm">
-                <Inbox className="h-4 w-4 text-muted-foreground" />
-                Create inbox conversation
-              </span>
-            </label>
+            <Label>Notifications</Label>
             <label className="flex items-center gap-3">
               <Checkbox
                 checked={notifyAssignedMembers}
                 onCheckedChange={(checked) =>
                   setNotifyAssignedMembers(checked === true)
                 }
-                disabled={!canEdit || !createInboxConversation}
+                disabled={!canEdit}
               />
               <span className="flex items-center gap-2 text-sm">
                 <Bell className="h-4 w-4 text-muted-foreground" />
