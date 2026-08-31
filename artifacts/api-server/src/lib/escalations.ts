@@ -1,11 +1,13 @@
 import {
   and,
+  count,
   desc,
   eq,
   inArray,
   isNotNull,
   isNull,
   notInArray,
+  or,
 } from "drizzle-orm";
 import {
   agentEscalationMembersTable,
@@ -201,6 +203,18 @@ export async function updateAgentEscalation(
           });
       }
     }
+    await tx
+      .update(escalationsTable)
+      .set({ assigneeMemberId: null, claimedAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(escalationsTable.agentId, agentId),
+          eq(escalationsTable.status, "open"),
+          memberIds.length > 0
+            ? notInArray(escalationsTable.assigneeMemberId, memberIds)
+            : undefined,
+        ),
+      );
 
     return toAgentEscalation(agentId, settings, members);
   });
@@ -311,12 +325,14 @@ export async function listAssignedEscalations(
   memberId: string,
   status: "open" | "resolved" | "all",
   unreadOnly: boolean,
+  agentId?: string,
 ) {
   const rows = await db
     .select({
       escalation: escalationsTable,
       assignment: escalationAssignmentsTable,
       agentName: agentsTable.name,
+      teamName: agentEscalationSettingsTable.name,
     })
     .from(escalationAssignmentsTable)
     .innerJoin(
@@ -324,19 +340,260 @@ export async function listAssignedEscalations(
       eq(escalationAssignmentsTable.escalationId, escalationsTable.id),
     )
     .innerJoin(agentsTable, eq(escalationsTable.agentId, agentsTable.id))
+    .innerJoin(
+      agentEscalationSettingsTable,
+      eq(escalationsTable.agentId, agentEscalationSettingsTable.agentId),
+    )
     .where(
       and(
         eq(escalationAssignmentsTable.memberId, memberId),
         isNull(escalationAssignmentsTable.revokedAt),
         status === "all" ? undefined : eq(escalationsTable.status, status),
         unreadOnly ? eq(escalationAssignmentsTable.isRead, false) : undefined,
+        agentId ? eq(escalationsTable.agentId, agentId) : undefined,
+        or(
+          isNull(escalationsTable.assigneeMemberId),
+          eq(escalationsTable.assigneeMemberId, memberId),
+        ),
       ),
     )
     .orderBy(desc(escalationsTable.updatedAt));
 
-  return rows.map(({ escalation, assignment, agentName }) =>
-    toInboxEscalation(escalation, assignment, agentName),
+  return enrichInboxEscalations(
+    rows.map(({ escalation, assignment, agentName, teamName }) => ({
+      escalation,
+      assignment,
+      agentName,
+      teamName,
+    })),
   );
+}
+
+export async function listTeamEscalations(
+  agentId: string,
+  memberId: string,
+  memberRole: string | undefined,
+  status: "open" | "resolved" | "all",
+  unreadOnly: boolean,
+) {
+  const canView = await canViewTeam(agentId, memberId, memberRole);
+  if (!canView) throw new EscalationError("Team inbox not found.", 404);
+
+  const rows = await db
+    .select({
+      escalation: escalationsTable,
+      agentName: agentsTable.name,
+      teamName: agentEscalationSettingsTable.name,
+    })
+    .from(escalationsTable)
+    .innerJoin(agentsTable, eq(escalationsTable.agentId, agentsTable.id))
+    .innerJoin(
+      agentEscalationSettingsTable,
+      eq(escalationsTable.agentId, agentEscalationSettingsTable.agentId),
+    )
+    .where(
+      and(
+        eq(escalationsTable.agentId, agentId),
+        status === "all" ? undefined : eq(escalationsTable.status, status),
+      ),
+    )
+    .orderBy(desc(escalationsTable.updatedAt));
+
+  const assignments = rows.length
+    ? await db
+        .select()
+        .from(escalationAssignmentsTable)
+        .where(
+          and(
+            eq(escalationAssignmentsTable.memberId, memberId),
+            isNull(escalationAssignmentsTable.revokedAt),
+            inArray(
+              escalationAssignmentsTable.escalationId,
+              rows.map(({ escalation }) => escalation.id),
+            ),
+          ),
+        )
+    : [];
+  const assignmentByEscalation = new Map(
+    assignments.map((assignment) => [assignment.escalationId, assignment]),
+  );
+
+  const filteredRows = unreadOnly
+    ? rows.filter(
+        ({ escalation }) => assignmentByEscalation.get(escalation.id)?.isRead === false,
+      )
+    : rows;
+  return enrichInboxEscalations(
+    filteredRows.map(({ escalation, agentName, teamName }) => ({
+      escalation,
+      assignment: assignmentByEscalation.get(escalation.id) ?? null,
+      agentName,
+      teamName,
+    })),
+  );
+}
+
+export async function listInboxTeams(
+  memberId: string,
+  memberRole?: string,
+) {
+  const teamRows =
+    memberRole === "editor"
+      ? await db
+          .select({
+            agentId: agentEscalationSettingsTable.agentId,
+            teamName: agentEscalationSettingsTable.name,
+            agentName: agentsTable.name,
+          })
+          .from(agentEscalationSettingsTable)
+          .innerJoin(
+            agentsTable,
+            eq(agentsTable.id, agentEscalationSettingsTable.agentId),
+          )
+      : await db
+          .select({
+            agentId: agentEscalationSettingsTable.agentId,
+            teamName: agentEscalationSettingsTable.name,
+            agentName: agentsTable.name,
+          })
+          .from(agentEscalationMembersTable)
+          .innerJoin(
+            agentEscalationSettingsTable,
+            eq(
+              agentEscalationSettingsTable.agentId,
+              agentEscalationMembersTable.agentId,
+            ),
+          )
+          .innerJoin(
+            agentsTable,
+            eq(agentsTable.id, agentEscalationSettingsTable.agentId),
+          )
+          .where(eq(agentEscalationMembersTable.memberId, memberId));
+
+  const countRows =
+    teamRows.length === 0
+      ? []
+      : await db
+          .select({
+            agentId: escalationsTable.agentId,
+            openCount: count(),
+          })
+          .from(escalationAssignmentsTable)
+          .innerJoin(
+            escalationsTable,
+            eq(escalationAssignmentsTable.escalationId, escalationsTable.id),
+          )
+          .where(
+            and(
+              eq(escalationAssignmentsTable.memberId, memberId),
+              isNull(escalationAssignmentsTable.revokedAt),
+              eq(escalationsTable.status, "open"),
+              inArray(
+                escalationsTable.agentId,
+                teamRows.map((team) => team.agentId),
+              ),
+              or(
+                isNull(escalationsTable.assigneeMemberId),
+                eq(escalationsTable.assigneeMemberId, memberId),
+              ),
+            ),
+          )
+          .groupBy(escalationsTable.agentId);
+
+  const openCountByAgent = new Map(
+    countRows.map((row) => [row.agentId, Number(row.openCount)]),
+  );
+  return teamRows
+    .map((team) => ({
+      agentId: team.agentId,
+      agentName: team.agentName,
+      teamName: inboxTeamLabel(team.teamName),
+      openCount: openCountByAgent.get(team.agentId) ?? 0,
+    }))
+    .sort((a, b) => a.teamName.localeCompare(b.teamName));
+}
+
+export function inboxTeamLabel(name: string | null | undefined) {
+  const trimmed = name?.trim() ?? "";
+  return trimmed || "Escalation team";
+}
+
+async function canViewTeam(
+  agentId: string,
+  memberId: string,
+  memberRole?: string,
+) {
+  if (memberRole === "editor") return true;
+  const [membership] = await db
+    .select({ id: agentEscalationMembersTable.id })
+    .from(agentEscalationMembersTable)
+    .where(
+      and(
+        eq(agentEscalationMembersTable.agentId, agentId),
+        eq(agentEscalationMembersTable.memberId, memberId),
+      ),
+    )
+    .limit(1);
+  return Boolean(membership);
+}
+
+export async function claimEscalation(
+  escalationId: string,
+  memberId: string,
+) {
+  const [candidate] = await db
+    .select({ escalation: escalationsTable })
+    .from(escalationsTable)
+    .innerJoin(
+      agentEscalationMembersTable,
+      eq(
+        agentEscalationMembersTable.agentId,
+        escalationsTable.agentId,
+      ),
+    )
+    .where(
+      and(
+        eq(escalationsTable.id, escalationId),
+        eq(agentEscalationMembersTable.memberId, memberId),
+        eq(escalationsTable.status, "open"),
+      ),
+    )
+    .limit(1);
+  if (!candidate) throw new EscalationError("Escalation not found.", 404);
+
+  if (candidate.escalation.assigneeMemberId === memberId) {
+    return candidate.escalation;
+  }
+  if (candidate.escalation.assigneeMemberId) {
+    throw new EscalationError("This escalation is already assigned.", 409);
+  }
+
+  const now = new Date();
+  const [claimed] = await db
+    .update(escalationsTable)
+    .set({ assigneeMemberId: memberId, claimedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(escalationsTable.id, escalationId),
+        eq(escalationsTable.status, "open"),
+        isNull(escalationsTable.assigneeMemberId),
+      ),
+    )
+    .returning();
+  if (!claimed) {
+    throw new EscalationError("This escalation is already assigned.", 409);
+  }
+  return claimed;
+}
+
+export async function getInboxEscalationForMember(
+  escalationId: string,
+  memberId: string,
+) {
+  const items = await listAssignedEscalations(memberId, "all", false);
+  const item = items.find((escalation) => escalation.id === escalationId);
+  if (!item) throw new EscalationError("Escalation not found.", 404);
+  return item;
 }
 
 export async function countUnreadEscalations(memberId: string) {
@@ -353,6 +610,10 @@ export async function countUnreadEscalations(memberId: string) {
         eq(escalationAssignmentsTable.isRead, false),
         isNull(escalationAssignmentsTable.revokedAt),
         eq(escalationsTable.status, "open"),
+        or(
+          isNull(escalationsTable.assigneeMemberId),
+          eq(escalationsTable.assigneeMemberId, memberId),
+        ),
       ),
     );
   return rows.length;
@@ -423,13 +684,32 @@ export async function assertAssignedEscalation(
     )
     .limit(1);
   if (!row) throw new EscalationError("Escalation not found.", 404);
+  if (row.escalation.assigneeMemberId !== memberId) {
+    throw new EscalationError(
+      "Claim this escalation before replying or resolving it.",
+      409,
+    );
+  }
   return row;
 }
 
 export async function getAssignedConversation(
   conversationId: string,
   memberId: string,
+  memberRole?: string,
 ) {
+  if (memberRole === "editor") {
+    const [row] = await db
+      .select({ conversation: conversationsTable })
+      .from(escalationsTable)
+      .innerJoin(
+        conversationsTable,
+        eq(escalationsTable.conversationId, conversationsTable.id),
+      )
+      .where(eq(escalationsTable.conversationId, conversationId))
+      .limit(1);
+    return row?.conversation ?? null;
+  }
   const [row] = await db
     .select({ conversation: conversationsTable })
     .from(escalationAssignmentsTable)
@@ -545,7 +825,7 @@ function toAgentEscalation(
 ) {
   return {
     agentId,
-    name: settings?.name ?? "Escalation team",
+    name: inboxTeamLabel(settings?.name),
     notifyAssignedMembers: settings?.notifyAssignedMembers ?? true,
     members: members.map(toMemberDto),
   };
@@ -553,15 +833,21 @@ function toAgentEscalation(
 
 function toInboxEscalation(
   escalation: typeof escalationsTable.$inferSelect,
-  assignment: typeof escalationAssignmentsTable.$inferSelect,
+  assignment: typeof escalationAssignmentsTable.$inferSelect | null,
   agentName: string,
+  teamName: string,
+  customer: { name: string | null; email: string | null },
+  lastMessagePreview: string | null,
+  lastActivityAt: Date,
 ) {
   return {
     id: escalation.id,
     conversationId: escalation.conversationId,
     agentId: escalation.agentId,
     agentName,
+    teamName: inboxTeamLabel(teamName),
     status: escalation.status as "open" | "resolved",
+    priority: escalation.priority as "low" | "normal" | "high" | "urgent",
     reason: escalation.reason,
     category: escalation.category,
     subcategory: escalation.subcategory,
@@ -570,10 +856,92 @@ function toInboxEscalation(
       : [],
     previousAnswer: escalation.previousAnswer,
     context: isRecord(escalation.context) ? escalation.context : {},
-    isRead: assignment.isRead,
+    isRead: assignment?.isRead ?? false,
+    assignmentState: escalation.assigneeMemberId ? "assigned" : "unassigned",
+    assigneeMemberId: escalation.assigneeMemberId,
+    assigneeName: null,
+    claimedAt: escalation.claimedAt?.toISOString() ?? null,
+    customerName: customer.name,
+    customerEmail: customer.email,
+    lastMessagePreview,
+    lastActivityAt: lastActivityAt.toISOString(),
     createdAt: escalation.createdAt.toISOString(),
     updatedAt: escalation.updatedAt.toISOString(),
     resolvedAt: escalation.resolvedAt?.toISOString() ?? null,
+  };
+}
+
+async function enrichInboxEscalations(
+  rows: Array<{
+    escalation: typeof escalationsTable.$inferSelect;
+    assignment: typeof escalationAssignmentsTable.$inferSelect | null;
+    agentName: string;
+    teamName: string;
+  }>,
+) {
+  if (rows.length === 0) return [];
+  const conversationIds = rows.map(({ escalation }) => escalation.conversationId);
+  const assigneeIds = rows
+    .map(({ escalation }) => escalation.assigneeMemberId)
+    .filter((id): id is string => Boolean(id));
+  const [messages, members] = await Promise.all([
+    db
+      .select({
+        conversationId: messagesTable.conversationId,
+        content: messagesTable.content,
+        createdAt: messagesTable.createdAt,
+      })
+      .from(messagesTable)
+      .where(inArray(messagesTable.conversationId, conversationIds))
+      .orderBy(desc(messagesTable.createdAt)),
+    assigneeIds.length
+      ? db
+          .select({
+            id: workspaceMembersTable.id,
+            email: workspaceMembersTable.email,
+          })
+          .from(workspaceMembersTable)
+          .where(inArray(workspaceMembersTable.id, assigneeIds))
+      : Promise.resolve([]),
+  ]);
+  const latestMessage = new Map<string, (typeof messages)[number]>();
+  for (const message of messages) {
+    if (!latestMessage.has(message.conversationId)) {
+      latestMessage.set(message.conversationId, message);
+    }
+  }
+  const memberById = new Map(members.map((member) => [member.id, member.email]));
+  return rows.map(
+    ({ escalation, assignment, agentName, teamName }) => ({
+      ...toInboxEscalation(
+        escalation,
+        assignment,
+        agentName,
+        teamName,
+        customerFromContext(escalation.context),
+        latestMessage.get(escalation.conversationId)?.content ?? null,
+        latestMessage.get(escalation.conversationId)?.createdAt ??
+          escalation.updatedAt,
+      ),
+      assigneeName: escalation.assigneeMemberId
+        ? memberById.get(escalation.assigneeMemberId) ?? null
+        : null,
+    }),
+  );
+}
+
+function customerFromContext(value: unknown) {
+  const context = isRecord(value) ? value : {};
+  const nameValue =
+    context.customerName ??
+    context.userName ??
+    context.name ??
+    ([context.firstName, context.lastName].filter(
+      (part): part is string => typeof part === "string" && Boolean(part),
+    ).join(" ") || null);
+  return {
+    name: typeof nameValue === "string" ? nameValue : null,
+    email: typeof context.email === "string" ? context.email : null,
   };
 }
 

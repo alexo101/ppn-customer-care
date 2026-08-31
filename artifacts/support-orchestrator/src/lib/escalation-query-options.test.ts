@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   getAgentEscalationQueryOptions,
   getInboxEscalationsQueryOptions,
+  getInboxMessagesQueryOptions,
+  getInboxTeamsQueryOptions,
   getInboxUnreadCountQueryOptions,
+  getTeamEscalationsQueryOptions,
 } from "./escalation-query-options";
 
 describe("escalation query options", () => {
@@ -23,6 +26,30 @@ describe("escalation query options", () => {
       queryKey: ["/api/inbox/escalations/unread-count"],
       refetchInterval: 10000,
       retry: false,
+    });
+    expect(getInboxTeamsQueryOptions()).toMatchObject({
+      queryKey: ["/api/inbox/teams"],
+      refetchInterval: 10000,
+      retry: false,
+    });
+  });
+
+  it("keeps team queues independently cacheable and polled", () => {
+    expect(getTeamEscalationsQueryOptions("agent-1", "open")).toMatchObject({
+      queryKey: ["/api/inbox/team-escalations", { agentId: "agent-1", status: "open" }],
+      refetchInterval: 10000,
+      retry: false,
+    });
+  });
+
+  it("polls messages only while an escalation is open", () => {
+    expect(getInboxMessagesQueryOptions("conversation-1", true)).toMatchObject({
+      queryKey: ["/api/conversations/conversation-1/messages"],
+      refetchInterval: 5000,
+      retry: false,
+    });
+    expect(getInboxMessagesQueryOptions("conversation-1", false)).toMatchObject({
+      refetchInterval: false,
     });
   });
 });

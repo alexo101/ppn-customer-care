@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   getGetAgentEscalationQueryKey,
+  getListInboxTeamsQueryKey,
   type AgentEscalationInput,
   useGetAgentEscalation,
   useListMembers,
@@ -72,6 +73,9 @@ export function EscalationEditor({ agentId }: { agentId: string }) {
       await updateEscalation.mutateAsync({ id: agentId, data: input });
       await queryClient.invalidateQueries({
         queryKey: getGetAgentEscalationQueryKey(agentId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: getListInboxTeamsQueryKey(),
       });
       toast({ title: "Escalation settings saved" });
     } catch (error) {

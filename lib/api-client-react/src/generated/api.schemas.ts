@@ -87,6 +87,13 @@ export interface AgentEscalationInput {
   memberIds: string[];
 }
 
+export interface InboxTeam {
+  agentId: string;
+  agentName: string;
+  teamName: string;
+  openCount: number;
+}
+
 export interface EscalationAssignment {
   id: string;
   escalationId: string;
@@ -106,16 +113,36 @@ export const InboxEscalationStatus = {
   resolved: 'resolved',
 } as const;
 
+export type InboxEscalationPriority = typeof InboxEscalationPriority[keyof typeof InboxEscalationPriority];
+
+
+export const InboxEscalationPriority = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
 export type InboxEscalationRetrievedInformationItem = { [key: string]: unknown };
 
 export type InboxEscalationContext = { [key: string]: unknown };
+
+export type InboxEscalationAssignmentState = typeof InboxEscalationAssignmentState[keyof typeof InboxEscalationAssignmentState];
+
+
+export const InboxEscalationAssignmentState = {
+  unassigned: 'unassigned',
+  assigned: 'assigned',
+} as const;
 
 export interface InboxEscalation {
   id: string;
   conversationId: string;
   agentId: string;
   agentName: string;
+  teamName: string;
   status: InboxEscalationStatus;
+  priority: InboxEscalationPriority;
   reason: string;
   category: string;
   subcategory: string;
@@ -123,6 +150,20 @@ export interface InboxEscalation {
   previousAnswer: string;
   context: InboxEscalationContext;
   isRead: boolean;
+  assignmentState: InboxEscalationAssignmentState;
+  /** @nullable */
+  assigneeMemberId: string | null;
+  /** @nullable */
+  assigneeName: string | null;
+  /** @nullable */
+  claimedAt: string | null;
+  /** @nullable */
+  customerName: string | null;
+  /** @nullable */
+  customerEmail: string | null;
+  /** @nullable */
+  lastMessagePreview: string | null;
+  lastActivityAt: string;
   createdAt: string;
   updatedAt: string;
   /** @nullable */
@@ -929,6 +970,7 @@ export interface UpdateMemberInput {
 }
 
 export type ListInboxEscalationsParams = {
+agentId?: string;
 status?: ListInboxEscalationsStatus;
 unreadOnly?: boolean;
 };
@@ -937,6 +979,21 @@ export type ListInboxEscalationsStatus = typeof ListInboxEscalationsStatus[keyof
 
 
 export const ListInboxEscalationsStatus = {
+  open: 'open',
+  resolved: 'resolved',
+  all: 'all',
+} as const;
+
+export type ListTeamInboxEscalationsParams = {
+agentId: string;
+status?: ListTeamInboxEscalationsStatus;
+unreadOnly?: boolean;
+};
+
+export type ListTeamInboxEscalationsStatus = typeof ListTeamInboxEscalationsStatus[keyof typeof ListTeamInboxEscalationsStatus];
+
+
+export const ListTeamInboxEscalationsStatus = {
   open: 'open',
   resolved: 'resolved',
   all: 'all',

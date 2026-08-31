@@ -191,6 +191,7 @@ router.get(
       const assigned = await getAssignedConversation(
         params.data.id,
         req.workspaceMemberId,
+        req.memberRole,
       );
       if (assigned) row = assigned;
     }
@@ -274,6 +275,7 @@ router.get(
       const assigned = await getAssignedConversation(
         params.data.id,
         req.workspaceMemberId,
+        req.memberRole,
       );
       if (assigned) conv = { id: assigned.id };
     }
@@ -834,6 +836,7 @@ router.post(
       const assigned = await getAssignedConversation(
         params.data.id,
         req.workspaceMemberId,
+        req.memberRole,
       );
       if (assigned) conv = { id: assigned.id };
     }

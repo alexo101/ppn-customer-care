@@ -5,7 +5,9 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { InboxEscalationAssignmentState } from './inboxEscalationAssignmentState';
 import type { InboxEscalationContext } from './inboxEscalationContext';
+import type { InboxEscalationPriority } from './inboxEscalationPriority';
 import type { InboxEscalationRetrievedInformationItem } from './inboxEscalationRetrievedInformationItem';
 import type { InboxEscalationStatus } from './inboxEscalationStatus';
 
@@ -14,7 +16,9 @@ export interface InboxEscalation {
   conversationId: string;
   agentId: string;
   agentName: string;
+  teamName: string;
   status: InboxEscalationStatus;
+  priority: InboxEscalationPriority;
   reason: string;
   category: string;
   subcategory: string;
@@ -22,6 +26,20 @@ export interface InboxEscalation {
   previousAnswer: string;
   context: InboxEscalationContext;
   isRead: boolean;
+  assignmentState: InboxEscalationAssignmentState;
+  /** @nullable */
+  assigneeMemberId: string | null;
+  /** @nullable */
+  assigneeName: string | null;
+  /** @nullable */
+  claimedAt: Date | null;
+  /** @nullable */
+  customerName: string | null;
+  /** @nullable */
+  customerEmail: string | null;
+  /** @nullable */
+  lastMessagePreview: string | null;
+  lastActivityAt: Date;
   createdAt: Date;
   updatedAt: Date;
   /** @nullable */

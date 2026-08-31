@@ -1,33 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  getGetAgentEscalationQueryOptions,
   getGetInboxUnreadCountQueryKey,
-  getListInboxEscalationsQueryKey,
   getListMessagesQueryKey,
   type InboxEscalation,
   useGetConversation,
+  useClaimEscalation,
   useListInboxEscalations,
+  useListAgents,
+  useListTeamInboxEscalations,
   useListMessages,
   useMarkEscalationRead,
   useReplyToEscalation,
   useResolveEscalation,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { formatDistanceToNow } from "date-fns";
 import {
   CheckCircle2,
   Inbox as InboxIcon,
   Loader2,
   Send,
+  Users,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getInboxEscalationsQueryOptions } from "@/lib/escalation-query-options";
+import {
+  getInboxEscalationsQueryOptions,
+  getInboxMessagesQueryOptions,
+  getTeamEscalationsQueryOptions,
+} from "@/lib/escalation-query-options";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { inboxTeamsFromConfigured } from "@/lib/inbox-teams";
 import { toast } from "@/hooks/use-toast";
 
 type StatusFilter = "open" | "resolved" | "all";
@@ -37,22 +46,61 @@ export default function InboxPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"mine" | "team">("mine");
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const { data: escalations = [], isLoading } = useListInboxEscalations(
     { status: statusFilter },
     {
       query: getInboxEscalationsQueryOptions(statusFilter),
     },
   );
+  const { data: teamEscalations = [], isLoading: isTeamLoading } =
+    useListTeamInboxEscalations(
+      { agentId: selectedTeamId ?? "", status: statusFilter },
+      {
+        query: {
+          ...getTeamEscalationsQueryOptions(
+            selectedTeamId ?? "",
+            statusFilter,
+          ),
+          enabled: viewMode === "team" && Boolean(selectedTeamId),
+        },
+      },
+    );
+  const { data: agents = [] } = useListAgents();
+  const escalationSettings = useQueries({
+    queries: agents.map((agent) => getGetAgentEscalationQueryOptions(agent.id)),
+  });
   const markRead = useMarkEscalationRead();
 
+  const teams = useMemo(
+    () =>
+      inboxTeamsFromConfigured(
+        agents.map((agent, index) => ({
+          agentId: agent.id,
+          teamName: escalationSettings[index]?.data?.name ?? "",
+          openCount: escalations.filter(
+            (item) => item.agentId === agent.id && item.status === "open",
+          ).length,
+        })),
+      ),
+    [agents, escalationSettings, escalations],
+  );
+
+  const sourceItems =
+    viewMode === "team"
+      ? teamEscalations
+      : selectedTeamId
+        ? escalations.filter((item) => item.agentId === selectedTeamId)
+        : escalations;
   const filtered = useMemo(
     () =>
-      escalations.filter((escalation) => {
+      sourceItems.filter((escalation) => {
         const value =
-          `${escalation.agentName} ${escalation.category} ${escalation.subcategory} ${escalation.reason}`.toLowerCase();
+          `${escalation.teamName} ${escalation.agentName} ${escalation.customerName ?? ""} ${escalation.customerEmail ?? ""} ${escalation.lastMessagePreview ?? ""} ${escalation.category} ${escalation.subcategory} ${escalation.reason}`.toLowerCase();
         return value.includes(search.toLowerCase());
       }),
-    [escalations, search],
+    [sourceItems, search],
   );
 
   useEffect(() => {
@@ -61,7 +109,7 @@ export default function InboxPage() {
     }
   }, [filtered, selectedId]);
 
-  const selected = escalations.find((item) => item.id === selectedId) ?? null;
+  const selected = sourceItems.find((item) => item.id === selectedId) ?? null;
   const openEscalation = (item: InboxEscalation) => {
     setSelectedId(item.id);
     if (!item.isRead) {
@@ -70,9 +118,7 @@ export default function InboxPage() {
         {
           onSuccess: () => {
             void queryClient.invalidateQueries({
-              queryKey: getListInboxEscalationsQueryKey({
-                status: statusFilter,
-              }),
+              queryKey: ["/api/inbox"],
             });
             void queryClient.invalidateQueries({
               queryKey: getGetInboxUnreadCountQueryKey(),
@@ -85,52 +131,99 @@ export default function InboxPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card px-6 md:px-8">
-        <div className="flex items-center gap-3">
-          <InboxIcon className="h-5 w-5 text-primary" />
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Inbox</h1>
-            <p className="hidden text-xs text-muted-foreground sm:block">
-              Support conversations assigned to you
-            </p>
-          </div>
+      <div className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-6 md:px-8">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <InboxIcon className="h-5 w-5 shrink-0 text-primary" />
+          <h1 className="shrink-0 text-xl font-semibold tracking-tight">Inbox</h1>
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search escalations..."
+            className="h-9 max-w-sm bg-background text-xs"
+          />
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-1">
-          {(["open", "all", "resolved"] as StatusFilter[]).map((status) => (
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-1">
+            {(["open", "all", "resolved"] as StatusFilter[]).map((status) => (
+              <Button
+                key={status}
+                variant={statusFilter === status ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 text-xs capitalize"
+                onClick={() => setStatusFilter(status)}
+              >
+                {status}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-1">
             <Button
-              key={status}
-              variant={statusFilter === status ? "secondary" : "ghost"}
+              variant={viewMode === "mine" ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 text-xs capitalize"
-              onClick={() => setStatusFilter(status)}
+              className="h-7 text-xs"
+              onClick={() => setViewMode("mine")}
             >
-              {status}
+              My inbox
             </Button>
-          ))}
+            <Button
+              variant={viewMode === "team" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1 text-xs"
+              onClick={() => {
+                setViewMode("team");
+                setSelectedTeamId(selectedTeamId ?? teams[0]?.agentId ?? null);
+              }}
+            >
+              <Users className="h-3.5 w-3.5" />
+              All team conversations
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="flex w-80 shrink-0 flex-col border-r border-border bg-card">
+        <div className="flex w-64 shrink-0 flex-col border-r border-border bg-card">
           <div className="border-b border-border p-3">
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search escalations..."
-              className="h-9 bg-background text-xs"
-            />
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Escalation teams
+            </p>
+            <div className="mt-2 space-y-1">
+              {teams.map((team) => (
+                <button
+                  key={team.agentId}
+                  type="button"
+                  onClick={() => {
+                    setSelectedTeamId(team.agentId);
+                    if (viewMode === "team") setSelectedId(null);
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-xs",
+                    viewMode === "team" && selectedTeamId === team.agentId
+                      ? "bg-primary/10 text-primary"
+                      : selectedTeamId === team.agentId
+                        ? "bg-muted"
+                        : "hover:bg-background",
+                  )}
+                >
+                  <span className="truncate font-medium">{team.teamName}</span>
+                  <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
+                    {team.openCount}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-1 p-2">
-              {isLoading ? (
+              {(viewMode === "mine" ? isLoading : isTeamLoading) ? (
                 <div className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading inbox...
                 </div>
               ) : filtered.length === 0 ? (
                 <p className="p-6 text-center text-sm text-muted-foreground">
-                  No {statusFilter === "all" ? "" : statusFilter} escalations
-                  assigned to you.
+                  No {statusFilter === "all" ? "" : statusFilter}{" "}
+                  {viewMode === "team" ? "team" : "personal"} escalations.
                 </p>
               ) : (
                 filtered.map((item) => (
@@ -146,8 +239,8 @@ export default function InboxPage() {
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-xs font-semibold">
-                        {item.agentName}
+                      <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-primary">
+                        {item.teamName}
                       </span>
                       {!item.isRead && item.status === "open" ? (
                         <span
@@ -156,15 +249,27 @@ export default function InboxPage() {
                         />
                       ) : null}
                     </div>
-                    <p className="mt-1 truncate text-sm font-medium">
-                      {item.category || "Support request"}
-                      {item.subcategory ? ` · ${item.subcategory}` : ""}
+                    <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                      {item.agentName}
                     </p>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {item.reason}
+                    <p className="mt-1 truncate text-sm font-semibold">
+                      {item.customerName || item.customerEmail || "Customer"}
                     </p>
-                    <p className="mt-2 text-[10px] text-muted-foreground">
-                      {format(new Date(item.updatedAt), "MMM d, HH:mm")}
+                    <p className="mt-1 line-clamp-2 text-xs">
+                      {item.lastMessagePreview || item.reason || "Support request"}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                      {item.category || "Support"}{" "}
+                      {item.subcategory ? `· ${item.subcategory}` : ""} ·{" "}
+                      {item.priority}
+                    </p>
+                    <p className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>{item.assigneeName || "Unassigned"}</span>
+                      <span>
+                        {formatDistanceToNow(new Date(item.lastActivityAt), {
+                          addSuffix: true,
+                        })}
+                      </span>
                     </p>
                   </button>
                 ))
@@ -176,11 +281,10 @@ export default function InboxPage() {
         {selected ? (
           <EscalationDetail
             escalation={selected}
+            isTeamView={viewMode === "team"}
             onRefresh={() => {
               void queryClient.invalidateQueries({
-                queryKey: getListInboxEscalationsQueryKey({
-                  status: statusFilter,
-                }),
+                queryKey: ["/api/inbox"],
               });
               void queryClient.invalidateQueries({
                 queryKey: getGetInboxUnreadCountQueryKey(),
@@ -202,22 +306,56 @@ export default function InboxPage() {
 
 function EscalationDetail({
   escalation,
+  isTeamView,
   onRefresh,
 }: {
   escalation: InboxEscalation;
+  isTeamView: boolean;
   onRefresh: () => void;
 }) {
   const queryClient = useQueryClient();
   const { data: conversation } = useGetConversation(escalation.conversationId);
   const { data: messages = [], isLoading } = useListMessages(
     escalation.conversationId,
+    { query: getInboxMessagesQueryOptions(
+      escalation.conversationId,
+      escalation.status === "open",
+    ) },
   );
   const reply = useReplyToEscalation();
   const resolve = useResolveEscalation();
+  const claim = useClaimEscalation();
   const [content, setContent] = useState("");
+  const canRespond = escalation.assigneeMemberId !== null;
+
+  const claimConversation = () => {
+    claim.mutate(
+      { id: escalation.id },
+      {
+        onSuccess: () => {
+          toast({ title: "Escalation assigned to you" });
+          onRefresh();
+        },
+        onError: (error) =>
+          toast({
+            title: "Could not claim escalation",
+            description:
+              error instanceof Error
+                ? error.message
+                : "Someone else may have claimed it.",
+            variant: "destructive",
+          }),
+      },
+    );
+  };
 
   const sendReply = () => {
-    if (!content.trim() || reply.isPending || escalation.status !== "open")
+    if (
+      !content.trim() ||
+      reply.isPending ||
+      escalation.status !== "open" ||
+      !canRespond
+    )
       return;
     reply.mutate(
       { id: escalation.id, data: { content: content.trim() } },
@@ -263,8 +401,7 @@ function EscalationDetail({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="truncate text-sm font-semibold">
-              {escalation.category || "Support escalation"}
-              {escalation.subcategory ? ` · ${escalation.subcategory}` : ""}
+              {escalation.teamName}
             </h2>
             <Badge
               variant={
@@ -276,21 +413,37 @@ function EscalationDetail({
             </Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {escalation.agentName} · Conversation{" "}
+            {isTeamView ? "Team queue · " : "My inbox · "}
+            {escalation.agentName} ·{" "}
+            {escalation.customerName || escalation.customerEmail || "Customer"}{" "}
+            · Conversation{" "}
             {escalation.conversationId.slice(0, 8)}
           </p>
         </div>
         {escalation.status === "open" ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 text-xs"
-            onClick={resolveConversation}
-            disabled={resolve.isPending}
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {resolve.isPending ? "Resolving..." : "Resolve"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {escalation.assigneeMemberId === null ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={claimConversation}
+                disabled={claim.isPending}
+              >
+                {claim.isPending ? "Assigning..." : "Assign to me"}
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-xs"
+              onClick={resolveConversation}
+              disabled={resolve.isPending || !canRespond}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {resolve.isPending ? "Resolving..." : "Resolve"}
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -357,7 +510,11 @@ function EscalationDetail({
           <aside className="h-fit rounded-xl border border-border bg-card p-4 text-sm">
             <h3 className="font-semibold">Escalation context</h3>
             <Separator className="my-3" />
-            <ContextRow label="Reason" value={escalation.reason} />
+            <ContextRow label="Why Fin escalated" value={escalation.reason} />
+            <ContextRow
+              label="Customer"
+              value={escalation.customerName || escalation.customerEmail || "—"}
+            />
             <ContextRow label="Category" value={escalation.category || "—"} />
             <ContextRow
               label="Subcategory"
@@ -368,10 +525,7 @@ function EscalationDetail({
               value={stringValue(escalation.context.userQuestion) || "—"}
             />
             {escalation.previousAnswer ? (
-              <ContextRow
-                label="Fin's previous answer"
-                value={escalation.previousAnswer}
-              />
+              <ContextRow label="AI response" value={escalation.previousAnswer} />
             ) : null}
             {Object.entries(escalation.context)
               .filter(
@@ -417,7 +571,11 @@ function EscalationDetail({
             <Textarea
               value={content}
               onChange={(event) => setContent(event.target.value)}
-              placeholder="Reply to the user as a support member..."
+              placeholder={
+                canRespond
+                  ? "Reply to the user as a support member..."
+                  : "Assign this escalation to yourself before replying..."
+              }
               className="min-h-11 resize-none text-sm"
               onKeyDown={(event) => {
                 if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -430,7 +588,7 @@ function EscalationDetail({
               size="icon"
               className="mt-auto shrink-0"
               onClick={sendReply}
-              disabled={!content.trim() || reply.isPending}
+              disabled={!content.trim() || reply.isPending || !canRespond}
               aria-label="Send reply"
             >
               {reply.isPending ? (

@@ -1,7 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
+  ClaimEscalationParams,
   GetAgentEscalationParams,
   ListInboxEscalationsQueryParams,
+  ListTeamInboxEscalationsQueryParams,
   MarkEscalationReadParams,
   ReplyToEscalationBody,
   ReplyToEscalationParams,
@@ -14,8 +16,12 @@ import { getOwnedAgent } from "../lib/agents";
 import {
   EscalationError,
   countUnreadEscalations,
+  claimEscalation,
   getAgentEscalation,
+  getInboxEscalationForMember,
   listAssignedEscalations,
+  listInboxTeams,
+  listTeamEscalations,
   markEscalationRead,
   replyToAssignedEscalation,
   resolveAssignedEscalation,
@@ -87,6 +93,16 @@ router.patch(
 );
 
 router.get(
+  "/inbox/teams",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const memberId = memberIdOrUnauthorized(req, res);
+    if (!memberId) return;
+    res.json(await listInboxTeams(memberId, req.memberRole));
+  },
+);
+
+router.get(
   "/inbox/escalations",
   requireAuth,
   async (req, res): Promise<void> => {
@@ -102,8 +118,36 @@ router.get(
         memberId,
         parsed.data.status,
         parsed.data.unreadOnly,
+        parsed.data.agentId,
       ),
     );
+  },
+);
+
+router.get(
+  "/inbox/team-escalations",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const memberId = memberIdOrUnauthorized(req, res);
+    if (!memberId) return;
+    const parsed = ListTeamInboxEscalationsQueryParams.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    try {
+      res.json(
+        await listTeamEscalations(
+          parsed.data.agentId,
+          memberId,
+          req.memberRole,
+          parsed.data.status,
+          parsed.data.unreadOnly,
+        ),
+      );
+    } catch (error) {
+      if (!sendEscalationError(res, error)) throw error;
+    }
   },
 );
 
@@ -132,6 +176,26 @@ router.post(
       res.json(
         toAssignment(await markEscalationRead(params.data.id, memberId)),
       );
+    } catch (error) {
+      if (!sendEscalationError(res, error)) throw error;
+    }
+  },
+);
+
+router.post(
+  "/inbox/escalations/:id/claim",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const memberId = memberIdOrUnauthorized(req, res);
+    if (!memberId) return;
+    const params = ClaimEscalationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    try {
+      await claimEscalation(params.data.id, memberId);
+      res.json(await getInboxEscalationForMember(params.data.id, memberId));
     } catch (error) {
       if (!sendEscalationError(res, error)) throw error;
     }

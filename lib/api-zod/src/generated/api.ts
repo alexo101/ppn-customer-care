@@ -285,12 +285,25 @@ export const UpdateAgentEscalationResponse = zod.object({
 
 
 /**
- * @summary List escalations assigned to the current member
+ * @summary List escalation teams visible to the current member
+ */
+export const ListInboxTeamsResponseItem = zod.object({
+  "agentId": zod.string(),
+  "agentName": zod.string(),
+  "teamName": zod.string(),
+  "openCount": zod.number()
+})
+export const ListInboxTeamsResponse = zod.array(ListInboxTeamsResponseItem)
+
+
+/**
+ * @summary List escalations visible in the current member's inbox
  */
 export const listInboxEscalationsQueryStatusDefault = `open`;
 export const listInboxEscalationsQueryUnreadOnlyDefault = false;
 
 export const ListInboxEscalationsQueryParams = zod.object({
+  "agentId": zod.coerce.string().optional(),
   "status": zod.enum(['open', 'resolved', 'all']).default(listInboxEscalationsQueryStatusDefault),
   "unreadOnly": zod.coerce.boolean().default(listInboxEscalationsQueryUnreadOnlyDefault)
 })
@@ -300,7 +313,9 @@ export const ListInboxEscalationsResponseItem = zod.object({
   "conversationId": zod.string(),
   "agentId": zod.string(),
   "agentName": zod.string(),
+  "teamName": zod.string(),
   "status": zod.enum(['open', 'resolved']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),
@@ -308,11 +323,61 @@ export const ListInboxEscalationsResponseItem = zod.object({
   "previousAnswer": zod.string(),
   "context": zod.record(zod.string(), zod.unknown()),
   "isRead": zod.boolean(),
+  "assignmentState": zod.enum(['unassigned', 'assigned']),
+  "assigneeMemberId": zod.string().nullable(),
+  "assigneeName": zod.string().nullable(),
+  "claimedAt": zod.coerce.date().nullable(),
+  "customerName": zod.string().nullable(),
+  "customerEmail": zod.string().nullable(),
+  "lastMessagePreview": zod.string().nullable(),
+  "lastActivityAt": zod.coerce.date(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "resolvedAt": zod.coerce.date().nullish()
 })
 export const ListInboxEscalationsResponse = zod.array(ListInboxEscalationsResponseItem)
+
+
+/**
+ * @summary List all escalations for an escalation team
+ */
+export const listTeamInboxEscalationsQueryStatusDefault = `open`;
+export const listTeamInboxEscalationsQueryUnreadOnlyDefault = false;
+
+export const ListTeamInboxEscalationsQueryParams = zod.object({
+  "agentId": zod.coerce.string(),
+  "status": zod.enum(['open', 'resolved', 'all']).default(listTeamInboxEscalationsQueryStatusDefault),
+  "unreadOnly": zod.coerce.boolean().default(listTeamInboxEscalationsQueryUnreadOnlyDefault)
+})
+
+export const ListTeamInboxEscalationsResponseItem = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "agentId": zod.string(),
+  "agentName": zod.string(),
+  "teamName": zod.string(),
+  "status": zod.enum(['open', 'resolved']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "reason": zod.string(),
+  "category": zod.string(),
+  "subcategory": zod.string(),
+  "retrievedInformation": zod.array(zod.record(zod.string(), zod.unknown())),
+  "previousAnswer": zod.string(),
+  "context": zod.record(zod.string(), zod.unknown()),
+  "isRead": zod.boolean(),
+  "assignmentState": zod.enum(['unassigned', 'assigned']),
+  "assigneeMemberId": zod.string().nullable(),
+  "assigneeName": zod.string().nullable(),
+  "claimedAt": zod.coerce.date().nullable(),
+  "customerName": zod.string().nullable(),
+  "customerEmail": zod.string().nullable(),
+  "lastMessagePreview": zod.string().nullable(),
+  "lastActivityAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullish()
+})
+export const ListTeamInboxEscalationsResponse = zod.array(ListTeamInboxEscalationsResponseItem)
 
 
 /**
@@ -338,6 +403,42 @@ export const MarkEscalationReadResponse = zod.object({
   "revokedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Claim an unassigned escalation for the current member
+ */
+export const ClaimEscalationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ClaimEscalationResponse = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "agentId": zod.string(),
+  "agentName": zod.string(),
+  "teamName": zod.string(),
+  "status": zod.enum(['open', 'resolved']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "reason": zod.string(),
+  "category": zod.string(),
+  "subcategory": zod.string(),
+  "retrievedInformation": zod.array(zod.record(zod.string(), zod.unknown())),
+  "previousAnswer": zod.string(),
+  "context": zod.record(zod.string(), zod.unknown()),
+  "isRead": zod.boolean(),
+  "assignmentState": zod.enum(['unassigned', 'assigned']),
+  "assigneeMemberId": zod.string().nullable(),
+  "assigneeName": zod.string().nullable(),
+  "claimedAt": zod.coerce.date().nullable(),
+  "customerName": zod.string().nullable(),
+  "customerEmail": zod.string().nullable(),
+  "lastMessagePreview": zod.string().nullable(),
+  "lastActivityAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "resolvedAt": zod.coerce.date().nullish()
 })
 
 
@@ -378,7 +479,9 @@ export const ResolveEscalationResponse = zod.object({
   "conversationId": zod.string(),
   "agentId": zod.string(),
   "agentName": zod.string(),
+  "teamName": zod.string(),
   "status": zod.enum(['open', 'resolved']),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),
@@ -386,6 +489,14 @@ export const ResolveEscalationResponse = zod.object({
   "previousAnswer": zod.string(),
   "context": zod.record(zod.string(), zod.unknown()),
   "isRead": zod.boolean(),
+  "assignmentState": zod.enum(['unassigned', 'assigned']),
+  "assigneeMemberId": zod.string().nullable(),
+  "assigneeName": zod.string().nullable(),
+  "claimedAt": zod.coerce.date().nullable(),
+  "customerName": zod.string().nullable(),
+  "customerEmail": zod.string().nullable(),
+  "lastMessagePreview": zod.string().nullable(),
+  "lastActivityAt": zod.coerce.date(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "resolvedAt": zod.coerce.date().nullish()

@@ -63,6 +63,12 @@ export const escalationsTable = pgTable("escalations", {
     .notNull()
     .references(() => agentsTable.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("normal"),
+  assigneeMemberId: uuid("assignee_member_id").references(
+    () => workspaceMembersTable.id,
+    { onDelete: "set null" },
+  ),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
   reason: text("reason").notNull().default(""),
   category: text("category").notNull().default(""),
   subcategory: text("subcategory").notNull().default(""),

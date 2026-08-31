@@ -328,12 +328,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/AgentEscalation"
 
+  /inbox/teams:
+    get:
+      operationId: listInboxTeams
+      tags: [escalations]
+      summary: List escalation teams visible to the current member
+      responses:
+        "200":
+          description: Escalation teams with configured names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InboxTeam"
+
   /inbox/escalations:
     get:
       operationId: listInboxEscalations
       tags: [escalations]
-      summary: List escalations assigned to the current member
+      summary: List escalations visible in the current member's inbox
       parameters:
+        - in: query
+          name: agentId
+          schema: { type: string }
         - in: query
           name: status
           schema: { type: string, enum: [open, resolved, all], default: open }
@@ -343,6 +361,32 @@ paths:
       responses:
         "200":
           description: Assigned escalations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InboxEscalation"
+
+  /inbox/team-escalations:
+    get:
+      operationId: listTeamInboxEscalations
+      tags: [escalations]
+      summary: List all escalations for an escalation team
+      parameters:
+        - in: query
+          name: agentId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [open, resolved, all], default: open }
+        - in: query
+          name: unreadOnly
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Team escalations
           content:
             application/json:
               schema:
@@ -380,6 +424,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EscalationAssignment"
+
+  /inbox/escalations/{id}/claim:
+    post:
+      operationId: claimEscalation
+      tags: [escalations]
+      summary: Claim an unassigned escalation for the current member
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Claimed escalation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InboxEscalation"
+        "409":
+          description: Escalation is already claimed
 
   /inbox/escalations/{id}/reply:
     post:
@@ -2003,6 +2067,15 @@ components:
           type: array
           items: { type: string }
 
+    InboxTeam:
+      type: object
+      required: [agentId, agentName, teamName, openCount]
+      properties:
+        agentId: { type: string }
+        agentName: { type: string }
+        teamName: { type: string }
+        openCount: { type: number }
+
     EscalationAssignment:
       type: object
       required: [id, escalationId, memberId, isRead, createdAt, updatedAt]
@@ -2025,7 +2098,9 @@ components:
           conversationId,
           agentId,
           agentName,
+          teamName,
           status,
+          priority,
           reason,
           category,
           subcategory,
@@ -2033,6 +2108,14 @@ components:
           previousAnswer,
           context,
           isRead,
+          assignmentState,
+          assigneeMemberId,
+          assigneeName,
+          claimedAt,
+          customerName,
+          customerEmail,
+          lastMessagePreview,
+          lastActivityAt,
           createdAt,
           updatedAt,
         ]
@@ -2041,7 +2124,9 @@ components:
         conversationId: { type: string }
         agentId: { type: string }
         agentName: { type: string }
+        teamName: { type: string }
         status: { type: string, enum: [open, resolved] }
+        priority: { type: string, enum: [low, normal, high, urgent] }
         reason: { type: string }
         category: { type: string }
         subcategory: { type: string }
@@ -2055,6 +2140,21 @@ components:
           type: object
           additionalProperties: true
         isRead: { type: boolean }
+        assignmentState: { type: string, enum: [unassigned, assigned] }
+        assigneeMemberId:
+          type: ["string", "null"]
+        assigneeName:
+          type: ["string", "null"]
+        claimedAt:
+          type: ["string", "null"]
+          format: date-time
+        customerName:
+          type: ["string", "null"]
+        customerEmail:
+          type: ["string", "null"]
+        lastMessagePreview:
+          type: ["string", "null"]
+        lastActivityAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         resolvedAt:

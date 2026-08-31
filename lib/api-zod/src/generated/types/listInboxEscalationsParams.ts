@@ -8,6 +8,7 @@
 import type { ListInboxEscalationsStatus } from './listInboxEscalationsStatus';
 
 export type ListInboxEscalationsParams = {
+agentId?: string;
 status?: ListInboxEscalationsStatus;
 unreadOnly?: boolean;
 };
