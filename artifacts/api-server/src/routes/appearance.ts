@@ -22,6 +22,9 @@ import { ensureDefaultAgentIfNeeded, getOwnedAgent } from "../lib/agents";
 
 const HEX_COLOR = /^#([0-9A-Fa-f]{6})$/;
 const MAX_LOGO_CHARS = 900_000;
+const MAX_TAG_CHARS = 20;
+const DEFAULT_TAG_STYLE = "solid";
+const TAG_STYLES = new Set(["solid", "outline", "soft"]);
 
 const router: IRouter = Router();
 
@@ -116,6 +119,8 @@ async function applyAppearanceUpdate(
     ctaColor?: string;
     backgroundColor?: string;
     logoUrl?: string | null;
+    tagText?: string | null;
+    tagStyle?: string;
   },
   res: { status: (n: number) => { json: (b: unknown) => void } },
 ) {
@@ -159,6 +164,27 @@ async function applyAppearanceUpdate(
       return null;
     }
     updates.logoUrl = data.logoUrl === "" ? null : data.logoUrl;
+  }
+
+  if (data.tagText !== undefined) {
+    if (data.tagText === null || data.tagText.trim() === "") {
+      updates.tagText = null;
+    } else {
+      const tagText = data.tagText.trim();
+      if (tagText.length > MAX_TAG_CHARS) {
+        res.status(400).json({ error: `Tag text must be ${MAX_TAG_CHARS} characters or fewer.` });
+        return null;
+      }
+      updates.tagText = tagText;
+    }
+  }
+
+  if (data.tagStyle !== undefined) {
+    if (!TAG_STYLES.has(data.tagStyle)) {
+      res.status(400).json({ error: "Tag style must be solid, outline, or soft." });
+      return null;
+    }
+    updates.tagStyle = data.tagStyle;
   }
 
   return upsertAppearance(userId, agentId, updates);
@@ -269,6 +295,8 @@ async function upsertAppearance(userId: string, agentId: string | null, updates:
       ctaColor: (updates.ctaColor as string | undefined) ?? DEFAULT_CTA_COLOR,
       backgroundColor: (updates.backgroundColor as string | undefined) ?? DEFAULT_BACKGROUND_COLOR,
       logoUrl: (updates.logoUrl as string | null | undefined) ?? null,
+      tagText: (updates.tagText as string | null | undefined) ?? null,
+      tagStyle: (updates.tagStyle as string | undefined) ?? DEFAULT_TAG_STYLE,
       importedAt: (updates.importedAt as Date | undefined) ?? null,
     })
     .returning();
@@ -282,6 +310,8 @@ function toAppearance(row: typeof appearanceSettingsTable.$inferSelect) {
     ctaColor: row.ctaColor,
     backgroundColor: row.backgroundColor,
     logoUrl: row.logoUrl ?? null,
+    tagText: row.tagText ?? null,
+    tagStyle: TAG_STYLES.has(row.tagStyle) ? row.tagStyle : DEFAULT_TAG_STYLE,
     importedAt: row.importedAt?.toISOString() ?? null,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),

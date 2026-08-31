@@ -12,7 +12,23 @@ describe("inbox team labels", () => {
     ).toEqual(["Customer Care Italy", "Technical Support"]);
   });
 
-  it("falls back only when the team name is empty", () => {
+  it("falls back to the agent name when the team name is empty or default", () => {
+    expect(inboxTeamLabel("", "Billing support")).toBe("Billing support");
+    expect(inboxTeamLabel("Escalation team", "Billing support")).toBe(
+      "Billing support",
+    );
+    expect(
+      inboxTeamsFromConfigured([
+        {
+          agentId: "a",
+          teamName: "Escalation team",
+          agentName: "Billing support",
+        },
+      ]).map((team) => team.teamName),
+    ).toEqual(["Billing support"]);
+  });
+
+  it("falls back to Escalation team only when both names are empty", () => {
     expect(inboxTeamLabel("")).toBe("Escalation team");
     expect(inboxTeamLabel("   ")).toBe("Escalation team");
   });

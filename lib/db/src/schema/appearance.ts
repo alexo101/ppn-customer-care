@@ -11,6 +11,8 @@ export const appearanceSettingsTable = pgTable("appearance_settings", {
   ctaColor: text("cta_color").notNull().default("#0EA5E9"),
   backgroundColor: text("background_color").notNull().default("#F8FAFC"),
   logoUrl: text("logo_url"),
+  tagText: text("tag_text"),
+  tagStyle: text("tag_style").notNull().default("solid"),
   importedAt: timestamp("imported_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

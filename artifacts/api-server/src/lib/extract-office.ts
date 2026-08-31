@@ -1,10 +1,12 @@
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
+import { extractText, getDocumentProxy } from "unpdf";
 import { inspectKnowledgeImage, type KnowledgeImageInfo } from "./knowledge-images";
 
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PDF_MIME = "application/pdf";
 
 export const OFFICE_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -18,8 +20,10 @@ export type ExtractedOfficeImage = KnowledgeImageInfo & {
 
 export function officeKindFromFile(file: { originalname: string; mimetype: string }): UploadedOfficeKind | null {
   const name = file.originalname.toLowerCase();
-  if (file.mimetype === DOCX_MIME || name.endsWith(".docx")) return "document";
-  if (file.mimetype === XLSX_MIME || name.endsWith(".xlsx")) return "spreadsheet";
+  const mime = file.mimetype.toLowerCase();
+  if (mime === DOCX_MIME || name.endsWith(".docx")) return "document";
+  if (mime === PDF_MIME || name.endsWith(".pdf")) return "document";
+  if (mime === XLSX_MIME || name.endsWith(".xlsx")) return "spreadsheet";
   return null;
 }
 
@@ -31,6 +35,11 @@ export async function extractOfficeText(
   file: { originalname: string; mimetype: string; buffer: Buffer },
 ): Promise<{ kind: UploadedOfficeKind; text: string; images: ExtractedOfficeImage[] }> {
   const kind = officeKindFromFile(file);
+  const name = file.originalname.toLowerCase();
+  const mime = file.mimetype.toLowerCase();
+  if (kind === "document" && (mime === PDF_MIME || name.endsWith(".pdf"))) {
+    return { kind, text: await extractPdfText(file.buffer), images: [] };
+  }
   if (kind === "document") {
     const extracted = await mammoth.extractRawText({ buffer: file.buffer });
     return { kind, text: extracted.value.trim(), images: await extractOfficeImages(file.buffer, "word/media") };
@@ -38,7 +47,13 @@ export async function extractOfficeText(
   if (kind === "spreadsheet") {
     return { kind, text: extractSpreadsheetText(file.buffer), images: await extractOfficeImages(file.buffer, "xl/media") };
   }
-  throw new Error("Only .docx and .xlsx files are supported");
+  throw new Error("Only .docx, .xlsx, and .pdf files are supported");
+}
+
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const pdf = await getDocumentProxy(new Uint8Array(buffer));
+  const { text } = await extractText(pdf, { mergePages: true });
+  return text.trim();
 }
 
 async function extractOfficeImages(

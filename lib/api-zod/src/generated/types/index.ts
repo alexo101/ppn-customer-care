@@ -20,6 +20,7 @@ export * from './analyticsSummary';
 export * from './apiConnector';
 export * from './apiConnectorAuthConfig';
 export * from './appearance';
+export * from './appearanceTagStyle';
 export * from './appearanceUpdate';
 export * from './categoryInput';
 export * from './categoryUpdate';

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAppearance } from "@/components/appearance-provider";
+import { AppearanceTag, DEFAULT_TAG_STYLE, isTagStyle } from "@/components/chat/appearance-tag";
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
 import { SourceCitations } from "@/components/chat/source-citations";
 
@@ -89,6 +90,11 @@ export function SupportChatPanel({
   const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
   const logoUrl = source === "training" ? appearance?.logoUrl ?? null : null;
   const chatName = agent?.name?.trim() || DEFAULT_CHAT_NAME;
+  const tagText = appearance?.tagText ?? null;
+  const tagStyle =
+    appearance && isTagStyle(appearance.tagStyle)
+      ? appearance.tagStyle
+      : DEFAULT_TAG_STYLE;
   const onCta = contrastHex(ctaColor);
 
   const [convoId, setConvoId] = useState<string | null>(null);
@@ -217,7 +223,16 @@ export function SupportChatPanel({
             <Bot className="w-5 h-5" />
           )}
           <div className="min-w-0">
-            <div className="font-medium truncate text-sm">{chatName}</div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="font-medium truncate text-sm">{chatName}</div>
+              <AppearanceTag
+                text={tagText}
+                style={tagStyle}
+                ctaColor={ctaColor}
+                tone="onCta"
+                className="shrink-0"
+              />
+            </div>
             <div className="text-[10px] opacity-80 truncate">
               {source === "training" ? "Training preview" : "Online"}
             </div>

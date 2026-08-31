@@ -38,6 +38,30 @@ export class EscalationError extends Error {
 
 type EscalationExecutor = Pick<typeof db, "select" | "insert">;
 
+export const DEFAULT_ESCALATION_TEAM_NAME = "Escalation team";
+
+async function agentDisplayName(
+  agentId: string,
+  executor: EscalationExecutor = db,
+) {
+  const [agent] = await executor
+    .select({ name: agentsTable.name })
+    .from(agentsTable)
+    .where(eq(agentsTable.id, agentId))
+    .limit(1);
+  return agent?.name.trim() || DEFAULT_ESCALATION_TEAM_NAME;
+}
+
+function shouldSyncTeamNameWithAgent(
+  currentTeamName: string,
+  previousAgentName?: string,
+) {
+  const current = currentTeamName.trim();
+  if (!current || current === DEFAULT_ESCALATION_TEAM_NAME) return true;
+  const previous = previousAgentName?.trim() ?? "";
+  return Boolean(previous) && current === previous;
+}
+
 export async function ensureAgentEscalationInbox(
   agentId: string,
   executor: EscalationExecutor = db,
@@ -49,9 +73,10 @@ export async function ensureAgentEscalationInbox(
     .limit(1);
   if (existing) return existing;
 
+  const name = await agentDisplayName(agentId, executor);
   const [created] = await executor
     .insert(agentEscalationSettingsTable)
-    .values({ agentId })
+    .values({ agentId, name })
     .onConflictDoNothing()
     .returning();
   if (created) return created;
@@ -68,7 +93,9 @@ export async function ensureAgentEscalationInbox(
 }
 
 export async function ensureAgentEscalationInboxesForAllAgents() {
-  const agents = await db.select({ id: agentsTable.id }).from(agentsTable);
+  const agents = await db
+    .select({ id: agentsTable.id, name: agentsTable.name })
+    .from(agentsTable);
   if (agents.length === 0) return 0;
 
   const existing = await db
@@ -78,10 +105,38 @@ export async function ensureAgentEscalationInboxesForAllAgents() {
   const missing = agents.filter((agent) => !hasInbox.has(agent.id));
   if (missing.length === 0) return 0;
 
-  await db
-    .insert(agentEscalationSettingsTable)
-    .values(missing.map((agent) => ({ agentId: agent.id })));
+  await db.insert(agentEscalationSettingsTable).values(
+    missing.map((agent) => ({
+      agentId: agent.id,
+      name: agent.name.trim() || DEFAULT_ESCALATION_TEAM_NAME,
+    })),
+  );
   return missing.length;
+}
+
+export async function syncEscalationTeamNameWithAgent(
+  agentId: string,
+  nextAgentName: string,
+  previousAgentName?: string,
+) {
+  const nextName = nextAgentName.trim();
+  if (!nextName) return;
+
+  const [settings] = await db
+    .select()
+    .from(agentEscalationSettingsTable)
+    .where(eq(agentEscalationSettingsTable.agentId, agentId))
+    .limit(1);
+  if (!settings) {
+    await ensureAgentEscalationInbox(agentId);
+    return;
+  }
+  if (!shouldSyncTeamNameWithAgent(settings.name, previousAgentName)) return;
+
+  await db
+    .update(agentEscalationSettingsTable)
+    .set({ name: nextName, updatedAt: new Date() })
+    .where(eq(agentEscalationSettingsTable.agentId, agentId));
 }
 
 export async function getAgentEscalation(agentId: string) {
@@ -507,15 +562,20 @@ export async function listInboxTeams(
     .map((team) => ({
       agentId: team.agentId,
       agentName: team.agentName,
-      teamName: inboxTeamLabel(team.teamName),
+      teamName: inboxTeamLabel(team.teamName, team.agentName),
       openCount: openCountByAgent.get(team.agentId) ?? 0,
     }))
     .sort((a, b) => a.teamName.localeCompare(b.teamName));
 }
 
-export function inboxTeamLabel(name: string | null | undefined) {
+export function inboxTeamLabel(
+  name: string | null | undefined,
+  agentName?: string | null,
+) {
   const trimmed = name?.trim() ?? "";
-  return trimmed || "Escalation team";
+  if (trimmed && trimmed !== DEFAULT_ESCALATION_TEAM_NAME) return trimmed;
+  const fromAgent = agentName?.trim() ?? "";
+  return fromAgent || DEFAULT_ESCALATION_TEAM_NAME;
 }
 
 async function canViewTeam(
@@ -845,7 +905,7 @@ function toInboxEscalation(
     conversationId: escalation.conversationId,
     agentId: escalation.agentId,
     agentName,
-    teamName: inboxTeamLabel(teamName),
+    teamName: inboxTeamLabel(teamName, agentName),
     status: escalation.status as "open" | "resolved",
     priority: escalation.priority as "low" | "normal" | "high" | "urgent",
     reason: escalation.reason,

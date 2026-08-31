@@ -69,7 +69,7 @@ const upload = multer({
       cb(null, true);
       return;
     }
-    cb(new Error("Only .docx and .xlsx files are supported"));
+    cb(new Error("Only .docx, .xlsx, and .pdf files are supported"));
   },
 });
 
@@ -232,7 +232,7 @@ router.post("/sources/upload", requireAuth, requireEditor, (req, res, next) => {
 }, async (req, res): Promise<void> => {
   const file = req.file;
   if (!file?.buffer) {
-    res.status(400).json({ error: "A .docx or .xlsx file is required." });
+    res.status(400).json({ error: "A .docx, .xlsx, or .pdf file is required." });
     return;
   }
 
@@ -265,7 +265,7 @@ router.post("/sources/upload", requireAuth, requireEditor, (req, res, next) => {
     return;
   }
 
-  const fallbackName = file.originalname.replace(/\.(docx|xlsx)$/i, "") || (
+  const fallbackName = file.originalname.replace(/\.(docx|xlsx|pdf)$/i, "") || (
     extracted.kind === "spreadsheet" ? "Uploaded spreadsheet" : "Uploaded document"
   );
   const sourceName = name || fallbackName;

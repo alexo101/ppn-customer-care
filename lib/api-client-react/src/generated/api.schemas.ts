@@ -878,6 +878,15 @@ export interface AnalyticsSummary {
   estimatedTotalCostUsd: number;
 }
 
+export type AppearanceTagStyle = typeof AppearanceTagStyle[keyof typeof AppearanceTagStyle];
+
+
+export const AppearanceTagStyle = {
+  solid: 'solid',
+  outline: 'outline',
+  soft: 'soft',
+} as const;
+
 export interface Appearance {
   id: string;
   /** @nullable */
@@ -886,6 +895,12 @@ export interface Appearance {
   backgroundColor: string;
   /** @nullable */
   logoUrl?: string | null;
+  /**
+     * @maxLength 20
+     * @nullable
+     */
+  tagText?: string | null;
+  tagStyle: AppearanceTagStyle;
   /** @nullable */
   importedAt?: string | null;
   createdAt: string;
@@ -899,6 +914,12 @@ export interface AppearanceUpdate {
   backgroundColor?: string;
   /** @nullable */
   logoUrl?: string | null;
+  /**
+     * @maxLength 20
+     * @nullable
+     */
+  tagText?: string | null;
+  tagStyle?: AppearanceTagStyle;
 }
 
 export interface ImportAppearanceInput {

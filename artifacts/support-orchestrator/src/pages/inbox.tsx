@@ -79,6 +79,7 @@ export default function InboxPage() {
         agents.map((agent, index) => ({
           agentId: agent.id,
           teamName: escalationSettings[index]?.data?.name ?? "",
+          agentName: agent.name,
           openCount: escalations.filter(
             (item) => item.agentId === agent.id && item.status === "open",
           ).length,

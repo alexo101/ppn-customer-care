@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useAppearance } from "@/components/appearance-provider";
+import { AppearanceTag, DEFAULT_TAG_STYLE, isTagStyle } from "@/components/chat/appearance-tag";
 import {
   contrastHex,
   DEFAULT_BACKGROUND_COLOR,
@@ -61,6 +62,11 @@ export default function Widget() {
   const backgroundColor =
     appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
   const chatName = agent?.name?.trim() || DEFAULT_CHAT_NAME;
+  const tagText = appearance?.tagText ?? null;
+  const tagStyle =
+    appearance && isTagStyle(appearance.tagStyle)
+      ? appearance.tagStyle
+      : DEFAULT_TAG_STYLE;
   const onCta = contrastHex(ctaColor);
   const onBackground = contrastHex(backgroundColor);
 
@@ -188,13 +194,21 @@ export default function Widget() {
       </div>
 
       {!isOpen && (
-        <Button
-          onClick={handleOpen}
-          className="absolute bottom-6 right-6 h-14 w-14 rounded-full shadow-xl flex items-center justify-center p-0 border-0"
-          style={{ backgroundColor: ctaColor, color: onCta }}
-        >
-          <MessageSquare className="w-6 h-6" />
-        </Button>
+        <div className="absolute bottom-6 right-6">
+          <AppearanceTag
+            text={tagText}
+            style={tagStyle}
+            ctaColor={ctaColor}
+            className="absolute right-full mr-2 top-1/2 -translate-y-1/2 shadow-sm"
+          />
+          <Button
+            onClick={handleOpen}
+            className="h-14 w-14 rounded-full shadow-xl flex items-center justify-center p-0 border-0"
+            style={{ backgroundColor: ctaColor, color: onCta }}
+          >
+            <MessageSquare className="w-6 h-6" />
+          </Button>
+        </div>
       )}
 
       {isOpen && (
@@ -208,8 +222,17 @@ export default function Widget() {
             style={{ backgroundColor: ctaColor, color: onCta }}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <Bot className="w-5 h-5" />
-              <div className="font-medium truncate">{chatName}</div>
+              <Bot className="w-5 h-5 shrink-0" />
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="font-medium truncate">{chatName}</div>
+                <AppearanceTag
+                  text={tagText}
+                  style={tagStyle}
+                  ctaColor={ctaColor}
+                  tone="onCta"
+                  className="shrink-0"
+                />
+              </div>
             </div>
             <div className="flex gap-1">
               <Button

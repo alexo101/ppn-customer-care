@@ -5,6 +5,7 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { AppearanceTagStyle } from './appearanceTagStyle';
 
 export interface Appearance {
   id: string;
@@ -14,6 +15,12 @@ export interface Appearance {
   backgroundColor: string;
   /** @nullable */
   logoUrl?: string | null;
+  /**
+     * @maxLength 20
+     * @nullable
+     */
+  tagText?: string | null;
+  tagStyle: AppearanceTagStyle;
   /** @nullable */
   importedAt?: string | null;
   createdAt: string;

@@ -3323,9 +3323,13 @@ components:
           type: number
 
     # ── Appearance ────────────────────────────────────────────────────────
+    AppearanceTagStyle:
+      type: string
+      enum: [solid, outline, soft]
+
     Appearance:
       type: object
-      required: [id, ctaColor, backgroundColor, createdAt, updatedAt]
+      required: [id, ctaColor, backgroundColor, tagStyle, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -3337,6 +3341,11 @@ components:
           type: string
         logoUrl:
           type: ["string", "null"]
+        tagText:
+          type: ["string", "null"]
+          maxLength: 20
+        tagStyle:
+          $ref: "#/components/schemas/AppearanceTagStyle"
         importedAt:
           type: ["string", "null"]
         createdAt:
@@ -3355,6 +3364,11 @@ components:
           type: string
         logoUrl:
           type: ["string", "null"]
+        tagText:
+          type: ["string", "null"]
+          maxLength: 20
+        tagStyle:
+          $ref: "#/components/schemas/AppearanceTagStyle"
 
     ImportAppearanceInput:
       type: object

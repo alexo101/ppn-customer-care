@@ -838,7 +838,6 @@ function VocabPicker({
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
           <SelectValue placeholder={`Choose ${label.toLowerCase()}`} />

@@ -99,7 +99,12 @@ describe("inboxTeamLabel", () => {
     expect(inboxTeamLabel("Customer Care France")).toBe("Customer Care France");
   });
 
-  it("falls back only when the name is empty", () => {
+  it("falls back to the agent name when the team name is empty or default", () => {
+    expect(inboxTeamLabel("", "Billing support")).toBe("Billing support");
+    expect(inboxTeamLabel("Escalation team", "Billing support")).toBe("Billing support");
+  });
+
+  it("falls back to Escalation team only when both names are empty", () => {
     expect(inboxTeamLabel("")).toBe("Escalation team");
     expect(inboxTeamLabel("  ")).toBe("Escalation team");
   });

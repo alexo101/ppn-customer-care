@@ -11,7 +11,7 @@ import {
   DeleteAgentParams,
 } from "@workspace/api-zod";
 import { ensureDefaultAgentIfNeeded, ensureEveryoneTarget, getOwnedAgent, toAgent } from "../lib/agents";
-import { ensureAgentEscalationInbox } from "../lib/escalations";
+import { ensureAgentEscalationInbox, syncEscalationTeamNameWithAgent } from "../lib/escalations";
 import { hashDeploymentToken, newDeploymentToken } from "../lib/connection-secrets";
 
 const router: IRouter = Router();
@@ -77,6 +77,12 @@ router.patch("/agents/:id", requireAuth, requireEditor, async (req, res): Promis
     return;
   }
 
+  const agent = await getOwnedAgent(req.userId, params.data.id);
+  if (!agent) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   if (parsed.data.name !== undefined) updates.name = parsed.data.name.trim();
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
@@ -91,6 +97,10 @@ router.patch("/agents/:id", requireAuth, requireEditor, async (req, res): Promis
   if (!row) {
     res.status(404).json({ error: "Agent not found" });
     return;
+  }
+
+  if (parsed.data.name !== undefined && row.name !== agent.name) {
+    await syncEscalationTeamNameWithAgent(row.id, row.name, agent.name);
   }
 
   res.json(toAgent(row));

@@ -331,7 +331,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
     event.preventDefault();
     if (!canEdit) return;
     if (!file) {
-      toast({ title: "Choose a .docx or .xlsx file", variant: "destructive" });
+      toast({ title: "Choose a .docx, .xlsx, or .pdf file", variant: "destructive" });
       return;
     }
 
@@ -463,7 +463,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       {
         kind: "document" as const,
         title: "Upload a document",
-        description: "Add a Word (.docx) or Excel (.xlsx) file.",
+        description: "Add a Word (.docx), Excel (.xlsx), or PDF file.",
         icon: FileUp,
       },
       {
@@ -743,7 +743,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
           <DialogHeader>
             <DialogTitle>Upload a document</DialogTitle>
             <DialogDescription>
-              Word (.docx) and Excel (.xlsx) files are extracted and stored as knowledge.
+              Word (.docx), Excel (.xlsx), and PDF files are extracted and stored as knowledge.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUploadDocument} className="space-y-4 pt-2">
@@ -761,7 +761,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".docx,.xlsx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                accept=".docx,.xlsx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />
@@ -771,7 +771,7 @@ export function SourcesTab({ agentId }: { agentId: string }) {
                 className="w-full rounded-lg border border-dashed border-border px-4 py-8 text-center hover:bg-accent/20"
               >
                 <FileUp className="w-5 h-5 mx-auto mb-2 text-muted-foreground" />
-                <div className="text-sm font-medium">{file ? file.name : "Choose a .docx or .xlsx file"}</div>
+                <div className="text-sm font-medium">{file ? file.name : "Choose a .docx, .xlsx, or .pdf file"}</div>
                 <p className="text-xs text-muted-foreground mt-1">Maximum 10 MB</p>
               </button>
             </div>

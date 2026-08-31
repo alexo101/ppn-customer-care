@@ -21,6 +21,11 @@ export function contrastHex(hex: string): string {
   return relativeLuminance(hex) > 0.55 ? "#0F172A" : "#FFFFFF";
 }
 
+export function hexToRgba(hex: string, alpha: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const value = (normalizeHexColor(hex) ?? DEFAULT_CTA_COLOR).slice(1);
   return {
