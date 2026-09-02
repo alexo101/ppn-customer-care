@@ -11,12 +11,10 @@ import {
   orchestratorRulesTable,
   ruleCategoryLinksTable,
   ruleSourceLinksTable,
-  ruleConnectorLinksTable,
   ruleAudienceTargetLinksTable,
   audienceTargetsTable,
   targetConditionsTable,
   knowledgeSourcesTable,
-  apiConnectorsTable,
   agentSettingsTable,
 } from "@workspace/db";
 import {
@@ -58,9 +56,10 @@ import {
 } from "../lib/classify-intent";
 import { generateAnswer, requiresAnswerProvider } from "../lib/generate-answer";
 import { retrieveRelevantChunks } from "../lib/retrieval";
-import { callConnector } from "../lib/api-connector";
+import { callLiveDataEndpoint } from "../lib/api-connector";
 import { applyGuardrails } from "../lib/guardrails";
 import { updateConversationAnalytics } from "../lib/conversation-analytics";
+import { logger } from "../lib/logger";
 import {
   matchesAudienceTarget,
   type AudienceTargetForMatching,
@@ -541,51 +540,37 @@ router.post(
           ];
         }
         if (normalizeAction(rule.action) === "query_live_data") {
-          const connectorLinks = await db
-            .select({
-              id: apiConnectorsTable.id,
-              name: apiConnectorsTable.name,
-              endpointPattern: apiConnectorsTable.endpointPattern,
-              authType: apiConnectorsTable.authType,
-              authConfig: apiConnectorsTable.authConfig,
-            })
-            .from(ruleConnectorLinksTable)
-            .innerJoin(
-              apiConnectorsTable,
-              eq(ruleConnectorLinksTable.connectorId, apiConnectorsTable.id),
-            )
-            .where(
-              and(
-                eq(ruleConnectorLinksTable.ruleId, rule.id),
-                eq(apiConnectorsTable.isEnabled, true),
-              ),
-            );
-          for (const connector of connectorLinks) {
-            dataSourcesQueried.push(connector.name);
-            const result = await callConnector(connector, {
-              query: rule.promptTemplate.trim() || parsed.data.content,
-              params: classification.entities,
-            });
-            if (
-              !result.ok &&
-              (result.status === 401 || result.status === 403)
-            ) {
-              retrievalAccessDenied = true;
-            }
-            if (result.ok && hasUsableConnectorBody(result.body)) {
-              retrievedChunks.push({
-                sourceId: result.sourceName,
-                sourceName: result.sourceName,
-                content: JSON.stringify(result.body),
-                distance: 0,
-                kind: "api",
+          const endpointUrl = rule.endpointUrl?.trim() ?? "";
+          if (endpointUrl) {
+            dataSourcesQueried.push(endpointUrl);
+            try {
+              const result = await callLiveDataEndpoint({
+                method: rule.httpMethod,
+                url: endpointUrl,
               });
+              if (
+                !result.ok &&
+                (result.status === 401 || result.status === 403)
+              ) {
+                retrievalAccessDenied = true;
+              }
+              if (result.ok && hasUsableConnectorBody(result.body)) {
+                retrievedChunks.push({
+                  sourceId: result.sourceName,
+                  sourceName: result.sourceName,
+                  content: JSON.stringify(result.body),
+                  distance: 0,
+                  kind: "api",
+                });
+              }
+            } catch (error) {
+              logger.warn({ error, endpointUrl }, "Live data endpoint call failed");
             }
           }
           dataSourcesQueried = [...new Set(dataSourcesQueried)];
-          retrievalNeedsClarification =
-            connectorLinks.length === 0 ||
-            !retrievedChunks.some((chunk) => chunk.kind === "api");
+          retrievalNeedsClarification = !retrievedChunks.some(
+            (chunk) => chunk.kind === "api",
+          );
         }
         if (
           normalizeAction(rule.action) === "search_answer" &&

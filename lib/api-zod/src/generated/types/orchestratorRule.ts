@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { OrchestratorRuleConditionCountry } from './orchestratorRuleConditionCountry';
+import type { OrchestratorRuleHttpMethod } from './orchestratorRuleHttpMethod';
 
 export interface OrchestratorRule {
   id: string;
@@ -24,6 +25,8 @@ export interface OrchestratorRule {
   sourceIds: string[];
   connectorIds: string[];
   audienceTargetIds: string[];
+  httpMethod: OrchestratorRuleHttpMethod;
+  endpointUrl: string;
   createdAt: string;
   updatedAt: string;
 }

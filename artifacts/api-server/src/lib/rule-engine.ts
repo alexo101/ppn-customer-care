@@ -22,6 +22,14 @@ export const RULE_COUNTRIES = [
 
 export type RuleCountryCode = (typeof RULE_COUNTRIES)[number]["code"];
 
+export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+export function normalizeHttpMethod(value: unknown): HttpMethod {
+  const method = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return HTTP_METHODS.includes(method as HttpMethod) ? (method as HttpMethod) : "GET";
+}
+
 export const DEFAULT_OPERATORS = [
   { label: "is", slug: "is", requiresSource: false, sortOrder: 1 },
   { label: "is not", slug: "is_not", requiresSource: false, sortOrder: 2 },
@@ -287,6 +295,8 @@ export function formatRuleSentence(input: {
   connectorNames?: string[];
   promptTemplate?: string;
   clarificationPrompt?: string;
+  httpMethod?: string;
+  endpointUrl?: string;
 }): string {
   const action = input.action.trim() || "search answer";
   const categoryNames = input.categoryNames
@@ -313,9 +323,9 @@ export function formatRuleSentence(input: {
     : "";
   let actionClause: string;
   if (kind === "query_live_data") {
-    const connector = joinNames(input.connectorNames ?? [], "the API");
-    const data = input.promptTemplate?.trim() || "the requested data";
-    actionClause = `call ${connector} to retrieve ${data}`;
+    const method = normalizeHttpMethod(input.httpMethod);
+    const url = input.endpointUrl?.trim();
+    actionClause = url ? `call ${method} ${url}` : "query live data";
   } else if (kind === "generate_from_template") {
     actionClause = `answer using the ${input.promptTemplate?.trim() || "configured"} template`;
   } else if (kind === "ask_clarification") {

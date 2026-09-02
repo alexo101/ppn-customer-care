@@ -485,6 +485,17 @@ export const OrchestratorRuleConditionCountry = {
   IT: 'IT',
 } as const;
 
+export type OrchestratorRuleHttpMethod = typeof OrchestratorRuleHttpMethod[keyof typeof OrchestratorRuleHttpMethod];
+
+
+export const OrchestratorRuleHttpMethod = {
+  GET: 'GET',
+  POST: 'POST',
+  PUT: 'PUT',
+  PATCH: 'PATCH',
+  DELETE: 'DELETE',
+} as const;
+
 export interface OrchestratorRule {
   id: string;
   name: string;
@@ -502,6 +513,8 @@ export interface OrchestratorRule {
   sourceIds: string[];
   connectorIds: string[];
   audienceTargetIds: string[];
+  httpMethod: OrchestratorRuleHttpMethod;
+  endpointUrl: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -516,6 +529,17 @@ export const RuleInputConditionCountry = {
   ES: 'ES',
   FR: 'FR',
   IT: 'IT',
+} as const;
+
+export type RuleInputHttpMethod = typeof RuleInputHttpMethod[keyof typeof RuleInputHttpMethod];
+
+
+export const RuleInputHttpMethod = {
+  GET: 'GET',
+  POST: 'POST',
+  PUT: 'PUT',
+  PATCH: 'PATCH',
+  DELETE: 'DELETE',
 } as const;
 
 export interface RuleInput {
@@ -535,6 +559,8 @@ export interface RuleInput {
   sourceIds?: string[];
   connectorIds?: string[];
   audienceTargetIds?: string[];
+  httpMethod?: RuleInputHttpMethod;
+  endpointUrl?: string;
 }
 
 /**
@@ -547,6 +573,17 @@ export const RuleUpdateConditionCountry = {
   ES: 'ES',
   FR: 'FR',
   IT: 'IT',
+} as const;
+
+export type RuleUpdateHttpMethod = typeof RuleUpdateHttpMethod[keyof typeof RuleUpdateHttpMethod];
+
+
+export const RuleUpdateHttpMethod = {
+  GET: 'GET',
+  POST: 'POST',
+  PUT: 'PUT',
+  PATCH: 'PATCH',
+  DELETE: 'DELETE',
 } as const;
 
 export interface RuleUpdate {
@@ -565,6 +602,8 @@ export interface RuleUpdate {
   sourceIds?: string[];
   connectorIds?: string[];
   audienceTargetIds?: string[];
+  httpMethod?: RuleUpdateHttpMethod;
+  endpointUrl?: string;
 }
 
 export type RuleAuthoringMessageRole = typeof RuleAuthoringMessageRole[keyof typeof RuleAuthoringMessageRole];
@@ -596,6 +635,17 @@ export const RuleAuthoringDraftConditionCountry = {
   IT: 'IT',
 } as const;
 
+export type RuleAuthoringDraftHttpMethod = typeof RuleAuthoringDraftHttpMethod[keyof typeof RuleAuthoringDraftHttpMethod];
+
+
+export const RuleAuthoringDraftHttpMethod = {
+  GET: 'GET',
+  POST: 'POST',
+  PUT: 'PUT',
+  PATCH: 'PATCH',
+  DELETE: 'DELETE',
+} as const;
+
 export interface RuleAuthoringDraft {
   name: string;
   description: string;
@@ -616,6 +666,8 @@ export interface RuleAuthoringDraft {
   sourceIds?: string[];
   connectorIds?: string[];
   audienceTargetIds?: string[];
+  httpMethod?: RuleAuthoringDraftHttpMethod;
+  endpointUrl?: string;
 }
 
 export interface RuleAuthoringRequest {

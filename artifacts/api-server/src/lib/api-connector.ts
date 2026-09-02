@@ -78,6 +78,51 @@ export async function callConnector(
   }
 }
 
+const LIVE_DATA_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+
+export async function callLiveDataEndpoint(input: {
+  method?: string;
+  url: string;
+}): Promise<ConnectorCallResult> {
+  const method = (input.method ?? "GET").trim().toUpperCase() || "GET";
+  if (!LIVE_DATA_METHODS.has(method)) {
+    throw new ApiConnectorError(`Unsupported HTTP method "${input.method}".`);
+  }
+
+  let url: URL;
+  try {
+    url = new URL(input.url.trim());
+  } catch (error) {
+    throw new ApiConnectorError("The API endpoint URL is invalid.", { cause: error });
+  }
+  if (url.protocol !== "https:") {
+    throw new ApiConnectorError("The API endpoint must use HTTPS.");
+  }
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const text = await response.text();
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      // Preserve non-JSON responses as text.
+    }
+    if (!response.ok) {
+      logger.warn({ url: url.toString(), status: response.status }, "Live data endpoint returned an error");
+    }
+    return { ok: response.ok, status: response.status, body, sourceName: url.hostname };
+  } catch (error) {
+    if (error instanceof ApiConnectorError) throw error;
+    logger.warn({ url: url.toString(), error }, "Live data endpoint request failed");
+    return { ok: false, status: 0, body: null, sourceName: url.hostname };
+  }
+}
+
 async function applyAuthentication(
   headers: Headers,
   connector: Connector,

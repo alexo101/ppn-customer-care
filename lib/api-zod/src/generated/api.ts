@@ -1088,6 +1088,8 @@ export const ListRulesResponseItem = zod.object({
   "sourceIds": zod.array(zod.string()),
   "connectorIds": zod.array(zod.string()),
   "audienceTargetIds": zod.array(zod.string()),
+  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+  "endpointUrl": zod.string(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1112,7 +1114,9 @@ export const CreateRuleBody = zod.object({
   "categoryIds": zod.array(zod.string()).optional(),
   "sourceIds": zod.array(zod.string()).optional(),
   "connectorIds": zod.array(zod.string()).optional(),
-  "audienceTargetIds": zod.array(zod.string()).optional()
+  "audienceTargetIds": zod.array(zod.string()).optional(),
+  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
+  "endpointUrl": zod.string().optional()
 })
 
 export const CreateRuleResponse = zod.object({
@@ -1131,6 +1135,8 @@ export const CreateRuleResponse = zod.object({
   "sourceIds": zod.array(zod.string()),
   "connectorIds": zod.array(zod.string()),
   "audienceTargetIds": zod.array(zod.string()),
+  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+  "endpointUrl": zod.string(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1156,6 +1162,8 @@ export const sendRuleAuthoringMessageBodyDraftCategoryIdsDefault = [];
 export const sendRuleAuthoringMessageBodyDraftSourceIdsDefault = [];
 export const sendRuleAuthoringMessageBodyDraftConnectorIdsDefault = [];
 export const sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault = [];
+export const sendRuleAuthoringMessageBodyDraftHttpMethodDefault = `GET`;
+export const sendRuleAuthoringMessageBodyDraftEndpointUrlDefault = ``;
 export const sendRuleAuthoringMessageBodyAwaitingConfirmationDefault = false;
 
 export const SendRuleAuthoringMessageBody = zod.object({
@@ -1178,7 +1186,9 @@ export const SendRuleAuthoringMessageBody = zod.object({
   "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftCategoryIdsDefault),
   "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftSourceIdsDefault),
   "connectorIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftConnectorIdsDefault),
-  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault)
+  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault),
+  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default(sendRuleAuthoringMessageBodyDraftHttpMethodDefault),
+  "endpointUrl": zod.string().default(sendRuleAuthoringMessageBodyDraftEndpointUrlDefault)
 }).optional(),
   "awaitingConfirmation": zod.boolean().default(sendRuleAuthoringMessageBodyAwaitingConfirmationDefault)
 })
@@ -1190,6 +1200,8 @@ export const sendRuleAuthoringMessageResponseDraftCategoryIdsDefault = [];
 export const sendRuleAuthoringMessageResponseDraftSourceIdsDefault = [];
 export const sendRuleAuthoringMessageResponseDraftConnectorIdsDefault = [];
 export const sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault = [];
+export const sendRuleAuthoringMessageResponseDraftHttpMethodDefault = `GET`;
+export const sendRuleAuthoringMessageResponseDraftEndpointUrlDefault = ``;
 
 export const SendRuleAuthoringMessageResponse = zod.object({
   "status": zod.enum(['clarifying', 'ready_for_confirmation', 'needs_changes', 'approved']),
@@ -1208,7 +1220,9 @@ export const SendRuleAuthoringMessageResponse = zod.object({
   "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftCategoryIdsDefault),
   "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftSourceIdsDefault),
   "connectorIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftConnectorIdsDefault),
-  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault)
+  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault),
+  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default(sendRuleAuthoringMessageResponseDraftHttpMethodDefault),
+  "endpointUrl": zod.string().default(sendRuleAuthoringMessageResponseDraftEndpointUrlDefault)
 }).optional(),
   "unresolvedFields": zod.array(zod.string())
 })
@@ -1235,7 +1249,9 @@ export const UpdateRuleBody = zod.object({
   "categoryIds": zod.array(zod.string()).optional(),
   "sourceIds": zod.array(zod.string()).optional(),
   "connectorIds": zod.array(zod.string()).optional(),
-  "audienceTargetIds": zod.array(zod.string()).optional()
+  "audienceTargetIds": zod.array(zod.string()).optional(),
+  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
+  "endpointUrl": zod.string().optional()
 })
 
 export const UpdateRuleResponse = zod.object({
@@ -1254,6 +1270,8 @@ export const UpdateRuleResponse = zod.object({
   "sourceIds": zod.array(zod.string()),
   "connectorIds": zod.array(zod.string()),
   "audienceTargetIds": zod.array(zod.string()),
+  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+  "endpointUrl": zod.string(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

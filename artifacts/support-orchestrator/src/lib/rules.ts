@@ -9,6 +9,23 @@ export const RULE_COUNTRIES = [
   { code: "IT", label: "Italy", domain: "app.papernest.it" },
 ] as const;
 
+export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+export function normalizeHttpMethod(value: unknown): HttpMethod {
+  const method = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return HTTP_METHODS.includes(method as HttpMethod) ? (method as HttpMethod) : "GET";
+}
+
+export function isLiveDataAction(action: string): boolean {
+  const kind = action.trim().toLowerCase();
+  return (
+    kind.includes("live data") ||
+    kind.includes("query") ||
+    kind.includes("lookup")
+  );
+}
+
 export function emptyRuleDraft(priority = 0): RuleAuthoringDraft {
   return normalizeDraft({
     name: "",
@@ -24,6 +41,8 @@ export function emptyRuleDraft(priority = 0): RuleAuthoringDraft {
     sourceIds: [],
     connectorIds: [],
     audienceTargetIds: [],
+    httpMethod: "GET",
+    endpointUrl: "",
   });
 }
 
@@ -41,8 +60,10 @@ export function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
     action: rule.action,
     categoryIds: rule.categoryIds,
     sourceIds: rule.sourceIds,
-    connectorIds: rule.connectorIds,
+    connectorIds: isLiveDataAction(rule.action) ? [] : rule.connectorIds,
     audienceTargetIds: rule.audienceTargetIds,
+    httpMethod: normalizeHttpMethod(rule.httpMethod),
+    endpointUrl: rule.endpointUrl ?? "",
   });
 }
 
@@ -58,8 +79,12 @@ export function normalizeDraft(draft: RuleAuthoringDraft): RuleAuthoringDraft {
     action: draft.action?.trim() || "search answer",
     categoryIds: draft.categoryIds ?? [],
     sourceIds: draft.sourceIds ?? [],
-    connectorIds: draft.connectorIds ?? [],
+    connectorIds: isLiveDataAction(draft.action ?? "")
+      ? []
+      : (draft.connectorIds ?? []),
     audienceTargetIds: draft.audienceTargetIds ?? [],
+    httpMethod: normalizeHttpMethod(draft.httpMethod),
+    endpointUrl: draft.endpointUrl ?? "",
   };
 }
 
@@ -89,6 +114,8 @@ export function formatRuleSentence(input: {
   connectorNames?: string[];
   promptTemplate?: string;
   clarificationPrompt?: string;
+  httpMethod?: string;
+  endpointUrl?: string;
 }): string {
   const action = input.action.trim() || "search answer";
   const categoryNames = input.categoryNames
@@ -119,7 +146,9 @@ export function formatRuleSentence(input: {
     kind.includes("query") ||
     kind.includes("lookup")
   ) {
-    actionClause = `call ${joinNames(input.connectorNames ?? [], "the API")} to retrieve ${input.promptTemplate?.trim() || "the requested data"}`;
+    const method = normalizeHttpMethod(input.httpMethod);
+    const url = input.endpointUrl?.trim();
+    actionClause = url ? `call ${method} ${url}` : "query live data";
   } else if (kind.includes("template") || kind.includes("generate")) {
     actionClause = `answer using the ${input.promptTemplate?.trim() || "configured"} template`;
   } else if (kind.includes("clarif")) {

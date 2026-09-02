@@ -2745,6 +2745,8 @@ components:
           sourceIds,
           connectorIds,
           audienceTargetIds,
+          httpMethod,
+          endpointUrl,
           createdAt,
           updatedAt,
         ]
@@ -2788,6 +2790,11 @@ components:
           type: array
           items:
             type: string
+        httpMethod:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+        endpointUrl:
+          type: string
         createdAt:
           type: string
         updatedAt:
@@ -2836,6 +2843,11 @@ components:
           type: array
           items:
             type: string
+        httpMethod:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+        endpointUrl:
+          type: string
 
     RuleUpdate:
       type: object
@@ -2877,6 +2889,11 @@ components:
           type: array
           items:
             type: string
+        httpMethod:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+        endpointUrl:
+          type: string
 
     RuleAuthoringMessage:
       type: object
@@ -2948,6 +2965,13 @@ components:
           items:
             type: string
           default: []
+        httpMethod:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+          default: GET
+        endpointUrl:
+          type: string
+          default: ""
 
     RuleAuthoringRequest:
       type: object

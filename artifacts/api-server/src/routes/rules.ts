@@ -54,6 +54,7 @@ import {
   DEFAULT_ACTIONS,
   DEFAULT_OPERATORS,
   normalizeAction,
+  normalizeHttpMethod,
   RULE_COUNTRIES,
   slugifyLabel,
 } from "../lib/rule-engine";
@@ -147,6 +148,8 @@ router.post(
             conditionOperator: parsed.data.conditionOperator?.trim() || "is",
             conditionCountry: parsed.data.conditionCountry ?? null,
             action: parsed.data.action?.trim() || "search answer",
+            httpMethod: normalizeHttpMethod(parsed.data.httpMethod),
+            endpointUrl: parsed.data.endpointUrl?.trim() ?? "",
           })
           .returning();
 
@@ -352,6 +355,8 @@ router.patch(
       "conditionOperator",
       "conditionCountry",
       "action",
+      "httpMethod",
+      "endpointUrl",
     ]) {
       if (d[key] !== undefined) updates[key] = d[key];
     }
@@ -372,6 +377,12 @@ router.patch(
       if (parsed.data.escalationTrigger === undefined) {
         updates.escalationTrigger = normalizeAction(action) === "escalate";
       }
+    }
+    if (updates.httpMethod !== undefined) {
+      updates.httpMethod = normalizeHttpMethod(updates.httpMethod);
+    }
+    if (typeof updates.endpointUrl === "string") {
+      updates.endpointUrl = updates.endpointUrl.trim();
     }
 
     try {
@@ -938,6 +949,8 @@ async function toRules(rows: (typeof orchestratorRulesTable.$inferSelect)[]) {
     sourceIds: sourcesByRule.get(row.id) ?? [],
     connectorIds: connectorsByRule.get(row.id) ?? [],
     audienceTargetIds: audienceTargetsByRule.get(row.id) ?? [],
+    httpMethod: normalizeHttpMethod(row.httpMethod),
+    endpointUrl: row.endpointUrl ?? "",
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   }));

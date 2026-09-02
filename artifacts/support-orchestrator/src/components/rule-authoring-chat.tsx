@@ -355,6 +355,12 @@ function RulePreview({
         {draft.promptTemplate && (
           <PreviewValue label="Prompt template" value={draft.promptTemplate} />
         )}
+        {draft.endpointUrl && (
+          <PreviewValue
+            label="API endpoint"
+            value={`${draft.httpMethod ?? "GET"} ${draft.endpointUrl}`}
+          />
+        )}
         {draft.requiresClarificationPrompt && (
           <PreviewValue
             label="Clarification prompt"
@@ -391,6 +397,8 @@ export function normalizeDraft(draft: RuleAuthoringDraft): RuleAuthoringDraft {
     categoryIds: draft.categoryIds ?? [],
     sourceIds: draft.sourceIds ?? [],
     audienceTargetIds: draft.audienceTargetIds ?? [],
+    httpMethod: draft.httpMethod ?? "GET",
+    endpointUrl: draft.endpointUrl ?? "",
   };
 }
 
@@ -409,6 +417,8 @@ function draftFromRule(rule: OrchestratorRule): RuleAuthoringDraft {
     categoryIds: rule.categoryIds,
     sourceIds: rule.sourceIds,
     audienceTargetIds: rule.audienceTargetIds,
+    httpMethod: rule.httpMethod ?? "GET",
+    endpointUrl: rule.endpointUrl ?? "",
   });
 }
 

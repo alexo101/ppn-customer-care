@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RuleUpdateConditionCountry } from './ruleUpdateConditionCountry';
+import type { RuleUpdateHttpMethod } from './ruleUpdateHttpMethod';
 
 export interface RuleUpdate {
   name?: string;
@@ -23,4 +24,6 @@ export interface RuleUpdate {
   sourceIds?: string[];
   connectorIds?: string[];
   audienceTargetIds?: string[];
+  httpMethod?: RuleUpdateHttpMethod;
+  endpointUrl?: string;
 }

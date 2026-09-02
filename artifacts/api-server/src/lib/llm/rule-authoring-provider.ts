@@ -12,6 +12,8 @@ export type RuleAuthoringDraft = {
   categoryIds?: string[];
   sourceIds?: string[];
   audienceTargetIds?: string[];
+  httpMethod?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  endpointUrl?: string;
 };
 
 export type NormalizedRuleAuthoringDraft = RuleAuthoringDraft & {

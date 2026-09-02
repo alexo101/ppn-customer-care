@@ -3,11 +3,10 @@ import {
   useListRuleVocabularies,
   type IntentCategory,
   type KnowledgeSource,
-  type ApiConnector,
   type RuleAuthoringDraft,
   type Target,
 } from "@workspace/api-client-react";
-import { FolderTree, Save } from "lucide-react";
+import { FolderTree, Info, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,9 +26,17 @@ import {
   actionIsEscalation,
   formatCategoryPath,
   formatRuleSentence,
+  HTTP_METHODS,
+  isLiveDataAction,
   normalizeDraft,
+  normalizeHttpMethod,
   RULE_COUNTRIES,
 } from "@/lib/rules";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type ManualRuleFormProps = {
   agentId: string;
@@ -37,7 +44,6 @@ type ManualRuleFormProps = {
   onDraftChange: (draft: RuleAuthoringDraft) => void;
   categories: IntentCategory[];
   sources: KnowledgeSource[];
-  connectors: ApiConnector[];
   audienceTargets: Target[];
   onSave: () => void;
   saving: boolean;
@@ -49,7 +55,6 @@ export function ManualRuleForm({
   onDraftChange,
   categories,
   sources,
-  connectors,
   audienceTargets,
   onSave,
   saving,
@@ -80,10 +85,7 @@ export function ManualRuleForm({
   );
   const actionKind = normalized.action.trim().toLowerCase();
   const needsSource = actionKind.includes("search");
-  const needsConnector =
-    actionKind.includes("live data") ||
-    actionKind.includes("query") ||
-    actionKind.includes("lookup");
+  const needsEndpoint = isLiveDataAction(normalized.action);
   const topLevelCategories = useMemo(
     () => categories.filter((category) => !category.parentId),
     [categories],
@@ -254,7 +256,7 @@ export function ManualRuleForm({
               />
             </div>
 
-            <div className="ml-4 mt-3 border-l-2 border-primary/25 pl-4">
+            <div className="ml-4 mt-3 space-y-4 border-l-2 border-primary/25 pl-4">
               {needsSource && (
                 <MultiCheckList
                   label={
@@ -272,46 +274,52 @@ export function ManualRuleForm({
                   emptyMessage="No sources are available for this agent."
                 />
               )}
-              {needsConnector && (
-                <Field
-                  label="API"
-                  hint="Choose the approved API connector."
-                >
-                  <InlineSelect
-                    value={normalized.connectorIds?.[0] ?? "__none__"}
-                    placeholder="No API"
-                    options={[
-                      { value: "__none__", label: "No API" },
-                      ...connectors.map((connector) => ({
-                        value: connector.id,
-                        label: connector.name,
-                      })),
-                    ]}
-                    onChange={(connectorId) =>
-                      update({
-                        connectorIds:
-                          connectorId === "__none__" ? [] : [connectorId],
-                      })
-                    }
+              {needsEndpoint && (
+                <div className="space-y-4">
+                  <SectionHeading
+                    title="API endpoint"
+                    description="Enter the API endpoint that should be called to access or update data."
                   />
-                </Field>
-              )}
-              {(actionKind.includes("live data") ||
-                actionKind.includes("query") ||
-                actionKind.includes("lookup")) && (
-                <Field
-                  label="Data to retrieve"
-                  hint="Describe the data the API should return."
-                >
-                  <Textarea
-                    value={normalized.promptTemplate}
-                    onChange={(event) =>
-                      update({ promptTemplate: event.target.value })
-                    }
-                    placeholder="Transaction status"
-                    className="min-h-20 resize-y"
-                  />
-                </Field>
+                  <div className="grid items-start gap-x-6 gap-y-3 sm:grid-cols-[7.5rem_minmax(0,1fr)]">
+                    <FieldLabelWithInfo
+                      label="Method"
+                      tooltip="HTTP method used to call the endpoint."
+                    />
+                    <Select
+                      value={normalizeHttpMethod(normalized.httpMethod)}
+                      onValueChange={(value) =>
+                        update({ httpMethod: normalizeHttpMethod(value) })
+                      }
+                    >
+                      <SelectTrigger className="h-9 w-28 bg-card">
+                        <SelectValue placeholder="GET" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HTTP_METHODS.map((method) => (
+                          <SelectItem key={method} value={method}>
+                            {method}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FieldLabelWithInfo
+                      label="HTTPS URL"
+                      tooltip="The endpoint must use HTTPS."
+                    />
+                    <div className="min-w-0">
+                      <Input
+                        value={normalized.endpointUrl ?? ""}
+                        onChange={(event) =>
+                          update({ endpointUrl: event.target.value })
+                        }
+                        placeholder="Enter"
+                      />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Example: https://example.com/api/v1/
+                      </p>
+                    </div>
+                  </div>
+                </div>
               )}
               {(actionKind.includes("template") ||
                 actionKind.includes("generate")) && (
@@ -388,11 +396,8 @@ export function ManualRuleForm({
                       normalized.audienceTargetIds ?? []
                     ).map((id) => targetNames[id] ?? id),
                     countryLabel: selectedCountry?.label,
-                    connectorNames: (normalized.connectorIds ?? []).map(
-                      (id) =>
-                        connectors.find((connector) => connector.id === id)
-                          ?.name ?? id,
-                    ),
+                    httpMethod: normalized.httpMethod,
+                    endpointUrl: normalized.endpointUrl,
                     promptTemplate: normalized.promptTemplate,
                     clarificationPrompt: normalized.requiresClarificationPrompt,
                   })}
@@ -433,6 +438,32 @@ function SectionHeading({
     <div>
       <h3 className="text-sm font-semibold">{title}</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function FieldLabelWithInfo({
+  label,
+  tooltip,
+}: {
+  label: string;
+  tooltip: string;
+}) {
+  return (
+    <div className="flex h-9 items-center gap-1.5">
+      <Label className="text-xs">{label}</Label>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={tooltip}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{tooltip}</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

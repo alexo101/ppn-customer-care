@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RuleAuthoringDraftConditionCountry } from './ruleAuthoringDraftConditionCountry';
+import type { RuleAuthoringDraftHttpMethod } from './ruleAuthoringDraftHttpMethod';
 
 export interface RuleAuthoringDraft {
   name: string;
@@ -27,4 +28,6 @@ export interface RuleAuthoringDraft {
   sourceIds?: string[];
   connectorIds?: string[];
   audienceTargetIds?: string[];
+  httpMethod?: RuleAuthoringDraftHttpMethod;
+  endpointUrl?: string;
 }

@@ -115,7 +115,12 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
   const [minutes, setMinutes] = useState(0);
   const [closingMessage, setClosingMessage] = useState("");
   const [askIfResolved, setAskIfResolved] = useState(true);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const selectionRef = useRef<{ start: number; end: number }>({
+    start: 0,
+    end: 0,
+  });
 
   useEffect(() => {
     if (!data) return;
@@ -124,28 +129,37 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
     setMinutes(data.autoCloseMinutes);
     setClosingMessage(data.closingMessage);
     setAskIfResolved(data.askIfResolved);
+    selectionRef.current = {
+      start: data.closingMessage.length,
+      end: data.closingMessage.length,
+    };
   }, [data]);
 
   const saving = updateSettings.isPending;
   const autoCloseDisabled = days + hours + minutes === 0;
 
-  const insertEmoji = (emoji: string) => {
+  const rememberSelection = () => {
     const field = textareaRef.current;
-    if (!field) {
-      setClosingMessage((current) =>
-        `${current}${emoji}`.slice(0, CLOSING_MESSAGE_MAX),
-      );
-      return;
-    }
-    const start = field.selectionStart ?? closingMessage.length;
-    const end = field.selectionEnd ?? closingMessage.length;
+    if (!field) return;
+    selectionRef.current = {
+      start: field.selectionStart ?? closingMessage.length,
+      end: field.selectionEnd ?? closingMessage.length,
+    };
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const { start, end } = selectionRef.current;
     const next = `${closingMessage.slice(0, start)}${emoji}${closingMessage.slice(end)}`.slice(
       0,
       CLOSING_MESSAGE_MAX,
     );
+    const cursor = Math.min(start + emoji.length, next.length);
+    selectionRef.current = { start: cursor, end: cursor };
     setClosingMessage(next);
+    setEmojiOpen(false);
     requestAnimationFrame(() => {
-      const cursor = Math.min(start + emoji.length, CLOSING_MESSAGE_MAX);
+      const field = textareaRef.current;
+      if (!field) return;
       field.focus();
       field.setSelectionRange(cursor, cursor);
     });
@@ -232,54 +246,72 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="closing-message">Closing message</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1.5"
-                    disabled={!canEdit}
-                    aria-label="Insert emoji"
+            <Label htmlFor="closing-message">Closing message</Label>
+            <div className="rounded-md border border-input shadow-sm focus-within:ring-1 focus-within:ring-ring">
+              <Textarea
+                id="closing-message"
+                ref={textareaRef}
+                value={closingMessage}
+                onChange={(event) => {
+                  const value = event.target.value.slice(0, CLOSING_MESSAGE_MAX);
+                  setClosingMessage(value);
+                  selectionRef.current = {
+                    start: event.target.selectionStart ?? value.length,
+                    end: event.target.selectionEnd ?? value.length,
+                  };
+                }}
+                onSelect={rememberSelection}
+                onKeyUp={rememberSelection}
+                onClick={rememberSelection}
+                onBlur={rememberSelection}
+                disabled={!canEdit}
+                rows={4}
+                maxLength={CLOSING_MESSAGE_MAX}
+                placeholder="This conversation has been closed. Message us again if you need more help. 👋"
+                className="border-0 shadow-none focus-visible:ring-0 min-h-[96px] resize-none"
+              />
+              <div className="flex items-center justify-end px-1 pb-1">
+                <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 gap-1.5 text-muted-foreground"
+                      disabled={!canEdit}
+                      aria-label="Add emoji to closing message"
+                    >
+                      <Smile className="h-4 w-4" />
+                      Add emoji
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-64 p-2"
+                    align="end"
+                    onOpenAutoFocus={(event) => event.preventDefault()}
+                    onCloseAutoFocus={(event) => event.preventDefault()}
                   >
-                    <Smile className="h-4 w-4" />
-                    Emoji
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-64 p-2" align="end">
-                  <div className="grid grid-cols-8 gap-1">
-                    {EMOJIS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        className="h-8 w-8 rounded-md text-base hover:bg-muted"
-                        onClick={() => insertEmoji(emoji)}
-                        aria-label={`Insert ${emoji}`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+                    <div className="grid grid-cols-8 gap-1">
+                      {EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className="h-8 w-8 rounded-md text-base hover:bg-muted"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => insertEmoji(emoji)}
+                          aria-label={`Add ${emoji} to closing message`}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
-            <Textarea
-              id="closing-message"
-              ref={textareaRef}
-              value={closingMessage}
-              onChange={(event) =>
-                setClosingMessage(event.target.value.slice(0, CLOSING_MESSAGE_MAX))
-              }
-              disabled={!canEdit}
-              rows={4}
-              maxLength={CLOSING_MESSAGE_MAX}
-              placeholder="This conversation has been closed. Message us again if you need more help."
-            />
             <p className="text-xs text-muted-foreground">
-              Sent to the customer when the conversation closes. Emojis are
-              supported.
+              This text, including any emojis you add, is sent as the last
+              message when the conversation closes.
             </p>
           </div>
 

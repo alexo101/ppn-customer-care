@@ -32,6 +32,8 @@ export const orchestratorRulesTable = pgTable("orchestrator_rules", {
   conditionOperator: text("condition_operator").notNull().default("is"),
   conditionCountry: text("condition_country"),
   action: text("action").notNull().default("search answer"),
+  httpMethod: text("http_method").notNull().default("GET"),
+  endpointUrl: text("endpoint_url").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

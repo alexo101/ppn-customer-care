@@ -112,6 +112,8 @@ export function RulesTab({ agentId }: { agentId: string }) {
           (id) =>
             connectors.find((connector) => connector.id === id)?.name ?? "",
         ),
+        rule.httpMethod ?? "",
+        rule.endpointUrl ?? "",
       ]
         .join(" ")
         .toLowerCase()
@@ -232,7 +234,6 @@ export function RulesTab({ agentId }: { agentId: string }) {
             <MutatingControls>
               <Button
                 size="sm"
-                variant="outline"
                 className="h-8 text-xs"
                 onClick={() => openAuthoring(null, "manual")}
               >
@@ -241,6 +242,7 @@ export function RulesTab({ agentId }: { agentId: string }) {
               </Button>
               <Button
                 size="sm"
+                variant="outline"
                 className="h-8 text-xs"
                 onClick={() => openAuthoring(null, "ai")}
               >
@@ -336,7 +338,6 @@ export function RulesTab({ agentId }: { agentId: string }) {
         rule={editingRule}
         categories={categories}
         sources={sources}
-        connectors={connectors}
         audienceTargets={audienceTargets}
         open={chatOpen}
         initialMode={editorMode}
@@ -428,6 +429,8 @@ function RuleRow({
     connectorNames: (rule.connectorIds ?? [])
       .map((id) => connectorNames[id])
       .filter((name): name is string => Boolean(name)),
+    httpMethod: rule.httpMethod,
+    endpointUrl: rule.endpointUrl,
     promptTemplate: rule.promptTemplate,
     clarificationPrompt: rule.requiresClarificationPrompt,
   });

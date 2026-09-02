@@ -2,6 +2,7 @@ import {
   actionUsesSources,
   formatRuleSentence,
   normalizeAction,
+  normalizeHttpMethod,
   RULE_COUNTRIES,
 } from "./rule-engine";
 import type {
@@ -242,6 +243,8 @@ export function validateDraft(
     )?.label,
     promptTemplate: normalized.promptTemplate,
     clarificationPrompt: normalized.requiresClarificationPrompt,
+    httpMethod: normalizeHttpMethod(normalized.httpMethod),
+    endpointUrl: normalized.endpointUrl,
   });
 
   return {
@@ -260,6 +263,8 @@ export function validateDraft(
       categoryIds,
       sourceIds: requiresSource ? sourceIds : [],
       audienceTargetIds,
+      httpMethod: normalizeHttpMethod(normalized.httpMethod),
+      endpointUrl: (normalized.endpointUrl ?? "").trim(),
     },
     unresolvedFields: unique(unresolvedFields),
   };

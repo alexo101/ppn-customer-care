@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RuleInputConditionCountry } from './ruleInputConditionCountry';
+import type { RuleInputHttpMethod } from './ruleInputHttpMethod';
 
 export interface RuleInput {
   name: string;
@@ -24,4 +25,6 @@ export interface RuleInput {
   sourceIds?: string[];
   connectorIds?: string[];
   audienceTargetIds?: string[];
+  httpMethod?: RuleInputHttpMethod;
+  endpointUrl?: string;
 }

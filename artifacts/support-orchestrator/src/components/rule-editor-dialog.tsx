@@ -4,7 +4,6 @@ import {
   useUpdateRule,
   type IntentCategory,
   type KnowledgeSource,
-  type ApiConnector,
   type OrchestratorRule,
   type RuleAuthoringDraft,
   type Target,
@@ -37,7 +36,6 @@ type RuleEditorDialogProps = {
   rule: OrchestratorRule | null;
   categories: IntentCategory[];
   sources: KnowledgeSource[];
-  connectors: ApiConnector[];
   audienceTargets: Target[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -51,7 +49,6 @@ export function RuleEditorDialog({
   rule,
   categories,
   sources,
-  connectors,
   audienceTargets,
   open,
   onOpenChange,
@@ -177,7 +174,6 @@ export function RuleEditorDialog({
               onDraftChange={setDraft}
               categories={categories}
               sources={sources}
-              connectors={connectors}
               audienceTargets={audienceTargets}
               onSave={() => handleSave(draft)}
               saving={saving}

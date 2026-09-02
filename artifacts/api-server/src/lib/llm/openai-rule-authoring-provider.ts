@@ -33,6 +33,8 @@ const RESPONSE_SCHEMA = {
             "categoryIds",
             "sourceIds",
             "audienceTargetIds",
+            "httpMethod",
+            "endpointUrl",
           ],
           properties: {
             name: { type: "string" },
@@ -51,6 +53,11 @@ const RESPONSE_SCHEMA = {
             categoryIds: { type: "array", items: { type: "string" } },
             sourceIds: { type: "array", items: { type: "string" } },
             audienceTargetIds: { type: "array", items: { type: "string" } },
+            httpMethod: {
+              type: "string",
+              enum: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+            },
+            endpointUrl: { type: "string" },
           },
         },
         { type: "null" },

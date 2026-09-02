@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiConnectorError, callConnector } from "./api-connector";
+import { ApiConnectorError, callConnector, callLiveDataEndpoint } from "./api-connector";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -39,6 +39,35 @@ describe("callConnector", () => {
         authType: "api_key",
         authConfig: { envVar: "MISSING_CONNECTOR_TOKEN" },
       }, { query: "status" }),
+    ).rejects.toBeInstanceOf(ApiConnectorError);
+  });
+});
+
+describe("callLiveDataEndpoint", () => {
+  it("calls the configured HTTPS URL with the selected method", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await callLiveDataEndpoint({
+      method: "POST",
+      url: "https://example.test/api/v1/",
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: 200,
+      sourceName: "example.test",
+    });
+    const [requestUrl, request] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(String(requestUrl)).toBe("https://example.test/api/v1/");
+    expect(request.method).toBe("POST");
+  });
+
+  it("rejects non-HTTPS live data URLs", async () => {
+    await expect(
+      callLiveDataEndpoint({ method: "GET", url: "http://example.test/api" }),
     ).rejects.toBeInstanceOf(ApiConnectorError);
   });
 });
