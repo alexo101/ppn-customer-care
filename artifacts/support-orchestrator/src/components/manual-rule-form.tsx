@@ -248,9 +248,7 @@ export function ManualRuleForm({
                 onChange={(value) =>
                   update({
                     action: value,
-                    escalationTrigger: actionIsEscalation(value)
-                      ? true
-                      : normalized.escalationTrigger,
+                    escalationTrigger: actionIsEscalation(value),
                   })
                 }
               />
@@ -365,12 +363,6 @@ export function ManualRuleForm({
               label="Enabled"
               checked={normalized.isEnabled}
               onChange={(isEnabled) => update({ isEnabled })}
-            />
-            <ToggleField
-              id="manual-rule-escalation"
-              label="Escalate to a human"
-              checked={normalized.escalationTrigger}
-              onChange={(escalationTrigger) => update({ escalationTrigger })}
             />
           </div>
 
