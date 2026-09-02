@@ -132,10 +132,6 @@ export function ManualRuleForm({
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-3xl space-y-5">
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Name this rule so you can find it later. The guided sentence below
-              shows exactly when it runs.
-            </p>
             <Field label="Name" required>
               <Input
                 value={normalized.name}
