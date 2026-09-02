@@ -357,15 +357,6 @@ export function ManualRuleForm({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-x-6 gap-y-3 px-1">
-            <ToggleField
-              id="manual-rule-enabled"
-              label="Enabled"
-              checked={normalized.isEnabled}
-              onChange={(isEnabled) => update({ isEnabled })}
-            />
-          </div>
-
           <div className="rounded-lg border border-primary/20 bg-card p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -395,9 +386,12 @@ export function ManualRuleForm({
                   })}
                 </p>
               </div>
-              <Badge variant={normalized.isEnabled ? "default" : "outline"}>
-                {normalized.isEnabled ? "Enabled" : "Disabled"}
-              </Badge>
+              <ToggleField
+                id="manual-rule-enabled"
+                label="Enabled"
+                checked={normalized.isEnabled}
+                onChange={(isEnabled) => update({ isEnabled })}
+              />
             </div>
           </div>
         </div>
