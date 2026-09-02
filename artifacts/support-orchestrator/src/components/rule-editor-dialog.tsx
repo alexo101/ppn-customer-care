@@ -162,9 +162,6 @@ export function RuleEditorDialog({
                 Describe to AI
               </TabsTrigger>
             </TabsList>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Choose either method. You can switch between them before saving.
-            </p>
           </div>
 
           <TabsContent value="manual" className="mt-0 flex min-h-0 flex-1 flex-col">
