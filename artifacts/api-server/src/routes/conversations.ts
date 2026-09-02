@@ -30,6 +30,8 @@ import {
   SendMessageBody,
   SubmitFeedbackParams,
   SubmitFeedbackBody,
+  ConfirmConversationCloseParams,
+  ConfirmConversationCloseBody,
   ListConversationLogsParams,
   ListQuestionsQueryParams,
 } from "@workspace/api-zod";
@@ -69,6 +71,12 @@ import {
   markConversationEscalationUnread,
   upsertEscalationForConversation,
 } from "../lib/escalations";
+import {
+  applyConversationCloseConfirmation,
+  clearAutoCloseConfirmation,
+  ConversationLifecycleError,
+  isAwaitingAutoCloseConfirmation,
+} from "../lib/conversation-lifecycle";
 
 const router: IRouter = Router();
 
@@ -367,7 +375,13 @@ router.post(
 
     // Stage 1: capture authenticated user identity
     stages[0].status = "running";
-    const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
+    const existingMeta = isAwaitingAutoCloseConfirmation(conv.metadata)
+      ? clearAutoCloseConfirmation(
+          isPlainObject(conv.metadata) ? conv.metadata : {},
+        )
+      : isPlainObject(conv.metadata)
+        ? conv.metadata
+        : {};
     const storedContext = isPlainObject(existingMeta.context)
       ? existingMeta.context
       : {};
@@ -877,6 +891,42 @@ router.post(
     await updateConversationAnalytics(params.data.id);
 
     res.status(201).json({ success: true });
+  },
+);
+
+// ── Confirm auto-close ────────────────────────────────────────────────────
+router.post(
+  "/conversations/:id/close-confirmation",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = ConfirmConversationCloseParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = ConfirmConversationCloseBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    try {
+      const row = await applyConversationCloseConfirmation(
+        params.data.id,
+        req.userId,
+        parsed.data.resolved,
+      );
+      if (!row) {
+        res.status(404).json({ error: "Conversation not found" });
+        return;
+      }
+      res.json(toConversation(row));
+    } catch (error) {
+      if (error instanceof ConversationLifecycleError) {
+        res.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      throw error;
+    }
   },
 );
 

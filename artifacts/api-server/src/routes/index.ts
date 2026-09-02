@@ -12,6 +12,7 @@ import membersRouter from "./members";
 import agentsRouter from "./agents";
 import trainingQuestionsRouter from "./training-questions";
 import escalationsRouter from "./escalations";
+import conversationSettingsRouter from "./conversation-settings";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(appearanceRouter);
 router.use(authRouter);
 router.use(membersRouter);
 router.use(escalationsRouter);
+router.use(conversationSettingsRouter);
 
 export default router;

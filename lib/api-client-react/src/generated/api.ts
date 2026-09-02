@@ -21,6 +21,8 @@ import type {
 
 import type {
   Agent,
+  AgentConversationSettings,
+  AgentConversationSettingsInput,
   AgentEscalation,
   AgentEscalationInput,
   AgentInput,
@@ -33,6 +35,7 @@ import type {
   AppearanceUpdate,
   CategoryInput,
   CategoryUpdate,
+  CloseConfirmationInput,
   ConnectorInput,
   ConnectorUpdate,
   Conversation,
@@ -1163,6 +1166,155 @@ export const useUpdateAgentEscalation = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateAgentEscalationMutationOptions(options));
+    }
+
+export const getGetAgentConversationSettingsUrl = (id: string,) => {
+
+
+
+
+  return `/api/agents/${id}/conversation-settings`
+}
+
+/**
+ * @summary Get conversation auto-close settings for an agent
+ */
+export const getAgentConversationSettings = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<AgentConversationSettings> => {
+
+  return customFetch<AgentConversationSettings>(getGetAgentConversationSettingsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAgentConversationSettingsQueryKey = (id: string,) => {
+    return [
+    `/api/agents/${id}/conversation-settings`
+    ] as const;
+    }
+
+
+export const getGetAgentConversationSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAgentConversationSettings>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentConversationSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAgentConversationSettingsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentConversationSettings>>> = ({ signal }) => getAgentConversationSettings(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgentConversationSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAgentConversationSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAgentConversationSettings>>>
+export type GetAgentConversationSettingsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get conversation auto-close settings for an agent
+ */
+
+export function useGetAgentConversationSettings<TData = Awaited<ReturnType<typeof getAgentConversationSettings>>, TError = ErrorType<ErrorResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentConversationSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAgentConversationSettingsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAgentConversationSettingsUrl = (id: string,) => {
+
+
+
+
+  return `/api/agents/${id}/conversation-settings`
+}
+
+/**
+ * @summary Update conversation auto-close settings for an agent
+ */
+export const updateAgentConversationSettings = async (id: string,
+    agentConversationSettingsInput: AgentConversationSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<AgentConversationSettings> => {
+
+  return customFetch<AgentConversationSettings>(getUpdateAgentConversationSettingsUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentConversationSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAgentConversationSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentConversationSettings>>, TError,{id: string;data: BodyType<AgentConversationSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAgentConversationSettings>>, TError,{id: string;data: BodyType<AgentConversationSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateAgentConversationSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAgentConversationSettings>>, {id: string;data: BodyType<AgentConversationSettingsInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAgentConversationSettings(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAgentConversationSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAgentConversationSettings>>>
+    export type UpdateAgentConversationSettingsMutationBody = BodyType<AgentConversationSettingsInput>
+    export type UpdateAgentConversationSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update conversation auto-close settings for an agent
+ */
+export const useUpdateAgentConversationSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentConversationSettings>>, TError,{id: string;data: BodyType<AgentConversationSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAgentConversationSettings>>,
+        TError,
+        {id: string;data: BodyType<AgentConversationSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAgentConversationSettingsMutationOptions(options));
     }
 
 export const getListInboxTeamsUrl = () => {
@@ -2368,6 +2520,78 @@ export const useSubmitFeedback = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSubmitFeedbackMutationOptions(options));
+    }
+
+export const getConfirmConversationCloseUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/close-confirmation`
+}
+
+/**
+ * @summary Confirm or decline auto-close after a resolution prompt
+ */
+export const confirmConversationClose = async (id: string,
+    closeConfirmationInput: CloseConfirmationInput, options?: Parameters<typeof customFetch>[1]): Promise<Conversation> => {
+
+  return customFetch<Conversation>(getConfirmConversationCloseUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(closeConfirmationInput)
+  }
+);}
+
+
+
+
+
+export const getConfirmConversationCloseMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmConversationClose>>, TError,{id: string;data: BodyType<CloseConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmConversationClose>>, TError,{id: string;data: BodyType<CloseConfirmationInput>}, TContext> => {
+
+const mutationKey = ['confirmConversationClose'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmConversationClose>>, {id: string;data: BodyType<CloseConfirmationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  confirmConversationClose(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmConversationCloseMutationResult = NonNullable<Awaited<ReturnType<typeof confirmConversationClose>>>
+    export type ConfirmConversationCloseMutationBody = BodyType<CloseConfirmationInput>
+    export type ConfirmConversationCloseMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Confirm or decline auto-close after a resolution prompt
+ */
+export const useConfirmConversationClose = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmConversationClose>>, TError,{id: string;data: BodyType<CloseConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmConversationClose>>,
+        TError,
+        {id: string;data: BodyType<CloseConfirmationInput>},
+        TContext
+      > => {
+      return useMutation(getConfirmConversationCloseMutationOptions(options));
     }
 
 export const getListConversationLogsUrl = (id: string,) => {

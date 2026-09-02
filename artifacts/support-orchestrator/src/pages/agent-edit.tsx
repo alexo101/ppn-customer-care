@@ -7,6 +7,7 @@ import { DeploymentEditor } from "@/components/deployment-editor";
 import { MonitoringEditor } from "@/components/monitoring-editor";
 import { TrainingEditor } from "@/components/training-editor";
 import { EscalationEditor } from "@/components/escalation-editor";
+import { ConversationSettingsEditor } from "@/components/conversation-settings-editor";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -88,6 +89,9 @@ export default function EditAgentPage() {
             {stepId === "categories" && <CategoriesTab agentId={agentId} />}
             {stepId === "rules" && <RulesTab agentId={agentId} />}
             {stepId === "escalations" && <EscalationEditor agentId={agentId} />}
+            {stepId === "conversation-settings" && (
+              <ConversationSettingsEditor agentId={agentId} />
+            )}
             {stepId === "sources" && <SourcesTab agentId={agentId} />}
             {stepId === "targets" && <TargetsTab agentId={agentId} />}
             {stepId === "deployment" && <DeploymentEditor agentId={agentId} />}

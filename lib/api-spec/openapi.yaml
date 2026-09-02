@@ -328,6 +328,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/AgentEscalation"
 
+  /agents/{id}/conversation-settings:
+    get:
+      operationId: getAgentConversationSettings
+      tags: [agents]
+      summary: Get conversation auto-close settings for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Conversation settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentConversationSettings"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateAgentConversationSettings
+      tags: [agents]
+      summary: Update conversation auto-close settings for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentConversationSettingsInput"
+      responses:
+        "200":
+          description: Updated conversation settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentConversationSettings"
+
   /inbox/teams:
     get:
       operationId: listInboxTeams
@@ -697,6 +743,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+
+  /conversations/{id}/close-confirmation:
+    post:
+      operationId: confirmConversationClose
+      tags: [conversations]
+      summary: Confirm or decline auto-close after a resolution prompt
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseConfirmationInput"
+      responses:
+        "200":
+          description: Updated conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "400":
+          description: Confirmation is not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /conversations/{id}/logs:
     get:
@@ -2066,6 +2149,48 @@ components:
         memberIds:
           type: array
           items: { type: string }
+
+    AgentConversationSettings:
+      type: object
+      required:
+        [
+          agentId,
+          autoCloseDays,
+          autoCloseHours,
+          autoCloseMinutes,
+          closingMessage,
+          askIfResolved,
+        ]
+      properties:
+        agentId: { type: string }
+        autoCloseDays: { type: number, minimum: 0, maximum: 365 }
+        autoCloseHours: { type: number, minimum: 0, maximum: 23 }
+        autoCloseMinutes: { type: number, minimum: 0, maximum: 59 }
+        closingMessage: { type: string, maxLength: 2000 }
+        askIfResolved: { type: boolean }
+
+    AgentConversationSettingsInput:
+      type: object
+      required:
+        [
+          autoCloseDays,
+          autoCloseHours,
+          autoCloseMinutes,
+          closingMessage,
+          askIfResolved,
+        ]
+      properties:
+        autoCloseDays: { type: number, minimum: 0, maximum: 365 }
+        autoCloseHours: { type: number, minimum: 0, maximum: 23 }
+        autoCloseMinutes: { type: number, minimum: 0, maximum: 59 }
+        closingMessage: { type: string, maxLength: 2000 }
+        askIfResolved: { type: boolean }
+
+    CloseConfirmationInput:
+      type: object
+      required: [resolved]
+      properties:
+        resolved: { type: boolean }
 
     InboxTeam:
       type: object

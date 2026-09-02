@@ -309,6 +309,87 @@ export const UpdateAgentEscalationResponse = zod.object({
 
 
 /**
+ * @summary Get conversation auto-close settings for an agent
+ */
+export const GetAgentConversationSettingsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const getAgentConversationSettingsResponseAutoCloseDaysMin = 0;
+export const getAgentConversationSettingsResponseAutoCloseDaysMax = 365;
+
+export const getAgentConversationSettingsResponseAutoCloseHoursMin = 0;
+export const getAgentConversationSettingsResponseAutoCloseHoursMax = 23;
+
+export const getAgentConversationSettingsResponseAutoCloseMinutesMin = 0;
+export const getAgentConversationSettingsResponseAutoCloseMinutesMax = 59;
+
+export const getAgentConversationSettingsResponseClosingMessageMax = 2000;
+
+
+
+export const GetAgentConversationSettingsResponse = zod.object({
+  "agentId": zod.string(),
+  "autoCloseDays": zod.number().min(getAgentConversationSettingsResponseAutoCloseDaysMin).max(getAgentConversationSettingsResponseAutoCloseDaysMax),
+  "autoCloseHours": zod.number().min(getAgentConversationSettingsResponseAutoCloseHoursMin).max(getAgentConversationSettingsResponseAutoCloseHoursMax),
+  "autoCloseMinutes": zod.number().min(getAgentConversationSettingsResponseAutoCloseMinutesMin).max(getAgentConversationSettingsResponseAutoCloseMinutesMax),
+  "closingMessage": zod.string().max(getAgentConversationSettingsResponseClosingMessageMax),
+  "askIfResolved": zod.boolean()
+})
+
+
+/**
+ * @summary Update conversation auto-close settings for an agent
+ */
+export const UpdateAgentConversationSettingsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateAgentConversationSettingsBodyAutoCloseDaysMin = 0;
+export const updateAgentConversationSettingsBodyAutoCloseDaysMax = 365;
+
+export const updateAgentConversationSettingsBodyAutoCloseHoursMin = 0;
+export const updateAgentConversationSettingsBodyAutoCloseHoursMax = 23;
+
+export const updateAgentConversationSettingsBodyAutoCloseMinutesMin = 0;
+export const updateAgentConversationSettingsBodyAutoCloseMinutesMax = 59;
+
+export const updateAgentConversationSettingsBodyClosingMessageMax = 2000;
+
+
+
+export const UpdateAgentConversationSettingsBody = zod.object({
+  "autoCloseDays": zod.number().min(updateAgentConversationSettingsBodyAutoCloseDaysMin).max(updateAgentConversationSettingsBodyAutoCloseDaysMax),
+  "autoCloseHours": zod.number().min(updateAgentConversationSettingsBodyAutoCloseHoursMin).max(updateAgentConversationSettingsBodyAutoCloseHoursMax),
+  "autoCloseMinutes": zod.number().min(updateAgentConversationSettingsBodyAutoCloseMinutesMin).max(updateAgentConversationSettingsBodyAutoCloseMinutesMax),
+  "closingMessage": zod.string().max(updateAgentConversationSettingsBodyClosingMessageMax),
+  "askIfResolved": zod.boolean()
+})
+
+export const updateAgentConversationSettingsResponseAutoCloseDaysMin = 0;
+export const updateAgentConversationSettingsResponseAutoCloseDaysMax = 365;
+
+export const updateAgentConversationSettingsResponseAutoCloseHoursMin = 0;
+export const updateAgentConversationSettingsResponseAutoCloseHoursMax = 23;
+
+export const updateAgentConversationSettingsResponseAutoCloseMinutesMin = 0;
+export const updateAgentConversationSettingsResponseAutoCloseMinutesMax = 59;
+
+export const updateAgentConversationSettingsResponseClosingMessageMax = 2000;
+
+
+
+export const UpdateAgentConversationSettingsResponse = zod.object({
+  "agentId": zod.string(),
+  "autoCloseDays": zod.number().min(updateAgentConversationSettingsResponseAutoCloseDaysMin).max(updateAgentConversationSettingsResponseAutoCloseDaysMax),
+  "autoCloseHours": zod.number().min(updateAgentConversationSettingsResponseAutoCloseHoursMin).max(updateAgentConversationSettingsResponseAutoCloseHoursMax),
+  "autoCloseMinutes": zod.number().min(updateAgentConversationSettingsResponseAutoCloseMinutesMin).max(updateAgentConversationSettingsResponseAutoCloseMinutesMax),
+  "closingMessage": zod.string().max(updateAgentConversationSettingsResponseClosingMessageMax),
+  "askIfResolved": zod.boolean()
+})
+
+
+/**
  * @summary List escalation teams visible to the current member
  */
 export const ListInboxTeamsResponseItem = zod.object({
@@ -708,6 +789,28 @@ export const SubmitFeedbackBody = zod.object({
 
 export const SubmitFeedbackResponse = zod.object({
   "success": zod.boolean()
+})
+
+
+/**
+ * @summary Confirm or decline auto-close after a resolution prompt
+ */
+export const ConfirmConversationCloseParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ConfirmConversationCloseBody = zod.object({
+  "resolved": zod.boolean()
+})
+
+export const ConfirmConversationCloseResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
+  "lastActivityAt": zod.string(),
+  "resolvedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish()
 })
 
 

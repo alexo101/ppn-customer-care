@@ -12,6 +12,7 @@ import {
   getGetConversationQueryKey,
   getListMessagesQueryKey,
   useSubmitFeedback,
+  useConfirmConversationClose,
 } from "@workspace/api-client-react";
 import {
   Send,
@@ -35,6 +36,8 @@ import {
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
 import { SourceCitations } from "@/components/chat/source-citations";
+import { AutoCloseConfirmation } from "@/components/chat/auto-close-confirmation";
+import { isAwaitingAutoCloseConfirmation } from "@/lib/conversation-settings";
 
 export default function Widget() {
   const search = useSearch();
@@ -73,6 +76,7 @@ export default function Widget() {
   const createConvo = useCreateConversation();
   const sendMessage = useSendMessage();
   const submitFeedback = useSubmitFeedback();
+  const confirmClose = useConfirmConversationClose();
 
   const { data: convo, refetch: refetchConvo } = useGetConversation(
     convoId ?? "",
@@ -174,6 +178,23 @@ export default function Widget() {
         },
       },
       { onSuccess: () => setFeedbackSent(true) },
+    );
+  };
+
+  const awaitingCloseConfirmation =
+    convo?.status !== "closed" &&
+    isAwaitingAutoCloseConfirmation(convo?.metadata);
+
+  const respondToClosePrompt = (resolved: boolean) => {
+    if (!convoId || confirmClose.isPending) return;
+    confirmClose.mutate(
+      { id: convoId, data: { resolved } },
+      {
+        onSuccess: () => {
+          refetch();
+          refetchConvo();
+        },
+      },
     );
   };
 
@@ -300,6 +321,15 @@ export default function Widget() {
               )}
             </div>
           </ScrollArea>
+
+          {awaitingCloseConfirmation && (
+            <div className="border-t border-border bg-background px-3 py-2">
+              <AutoCloseConfirmation
+                disabled={confirmClose.isPending}
+                onRespond={respondToClosePrompt}
+              />
+            </div>
+          )}
 
           {convo?.status === "resolved" && latestAssistant && !feedbackSent && (
             <div className="border-t border-border bg-background px-3 py-2">

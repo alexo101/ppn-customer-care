@@ -7,6 +7,8 @@
  */
 
 export * from './agent';
+export * from './agentConversationSettings';
+export * from './agentConversationSettingsInput';
 export * from './agentEscalation';
 export * from './agentEscalationInput';
 export * from './agentEscalationMember';
@@ -27,6 +29,7 @@ export * from './categoryUpdate';
 export * from './citation';
 export * from './classificationResult';
 export * from './classificationResultEntities';
+export * from './closeConfirmationInput';
 export * from './connectorInput';
 export * from './connectorInputAuthConfig';
 export * from './connectorUpdate';

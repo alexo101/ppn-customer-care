@@ -12,6 +12,11 @@ const protectedRoutes: Array<{
   { file: "agents.ts", method: "post", path: "/agents/:id/deployment-token" },
   { file: "agents.ts", method: "patch", path: "/agents/:id/settings" },
   { file: "escalations.ts", method: "patch", path: "/agents/:id/escalation" },
+  {
+    file: "conversation-settings.ts",
+    method: "patch",
+    path: "/agents/:id/conversation-settings",
+  },
   { file: "appearance.ts", method: "put", path: "/appearance" },
   { file: "appearance.ts", method: "post", path: "/appearance/import" },
   { file: "appearance.ts", method: "put", path: "/agents/:id/appearance" },

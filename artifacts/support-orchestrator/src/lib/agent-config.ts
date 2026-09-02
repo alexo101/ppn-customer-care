@@ -8,6 +8,7 @@ import {
   Shield,
   Tag,
   Target,
+  Timer,
 } from "lucide-react";
 
 export const AGENT_CONFIG_STEPS = [
@@ -25,6 +26,12 @@ export const AGENT_CONFIG_STEPS = [
     id: "escalations",
     label: "Escalations",
     icon: AlertTriangle,
+    group: "configuration",
+  },
+  {
+    id: "conversation-settings",
+    label: "Conversation Settings",
+    icon: Timer,
     group: "configuration",
   },
   {

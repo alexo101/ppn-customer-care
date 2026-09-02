@@ -87,6 +87,53 @@ export interface AgentEscalationInput {
   memberIds: string[];
 }
 
+export interface AgentConversationSettings {
+  agentId: string;
+  /**
+     * @minimum 0
+     * @maximum 365
+     */
+  autoCloseDays: number;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  autoCloseHours: number;
+  /**
+     * @minimum 0
+     * @maximum 59
+     */
+  autoCloseMinutes: number;
+  /** @maxLength 2000 */
+  closingMessage: string;
+  askIfResolved: boolean;
+}
+
+export interface AgentConversationSettingsInput {
+  /**
+     * @minimum 0
+     * @maximum 365
+     */
+  autoCloseDays: number;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  autoCloseHours: number;
+  /**
+     * @minimum 0
+     * @maximum 59
+     */
+  autoCloseMinutes: number;
+  /** @maxLength 2000 */
+  closingMessage: string;
+  askIfResolved: boolean;
+}
+
+export interface CloseConfirmationInput {
+  resolved: boolean;
+}
+
 export interface InboxTeam {
   agentId: string;
   agentName: string;

@@ -11,6 +11,7 @@ import {
   orchestratorRulesTable,
 } from "@workspace/db";
 import { ensureAgentEscalationInbox } from "./escalations";
+import { ensureAgentConversationSettings } from "./conversation-settings";
 import { EVERYONE_TARGET_DESCRIPTION, EVERYONE_TARGET_NAME } from "./targets";
 
 export async function getAgent(agentId: string) {
@@ -113,6 +114,7 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
         Promise.all([
           ensureEveryoneTarget(userId, agent.id),
           ensureAgentEscalationInbox(agent.id),
+          ensureAgentConversationSettings(agent.id),
         ]),
       ),
     );
@@ -133,6 +135,7 @@ export async function ensureDefaultAgentIfNeeded(userId: string) {
   await attachUnscopedRows(userId, created.id);
   await ensureEveryoneTarget(userId, created.id);
   await ensureAgentEscalationInbox(created.id);
+  await ensureAgentConversationSettings(created.id);
   return created;
 }
 
