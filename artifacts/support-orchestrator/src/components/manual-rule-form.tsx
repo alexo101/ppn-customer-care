@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  getListRuleVocabulariesQueryKey,
-  useCreateRuleVocabulary,
   useListRuleVocabularies,
   type IntentCategory,
   type KnowledgeSource,
@@ -9,8 +7,7 @@ import {
   type RuleAuthoringDraft,
   type Target,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { FolderTree, Plus, Save, Trash2 } from "lucide-react";
+import { FolderTree, Save } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,7 +22,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { MutatingControls } from "@/components/workspace-access";
 import {
   actionIsEscalation,
@@ -34,8 +30,6 @@ import {
   normalizeDraft,
   RULE_COUNTRIES,
 } from "@/lib/rules";
-
-type VocabularyKind = "operator" | "action";
 
 type ManualRuleFormProps = {
   agentId: string;
@@ -85,19 +79,7 @@ export function ManualRuleForm({
     [audienceTargets],
   );
   const actionKind = normalized.action.trim().toLowerCase();
-  const isCustomAction =
-    !actionKind.includes("search") &&
-    !actionKind.includes("answer") &&
-    !actionKind.includes("live data") &&
-    !actionKind.includes("query") &&
-    !actionKind.includes("lookup") &&
-    !actionKind.includes("template") &&
-    !actionKind.includes("generate") &&
-    !actionKind.includes("clarif") &&
-    !actionKind.includes("escalat") &&
-    !actionKind.includes("human") &&
-    !actionKind.includes("transfer");
-  const needsSource = actionKind.includes("search") || isCustomAction;
+  const needsSource = actionKind.includes("search");
   const needsConnector =
     actionKind.includes("live data") ||
     actionKind.includes("query") ||
@@ -258,10 +240,8 @@ export function ManualRuleForm({
                 }
               />
               <span className="font-medium text-muted-foreground">then</span>
-              <VocabPicker
+              <ActionPicker
                 agentId={agentId}
-                kind="action"
-                label="Action"
                 value={normalized.action}
                 onChange={(value) =>
                   update({
@@ -292,9 +272,9 @@ export function ManualRuleForm({
                   emptyMessage="No sources are available for this agent."
                 />
               )}
-              {(needsConnector || isCustomAction) && (
+              {needsConnector && (
                 <Field
-                  label={`API${isCustomAction ? " (optional)" : ""}`}
+                  label="API"
                   hint="Choose the approved API connector."
                 >
                   <InlineSelect
@@ -318,8 +298,7 @@ export function ManualRuleForm({
               )}
               {(actionKind.includes("live data") ||
                 actionKind.includes("query") ||
-                actionKind.includes("lookup") ||
-                isCustomAction) && (
+                actionKind.includes("lookup")) && (
                 <Field
                   label="Data to retrieve"
                   hint="Describe the data the API should return."
@@ -350,7 +329,7 @@ export function ManualRuleForm({
                   />
                 </Field>
               )}
-              {(actionKind.includes("clarif") || isCustomAction) && (
+              {actionKind.includes("clarif") && (
                 <Field label="Clarification question">
                   <Textarea
                     value={normalized.requiresClarificationPrompt}
@@ -774,25 +753,16 @@ function MultiCheckList({
   );
 }
 
-function VocabPicker({
+function ActionPicker({
   agentId,
-  kind,
-  label,
   value,
   onChange,
 }: {
   agentId: string;
-  kind: VocabularyKind;
-  label: string;
   value: string;
   onChange: (value: string) => void;
 }) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [adding, setAdding] = useState(false);
-  const [customLabel, setCustomLabel] = useState("");
-  const vocabularies = useListRuleVocabularies({ agentId, kind });
-  const createVocabulary = useCreateRuleVocabulary();
+  const vocabularies = useListRuleVocabularies({ agentId, kind: "action" });
   const entries = useMemo(() => {
     const unique: { id: string; label: string }[] = [];
     const seen = new Set<string>();
@@ -810,37 +780,11 @@ function VocabPicker({
     return unique;
   }, [value, vocabularies.data]);
 
-  const addCustom = () => {
-    const trimmed = customLabel.trim();
-    if (!trimmed || createVocabulary.isPending) return;
-    createVocabulary.mutate(
-      { data: { agentId, kind, label: trimmed } },
-      {
-        onSuccess: (created) => {
-          onChange(created.label);
-          setCustomLabel("");
-          setAdding(false);
-          queryClient.invalidateQueries({
-            queryKey: getListRuleVocabulariesQueryKey({ agentId, kind }),
-          });
-          toast({ title: `${label} added` });
-        },
-        onError: (error) => {
-          toast({
-            title: `Could not add ${label.toLowerCase()}`,
-            description: error instanceof Error ? error.message : "Try again.",
-            variant: "destructive",
-          });
-        },
-      },
-    );
-  };
-
   return (
     <div className="space-y-1.5">
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
-          <SelectValue placeholder={`Choose ${label.toLowerCase()}`} />
+          <SelectValue placeholder="Choose action" />
         </SelectTrigger>
         <SelectContent>
           {entries.map((entry) => (
@@ -850,53 +794,6 @@ function VocabPicker({
           ))}
         </SelectContent>
       </Select>
-      {!adding ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-1.5 text-[11px] text-muted-foreground"
-          onClick={() => setAdding(true)}
-        >
-          <Plus className="mr-1 h-3 w-3" />
-          Add custom {label.toLowerCase()}
-        </Button>
-      ) : (
-        <div className="flex items-center gap-2">
-          <Input
-            autoFocus
-            value={customLabel}
-            onChange={(event) => setCustomLabel(event.target.value)}
-            placeholder={`New ${label.toLowerCase()}`}
-            className="h-8 text-xs"
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addCustom();
-              }
-              if (event.key === "Escape") setAdding(false);
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={addCustom}
-            disabled={!customLabel.trim()}
-          >
-            Add
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setAdding(false)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
