@@ -201,10 +201,6 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
       <Card className="shadow-none border-border">
         <CardHeader>
           <CardTitle className="text-base">Auto-close conversations</CardTitle>
-          <CardDescription>
-            Close idle conversations after the exact duration you set. A
-            duration of 0 days, 0 hours, and 0 minutes turns auto-close off.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
