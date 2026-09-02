@@ -486,10 +486,6 @@ export function SourcesTab({ agentId }: { agentId: string }) {
       <div className="space-y-3">
         <div>
           <h2 className="font-semibold text-base tracking-tight">Add a source</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Articles, uploaded files, and public Google Docs or Sheets. After adding a source,
-            select it on a rule that searches knowledge.
-          </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {addOptions.map((option) => {
