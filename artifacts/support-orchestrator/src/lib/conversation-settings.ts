@@ -1,9 +1,8 @@
-export function isAwaitingAutoCloseConfirmation(metadata: unknown): boolean {
+export function isAutoClosedConversation(metadata: unknown): boolean {
   return Boolean(
     metadata &&
       typeof metadata === "object" &&
       !Array.isArray(metadata) &&
-      (metadata as { awaitingAutoCloseConfirmation?: unknown })
-        .awaitingAutoCloseConfirmation === true,
+      (metadata as { autoClosed?: unknown }).autoClosed === true,
   );
 }

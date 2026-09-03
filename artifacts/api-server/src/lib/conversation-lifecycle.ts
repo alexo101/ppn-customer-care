@@ -8,21 +8,15 @@ import {
 } from "@workspace/db";
 import { logger } from "./logger";
 import { updateConversationAnalytics } from "./conversation-analytics";
-import { DEFAULT_CONVERSATION_SETTINGS } from "./conversation-auto-close";
 import {
-  clearAutoCloseConfirmation,
+  DEFAULT_CONVERSATION_SETTINGS,
   isPlainMetadata,
-  isAwaitingAutoCloseConfirmation,
   nextAutoCloseAction,
-  withAutoCloseConfirmation,
+  npsSubmitError,
+  withAutoClosed,
 } from "./conversation-auto-close";
 
-export {
-  clearAutoCloseConfirmation,
-  isAwaitingAutoCloseConfirmation,
-  nextAutoCloseAction,
-  withAutoCloseConfirmation,
-} from "./conversation-auto-close";
+export { nextAutoCloseAction, npsSubmitError } from "./conversation-auto-close";
 
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -35,9 +29,6 @@ export class ConversationLifecycleError extends Error {
     this.statusCode = statusCode;
   }
 }
-
-export const AUTO_CLOSE_RESOLUTION_PROMPT =
-  "Has your issue been resolved? Let us know if you still need help.";
 
 async function insertAssistantMessage(
   conversationId: string,
@@ -68,9 +59,9 @@ async function closeConversation(
       kind: "auto_close",
     });
   }
-  const metadata = isPlainMetadata(conversation.metadata)
-    ? clearAutoCloseConfirmation(conversation.metadata)
-    : {};
+  const metadata = withAutoClosed(
+    isPlainMetadata(conversation.metadata) ? conversation.metadata : {},
+  );
   await db
     .update(conversationsTable)
     .set({
@@ -83,26 +74,9 @@ async function closeConversation(
   await updateConversationAnalytics(conversation.id);
 }
 
-async function promptForResolution(conversation: Conversation, now: Date) {
-  await insertAssistantMessage(conversation.id, AUTO_CLOSE_RESOLUTION_PROMPT, {
-    kind: "auto_close_prompt",
-  });
-  const metadata = withAutoCloseConfirmation(
-    isPlainMetadata(conversation.metadata) ? conversation.metadata : {},
-    now,
-  );
-  await db
-    .update(conversationsTable)
-    .set({
-      lastActivityAt: now,
-      metadata,
-    })
-    .where(eq(conversationsTable.id, conversation.id));
-}
-
 export async function closeInactiveConversations(
   now = new Date(),
-): Promise<{ prompted: number; closed: number }> {
+): Promise<{ closed: number }> {
   const rows = await db
     .select({
       conversation: conversationsTable,
@@ -120,7 +94,6 @@ export async function closeInactiveConversations(
       ),
     );
 
-  let prompted = 0;
   let closed = 0;
   for (const row of rows) {
     const settings = row.settings
@@ -129,32 +102,27 @@ export async function closeInactiveConversations(
           autoCloseHours: row.settings.autoCloseHours,
           autoCloseMinutes: row.settings.autoCloseMinutes,
           closingMessage: row.settings.closingMessage,
-          askIfResolved: row.settings.askIfResolved,
+          welcomeMessage: row.settings.welcomeMessage,
         }
       : DEFAULT_CONVERSATION_SETTINGS;
     const action = nextAutoCloseAction({
       status: row.conversation.status,
       lastActivityAt: row.conversation.lastActivityAt,
-      metadata: row.conversation.metadata,
       settings,
       now,
     });
-    if (action === "prompt") {
-      await promptForResolution(row.conversation, now);
-      prompted += 1;
-    } else if (action === "close") {
+    if (action === "close") {
       await closeConversation(row.conversation, settings.closingMessage, now);
       closed += 1;
     }
   }
-  return { prompted, closed };
+  return { closed };
 }
 
-export async function applyConversationCloseConfirmation(
+export async function submitConversationNps(
   conversationId: string,
   userId: string,
-  resolved: boolean,
-  now = new Date(),
+  score: number,
 ): Promise<Conversation | null> {
   const [conversation] = await db
     .select()
@@ -167,46 +135,21 @@ export async function applyConversationCloseConfirmation(
     )
     .limit(1);
   if (!conversation) return null;
-  if (conversation.status === "closed") {
-    throw new ConversationLifecycleError("Conversation is already closed.");
-  }
-  if (!isAwaitingAutoCloseConfirmation(conversation.metadata)) {
-    throw new ConversationLifecycleError(
-      "This conversation is not waiting for a close confirmation.",
-    );
+
+  const error = npsSubmitError({
+    status: conversation.status,
+    npsScore: conversation.npsScore,
+    metadata: conversation.metadata,
+  });
+  if (error) {
+    throw new ConversationLifecycleError(error);
   }
 
-  if (!resolved) {
-    const metadata = clearAutoCloseConfirmation(
-      isPlainMetadata(conversation.metadata) ? conversation.metadata : {},
-    );
-    const [updated] = await db
-      .update(conversationsTable)
-      .set({
-        status: "active",
-        lastActivityAt: now,
-        metadata,
-      })
-      .where(eq(conversationsTable.id, conversation.id))
-      .returning();
-    return updated ?? conversation;
-  }
-
-  let closingMessage = DEFAULT_CONVERSATION_SETTINGS.closingMessage;
-  if (conversation.agentId) {
-    const [settings] = await db
-      .select()
-      .from(agentConversationSettingsTable)
-      .where(eq(agentConversationSettingsTable.agentId, conversation.agentId))
-      .limit(1);
-    if (settings) closingMessage = settings.closingMessage;
-  }
-  await closeConversation(conversation, closingMessage, now);
   const [updated] = await db
-    .select()
-    .from(conversationsTable)
+    .update(conversationsTable)
+    .set({ npsScore: score })
     .where(eq(conversationsTable.id, conversation.id))
-    .limit(1);
+    .returning();
   return updated ?? conversation;
 }
 
@@ -214,9 +157,9 @@ export function startConversationLifecycleSweep(): NodeJS.Timeout | null {
   if (process.env.NODE_ENV === "test") return null;
   const sweep = async () => {
     try {
-      const { prompted, closed } = await closeInactiveConversations();
-      if (prompted > 0 || closed > 0) {
-        logger.info({ prompted, closed }, "Processed inactive conversations");
+      const { closed } = await closeInactiveConversations();
+      if (closed > 0) {
+        logger.info({ closed }, "Processed inactive conversations");
       }
     } catch (error) {
       logger.error({ error }, "Failed to close inactive conversations");

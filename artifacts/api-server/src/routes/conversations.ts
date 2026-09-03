@@ -28,10 +28,10 @@ import {
   SendMessageBody,
   SubmitFeedbackParams,
   SubmitFeedbackBody,
-  ConfirmConversationCloseParams,
-  ConfirmConversationCloseBody,
   ListConversationLogsParams,
   ListQuestionsQueryParams,
+  SubmitConversationNpsBody,
+  SubmitConversationNpsParams,
 } from "@workspace/api-zod";
 import type { ClassificationResult } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
@@ -41,7 +41,11 @@ import {
   countryMatchesDomain,
   normalizeAction,
 } from "../lib/rule-engine";
-import { resolveUserEmail } from "../lib/identity";
+import {
+  resolveUserDisplayName,
+  resolveUserEmail,
+} from "../lib/identity";
+import { sendWelcomeMessageIfNeeded } from "../lib/welcome-message";
 import {
   AnswerProviderError,
   ClassificationProviderError,
@@ -71,10 +75,8 @@ import {
   upsertEscalationForConversation,
 } from "../lib/escalations";
 import {
-  applyConversationCloseConfirmation,
-  clearAutoCloseConfirmation,
   ConversationLifecycleError,
-  isAwaitingAutoCloseConfirmation,
+  submitConversationNps,
 } from "../lib/conversation-lifecycle";
 
 const router: IRouter = Router();
@@ -135,12 +137,14 @@ router.post("/conversations", requireAuth, async (req, res): Promise<void> => {
   }
 
   let agentId = parsed.data.agentId ?? null;
+  let agentName: string | null = null;
   if (agentId) {
     const agent = await getOwnedAgent(req.userId, agentId);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
+    agentName = agent.name;
   }
 
   const email = await resolveUserEmail(req.userId, req.userEmail);
@@ -169,6 +173,15 @@ router.post("/conversations", requireAuth, async (req, res): Promise<void> => {
       metadata,
     })
     .returning();
+
+  const userName = await resolveUserDisplayName(req.userId, req.userEmail);
+  await sendWelcomeMessageIfNeeded({
+    conversationId: row.id,
+    agentId,
+    metadata,
+    userName,
+    agentName,
+  });
 
   res.status(201).json(toConversation(row));
 });
@@ -374,13 +387,7 @@ router.post(
 
     // Stage 1: capture authenticated user identity
     stages[0].status = "running";
-    const existingMeta = isAwaitingAutoCloseConfirmation(conv.metadata)
-      ? clearAutoCloseConfirmation(
-          isPlainObject(conv.metadata) ? conv.metadata : {},
-        )
-      : isPlainObject(conv.metadata)
-        ? conv.metadata
-        : {};
+    const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
     const storedContext = isPlainObject(existingMeta.context)
       ? existingMeta.context
       : {};
@@ -879,26 +886,26 @@ router.post(
   },
 );
 
-// ── Confirm auto-close ────────────────────────────────────────────────────
+// ── Submit NPS after auto-close ───────────────────────────────────────────
 router.post(
-  "/conversations/:id/close-confirmation",
+  "/conversations/:id/nps",
   requireAuth,
   async (req, res): Promise<void> => {
-    const params = ConfirmConversationCloseParams.safeParse(req.params);
+    const params = SubmitConversationNpsParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const parsed = ConfirmConversationCloseBody.safeParse(req.body);
+    const parsed = SubmitConversationNpsBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
     }
     try {
-      const row = await applyConversationCloseConfirmation(
+      const row = await submitConversationNps(
         params.data.id,
         req.userId,
-        parsed.data.resolved,
+        Math.trunc(parsed.data.score),
       );
       if (!row) {
         res.status(404).json({ error: "Conversation not found" });
@@ -1345,6 +1352,7 @@ function toConversation(row: typeof conversationsTable.$inferSelect) {
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     agentId: row.agentId ?? null,
+    npsScore: row.npsScore ?? null,
   };
 }
 

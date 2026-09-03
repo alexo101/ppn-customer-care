@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CloseConfirmationInput {
-  resolved: boolean;
+export interface NpsInput {
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  score: number;
 }

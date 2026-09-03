@@ -106,7 +106,8 @@ export interface AgentConversationSettings {
   autoCloseMinutes: number;
   /** @maxLength 2000 */
   closingMessage: string;
-  askIfResolved: boolean;
+  /** @maxLength 2000 */
+  welcomeMessage: string;
 }
 
 export interface AgentConversationSettingsInput {
@@ -127,11 +128,8 @@ export interface AgentConversationSettingsInput {
   autoCloseMinutes: number;
   /** @maxLength 2000 */
   closingMessage: string;
-  askIfResolved: boolean;
-}
-
-export interface CloseConfirmationInput {
-  resolved: boolean;
+  /** @maxLength 2000 */
+  welcomeMessage: string;
 }
 
 export interface InboxTeam {
@@ -262,6 +260,12 @@ export interface Conversation {
   createdAt: string;
   /** @nullable */
   agentId?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 10
+     * @nullable
+     */
+  npsScore?: number | null;
 }
 
 export type ConversationInputMetadata = { [key: string]: unknown };
@@ -404,6 +408,14 @@ export interface FeedbackInput {
   rating: FeedbackInputRating;
   /** @nullable */
   comment?: string | null;
+}
+
+export interface NpsInput {
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  score: number;
 }
 
 export type OrchestratorLogDetectedEntities = { [key: string]: unknown };

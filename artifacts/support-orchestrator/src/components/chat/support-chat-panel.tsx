@@ -6,7 +6,6 @@ import {
   useGetConversation,
   useListMessages,
   useSendMessage,
-  useConfirmConversationClose,
   getGetAgentAppearanceQueryKey,
   getGetAgentQueryKey,
   getGetConversationQueryKey,
@@ -21,8 +20,6 @@ import { useAppearance } from "@/components/appearance-provider";
 import { AppearanceTag, DEFAULT_TAG_STYLE, isTagStyle } from "@/components/chat/appearance-tag";
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
 import { SourceCitations } from "@/components/chat/source-citations";
-import { AutoCloseConfirmation } from "@/components/chat/auto-close-confirmation";
-import { isAwaitingAutoCloseConfirmation } from "@/lib/conversation-settings";
 
 const TRAINING_LOADER_STEPS = [
   "Classifying...",
@@ -108,7 +105,6 @@ export function SupportChatPanel({
 
   const { mutate: createConversation, isPending: creatingConversation } = useCreateConversation();
   const { mutate: sendChatMessage, isPending: sendingMessage } = useSendMessage();
-  const confirmClose = useConfirmConversationClose();
   const { data: convo, refetch: refetchConvo } = useGetConversation(convoId ?? "", {
     query: {
       enabled: Boolean(convoId),
@@ -215,23 +211,6 @@ export function SupportChatPanel({
         },
         onError: (error) => {
           setSendError(error instanceof Error ? error.message : "The training preview could not complete.");
-        },
-      },
-    );
-  };
-
-  const awaitingCloseConfirmation =
-    convo?.status !== "closed" &&
-    isAwaitingAutoCloseConfirmation(convo?.metadata);
-
-  const respondToClosePrompt = (resolved: boolean) => {
-    if (!convoId || confirmClose.isPending) return;
-    confirmClose.mutate(
-      { id: convoId, data: { resolved } },
-      {
-        onSuccess: () => {
-          refetch();
-          refetchConvo();
         },
       },
     );
@@ -367,15 +346,6 @@ export function SupportChatPanel({
           )}
         </div>
       </div>
-
-      {awaitingCloseConfirmation && (
-        <div className="px-3 py-2 bg-white/80 border-t border-black/10">
-          <AutoCloseConfirmation
-            disabled={confirmClose.isPending}
-            onRespond={respondToClosePrompt}
-          />
-        </div>
-      )}
 
       <div className="p-3 bg-white/80 border-t border-black/10 shrink-0">
         <form onSubmit={handleSend} className="relative">

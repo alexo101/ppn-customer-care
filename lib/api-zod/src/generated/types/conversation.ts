@@ -17,4 +17,10 @@ export interface Conversation {
   createdAt: string;
   /** @nullable */
   agentId?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 10
+     * @nullable
+     */
+  npsScore?: number | null;
 }

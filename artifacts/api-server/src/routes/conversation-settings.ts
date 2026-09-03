@@ -59,7 +59,7 @@ router.patch(
           autoCloseHours: parsed.data.autoCloseHours,
           autoCloseMinutes: parsed.data.autoCloseMinutes,
           closingMessage: parsed.data.closingMessage,
-          askIfResolved: parsed.data.askIfResolved,
+          welcomeMessage: parsed.data.welcomeMessage,
         }),
       );
     } catch (error) {

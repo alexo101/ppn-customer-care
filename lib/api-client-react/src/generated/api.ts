@@ -35,7 +35,6 @@ import type {
   AppearanceUpdate,
   CategoryInput,
   CategoryUpdate,
-  CloseConfirmationInput,
   ConnectorInput,
   ConnectorUpdate,
   Conversation,
@@ -72,6 +71,7 @@ import type {
   ListTeamInboxEscalationsParams,
   ListTrainingQuestionsParams,
   Message,
+  NpsInput,
   OrchestratorLog,
   OrchestratorRule,
   Question,
@@ -2522,26 +2522,26 @@ export const useSubmitFeedback = <TError = ErrorType<unknown>,
       return useMutation(getSubmitFeedbackMutationOptions(options));
     }
 
-export const getConfirmConversationCloseUrl = (id: string,) => {
+export const getSubmitConversationNpsUrl = (id: string,) => {
 
 
 
 
-  return `/api/conversations/${id}/close-confirmation`
+  return `/api/conversations/${id}/nps`
 }
 
 /**
- * @summary Confirm or decline auto-close after a resolution prompt
+ * @summary Submit an NPS score after an automatic conversation close
  */
-export const confirmConversationClose = async (id: string,
-    closeConfirmationInput: CloseConfirmationInput, options?: Parameters<typeof customFetch>[1]): Promise<Conversation> => {
+export const submitConversationNps = async (id: string,
+    npsInput: NpsInput, options?: Parameters<typeof customFetch>[1]): Promise<Conversation> => {
 
-  return customFetch<Conversation>(getConfirmConversationCloseUrl(id),
+  return customFetch<Conversation>(getSubmitConversationNpsUrl(id),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(closeConfirmationInput)
+    body: JSON.stringify(npsInput)
   }
 );}
 
@@ -2549,11 +2549,11 @@ export const confirmConversationClose = async (id: string,
 
 
 
-export const getConfirmConversationCloseMutationOptions = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmConversationClose>>, TError,{id: string;data: BodyType<CloseConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof confirmConversationClose>>, TError,{id: string;data: BodyType<CloseConfirmationInput>}, TContext> => {
+export const getSubmitConversationNpsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitConversationNps>>, TError,{id: string;data: BodyType<NpsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitConversationNps>>, TError,{id: string;data: BodyType<NpsInput>}, TContext> => {
 
-const mutationKey = ['confirmConversationClose'];
+const mutationKey = ['submitConversationNps'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2563,10 +2563,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmConversationClose>>, {id: string;data: BodyType<CloseConfirmationInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitConversationNps>>, {id: string;data: BodyType<NpsInput>}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  confirmConversationClose(id,data,requestOptions)
+          return  submitConversationNps(id,data,requestOptions)
         }
 
 
@@ -2576,22 +2576,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type ConfirmConversationCloseMutationResult = NonNullable<Awaited<ReturnType<typeof confirmConversationClose>>>
-    export type ConfirmConversationCloseMutationBody = BodyType<CloseConfirmationInput>
-    export type ConfirmConversationCloseMutationError = ErrorType<ErrorResponse>
+    export type SubmitConversationNpsMutationResult = NonNullable<Awaited<ReturnType<typeof submitConversationNps>>>
+    export type SubmitConversationNpsMutationBody = BodyType<NpsInput>
+    export type SubmitConversationNpsMutationError = ErrorType<ErrorResponse>
 
     /**
- * @summary Confirm or decline auto-close after a resolution prompt
+ * @summary Submit an NPS score after an automatic conversation close
  */
-export const useConfirmConversationClose = <TError = ErrorType<ErrorResponse>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmConversationClose>>, TError,{id: string;data: BodyType<CloseConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useSubmitConversationNps = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitConversationNps>>, TError,{id: string;data: BodyType<NpsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof confirmConversationClose>>,
+        Awaited<ReturnType<typeof submitConversationNps>>,
         TError,
-        {id: string;data: BodyType<CloseConfirmationInput>},
+        {id: string;data: BodyType<NpsInput>},
         TContext
       > => {
-      return useMutation(getConfirmConversationCloseMutationOptions(options));
+      return useMutation(getSubmitConversationNpsMutationOptions(options));
     }
 
 export const getListConversationLogsUrl = (id: string,) => {

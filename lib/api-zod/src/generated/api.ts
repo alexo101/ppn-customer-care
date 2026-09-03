@@ -326,6 +326,8 @@ export const getAgentConversationSettingsResponseAutoCloseMinutesMax = 59;
 
 export const getAgentConversationSettingsResponseClosingMessageMax = 2000;
 
+export const getAgentConversationSettingsResponseWelcomeMessageMax = 2000;
+
 
 
 export const GetAgentConversationSettingsResponse = zod.object({
@@ -334,7 +336,7 @@ export const GetAgentConversationSettingsResponse = zod.object({
   "autoCloseHours": zod.number().min(getAgentConversationSettingsResponseAutoCloseHoursMin).max(getAgentConversationSettingsResponseAutoCloseHoursMax),
   "autoCloseMinutes": zod.number().min(getAgentConversationSettingsResponseAutoCloseMinutesMin).max(getAgentConversationSettingsResponseAutoCloseMinutesMax),
   "closingMessage": zod.string().max(getAgentConversationSettingsResponseClosingMessageMax),
-  "askIfResolved": zod.boolean()
+  "welcomeMessage": zod.string().max(getAgentConversationSettingsResponseWelcomeMessageMax)
 })
 
 
@@ -356,6 +358,8 @@ export const updateAgentConversationSettingsBodyAutoCloseMinutesMax = 59;
 
 export const updateAgentConversationSettingsBodyClosingMessageMax = 2000;
 
+export const updateAgentConversationSettingsBodyWelcomeMessageMax = 2000;
+
 
 
 export const UpdateAgentConversationSettingsBody = zod.object({
@@ -363,7 +367,7 @@ export const UpdateAgentConversationSettingsBody = zod.object({
   "autoCloseHours": zod.number().min(updateAgentConversationSettingsBodyAutoCloseHoursMin).max(updateAgentConversationSettingsBodyAutoCloseHoursMax),
   "autoCloseMinutes": zod.number().min(updateAgentConversationSettingsBodyAutoCloseMinutesMin).max(updateAgentConversationSettingsBodyAutoCloseMinutesMax),
   "closingMessage": zod.string().max(updateAgentConversationSettingsBodyClosingMessageMax),
-  "askIfResolved": zod.boolean()
+  "welcomeMessage": zod.string().max(updateAgentConversationSettingsBodyWelcomeMessageMax)
 })
 
 export const updateAgentConversationSettingsResponseAutoCloseDaysMin = 0;
@@ -377,6 +381,8 @@ export const updateAgentConversationSettingsResponseAutoCloseMinutesMax = 59;
 
 export const updateAgentConversationSettingsResponseClosingMessageMax = 2000;
 
+export const updateAgentConversationSettingsResponseWelcomeMessageMax = 2000;
+
 
 
 export const UpdateAgentConversationSettingsResponse = zod.object({
@@ -385,7 +391,7 @@ export const UpdateAgentConversationSettingsResponse = zod.object({
   "autoCloseHours": zod.number().min(updateAgentConversationSettingsResponseAutoCloseHoursMin).max(updateAgentConversationSettingsResponseAutoCloseHoursMax),
   "autoCloseMinutes": zod.number().min(updateAgentConversationSettingsResponseAutoCloseMinutesMin).max(updateAgentConversationSettingsResponseAutoCloseMinutesMax),
   "closingMessage": zod.string().max(updateAgentConversationSettingsResponseClosingMessageMax),
-  "askIfResolved": zod.boolean()
+  "welcomeMessage": zod.string().max(updateAgentConversationSettingsResponseWelcomeMessageMax)
 })
 
 
@@ -637,6 +643,10 @@ export const ListConversationsQueryParams = zod.object({
   "toDate": zod.coerce.string().optional().describe('Inclusive end date (YYYY-MM-DD or ISO 8601)')
 })
 
+export const listConversationsResponseNpsScoreMax = 10;
+
+
+
 export const ListConversationsResponseItem = zod.object({
   "id": zod.string(),
   "status": zod.string(),
@@ -644,7 +654,8 @@ export const ListConversationsResponseItem = zod.object({
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "agentId": zod.string().nullish()
+  "agentId": zod.string().nullish(),
+  "npsScore": zod.number().min(1).max(listConversationsResponseNpsScoreMax).nullish()
 })
 export const ListConversationsResponse = zod.array(ListConversationsResponseItem)
 
@@ -657,6 +668,10 @@ export const CreateConversationBody = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
 })
 
+export const createConversationResponseNpsScoreMax = 10;
+
+
+
 export const CreateConversationResponse = zod.object({
   "id": zod.string(),
   "status": zod.string(),
@@ -664,7 +679,8 @@ export const CreateConversationResponse = zod.object({
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "agentId": zod.string().nullish()
+  "agentId": zod.string().nullish(),
+  "npsScore": zod.number().min(1).max(createConversationResponseNpsScoreMax).nullish()
 })
 
 
@@ -675,6 +691,10 @@ export const GetConversationParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const getConversationResponseNpsScoreMax = 10;
+
+
+
 export const GetConversationResponse = zod.object({
   "id": zod.string(),
   "status": zod.string(),
@@ -682,7 +702,8 @@ export const GetConversationResponse = zod.object({
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "agentId": zod.string().nullish()
+  "agentId": zod.string().nullish(),
+  "npsScore": zod.number().min(1).max(getConversationResponseNpsScoreMax).nullish()
 })
 
 
@@ -698,6 +719,10 @@ export const UpdateConversationBody = zod.object({
   "metadata": zod.record(zod.string(), zod.unknown()).optional()
 })
 
+export const updateConversationResponseNpsScoreMax = 10;
+
+
+
 export const UpdateConversationResponse = zod.object({
   "id": zod.string(),
   "status": zod.string(),
@@ -705,7 +730,8 @@ export const UpdateConversationResponse = zod.object({
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "agentId": zod.string().nullish()
+  "agentId": zod.string().nullish(),
+  "npsScore": zod.number().min(1).max(updateConversationResponseNpsScoreMax).nullish()
 })
 
 
@@ -793,24 +819,33 @@ export const SubmitFeedbackResponse = zod.object({
 
 
 /**
- * @summary Confirm or decline auto-close after a resolution prompt
+ * @summary Submit an NPS score after an automatic conversation close
  */
-export const ConfirmConversationCloseParams = zod.object({
+export const SubmitConversationNpsParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const ConfirmConversationCloseBody = zod.object({
-  "resolved": zod.boolean()
+export const submitConversationNpsBodyScoreMax = 10;
+
+
+
+export const SubmitConversationNpsBody = zod.object({
+  "score": zod.number().min(1).max(submitConversationNpsBodyScoreMax)
 })
 
-export const ConfirmConversationCloseResponse = zod.object({
+export const submitConversationNpsResponseNpsScoreMax = 10;
+
+
+
+export const SubmitConversationNpsResponse = zod.object({
   "id": zod.string(),
   "status": zod.string(),
   "metadata": zod.record(zod.string(), zod.unknown()),
   "lastActivityAt": zod.string(),
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "agentId": zod.string().nullish()
+  "agentId": zod.string().nullish(),
+  "npsScore": zod.number().min(1).max(submitConversationNpsResponseNpsScoreMax).nullish()
 })
 
 

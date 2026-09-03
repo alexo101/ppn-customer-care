@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { agentsTable } from "./agents";
 
 export const agentConversationSettingsTable = pgTable(
@@ -11,7 +11,11 @@ export const agentConversationSettingsTable = pgTable(
     autoCloseHours: integer("auto_close_hours").notNull().default(1),
     autoCloseMinutes: integer("auto_close_minutes").notNull().default(0),
     closingMessage: text("closing_message").notNull().default(""),
-    askIfResolved: boolean("ask_if_resolved").notNull().default(true),
+    welcomeMessage: text("welcome_message")
+      .notNull()
+      .default(
+        "Hello {user_name}, you are speaking {agent_name} Ai Agent. How can I help you?",
+      ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

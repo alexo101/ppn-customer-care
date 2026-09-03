@@ -9,6 +9,7 @@ import {
   DEFAULT_CONVERSATION_SETTINGS,
   type ConversationSettingsValues,
 } from "./conversation-auto-close";
+import { hasRequiredWelcomeTokens } from "./welcome-message";
 
 export {
   DEFAULT_CONVERSATION_SETTINGS,
@@ -41,7 +42,7 @@ export function toAgentConversationSettings(
     autoCloseHours: row.autoCloseHours,
     autoCloseMinutes: row.autoCloseMinutes,
     closingMessage: row.closingMessage,
-    askIfResolved: row.askIfResolved,
+    welcomeMessage: row.welcomeMessage,
   };
 }
 
@@ -106,6 +107,11 @@ export async function updateAgentConversationSettings(
   agentId: string,
   input: ConversationSettingsValues,
 ) {
+  if (!hasRequiredWelcomeTokens(input.welcomeMessage)) {
+    throw new ConversationSettingsError(
+      "Welcome message must include {user_name} and {agent_name}.",
+    );
+  }
   await ensureAgentConversationSettings(agentId);
   const [row] = await db
     .update(agentConversationSettingsTable)
@@ -114,7 +120,7 @@ export async function updateAgentConversationSettings(
       autoCloseHours: Math.trunc(input.autoCloseHours),
       autoCloseMinutes: Math.trunc(input.autoCloseMinutes),
       closingMessage: input.closingMessage,
-      askIfResolved: input.askIfResolved,
+      welcomeMessage: input.welcomeMessage,
       updatedAt: new Date(),
     })
     .where(eq(agentConversationSettingsTable.agentId, agentId))

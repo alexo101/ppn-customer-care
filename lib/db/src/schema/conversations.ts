@@ -11,6 +11,7 @@ export const conversationsTable = pgTable("conversations", {
   metadata: jsonb("metadata").notNull().default({}),
   lastActivityAt: timestamp("last_activity_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  npsScore: integer("nps_score"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

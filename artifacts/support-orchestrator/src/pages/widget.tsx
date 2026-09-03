@@ -12,7 +12,7 @@ import {
   getGetConversationQueryKey,
   getListMessagesQueryKey,
   useSubmitFeedback,
-  useConfirmConversationClose,
+  useSubmitConversationNps,
 } from "@workspace/api-client-react";
 import {
   Send,
@@ -36,8 +36,8 @@ import {
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
 import { SourceCitations } from "@/components/chat/source-citations";
-import { AutoCloseConfirmation } from "@/components/chat/auto-close-confirmation";
-import { isAwaitingAutoCloseConfirmation } from "@/lib/conversation-settings";
+import { NpsSurvey } from "@/components/chat/nps-survey";
+import { isAutoClosedConversation } from "@/lib/conversation-settings";
 
 export default function Widget() {
   const search = useSearch();
@@ -76,7 +76,7 @@ export default function Widget() {
   const createConvo = useCreateConversation();
   const sendMessage = useSendMessage();
   const submitFeedback = useSubmitFeedback();
-  const confirmClose = useConfirmConversationClose();
+  const submitNps = useSubmitConversationNps();
 
   const { data: convo, refetch: refetchConvo } = useGetConversation(
     convoId ?? "",
@@ -102,6 +102,7 @@ export default function Widget() {
   >(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [npsSent, setNpsSent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,6 +115,7 @@ export default function Widget() {
     setFeedbackRating(null);
     setFeedbackComment("");
     setFeedbackSent(false);
+    setNpsSent(false);
   }, [convoId]);
 
   const handleOpen = () => {
@@ -181,17 +183,18 @@ export default function Widget() {
     );
   };
 
-  const awaitingCloseConfirmation =
-    convo?.status !== "closed" &&
-    isAwaitingAutoCloseConfirmation(convo?.metadata);
+  const showNps =
+    convo?.status === "closed" &&
+    isAutoClosedConversation(convo.metadata) &&
+    (convo.npsScore == null || npsSent);
 
-  const respondToClosePrompt = (resolved: boolean) => {
-    if (!convoId || confirmClose.isPending) return;
-    confirmClose.mutate(
-      { id: convoId, data: { resolved } },
+  const sendNps = (score: number) => {
+    if (!convoId || submitNps.isPending || npsSent) return;
+    submitNps.mutate(
+      { id: convoId, data: { score } },
       {
         onSuccess: () => {
-          refetch();
+          setNpsSent(true);
           refetchConvo();
         },
       },
@@ -322,11 +325,12 @@ export default function Widget() {
             </div>
           </ScrollArea>
 
-          {awaitingCloseConfirmation && (
+          {showNps && (
             <div className="border-t border-border bg-background px-3 py-2">
-              <AutoCloseConfirmation
-                disabled={confirmClose.isPending}
-                onRespond={respondToClosePrompt}
+              <NpsSurvey
+                disabled={submitNps.isPending}
+                submitted={npsSent || convo?.npsScore != null}
+                onSubmit={sendNps}
               />
             </div>
           )}

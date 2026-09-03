@@ -24,5 +24,6 @@ export interface AgentConversationSettingsInput {
   autoCloseMinutes: number;
   /** @maxLength 2000 */
   closingMessage: string;
-  askIfResolved: boolean;
+  /** @maxLength 2000 */
+  welcomeMessage: string;
 }
