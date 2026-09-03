@@ -383,24 +383,24 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             tagStyle={draft.tagStyle}
             className="rounded-xl border border-border shadow-sm overflow-hidden"
           />
+          <div className="flex items-center justify-end">
+            <MutatingControls>
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                onClick={handleSave}
+                disabled={!isDirty || saving || isLoading}
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5 mr-1" />
+                )}
+                Save appearance
+              </Button>
+            </MutatingControls>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center justify-end">
-        <MutatingControls>
-          <Button
-            size="sm"
-            className="h-8 text-xs"
-            onClick={handleSave}
-            disabled={!isDirty || saving || isLoading}
-          >
-            {saving ? (
-              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-            ) : (
-              <Save className="w-3.5 h-3.5 mr-1" />
-            )}
-            Save appearance
-          </Button>
-        </MutatingControls>
       </div>
     </div>
   );
