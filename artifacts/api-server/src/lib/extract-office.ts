@@ -31,6 +31,10 @@ export function isAllowedOfficeUpload(file: { originalname: string; mimetype: st
   return officeKindFromFile(file) !== null;
 }
 
+export function sanitizeExtractedText(text: string): string {
+  return text.replace(/\u0000/g, "").trim();
+}
+
 export async function extractOfficeText(
   file: { originalname: string; mimetype: string; buffer: Buffer },
 ): Promise<{ kind: UploadedOfficeKind; text: string; images: ExtractedOfficeImage[] }> {
@@ -38,14 +42,22 @@ export async function extractOfficeText(
   const name = file.originalname.toLowerCase();
   const mime = file.mimetype.toLowerCase();
   if (kind === "document" && (mime === PDF_MIME || name.endsWith(".pdf"))) {
-    return { kind, text: await extractPdfText(file.buffer), images: [] };
+    return { kind, text: sanitizeExtractedText(await extractPdfText(file.buffer)), images: [] };
   }
   if (kind === "document") {
     const extracted = await mammoth.extractRawText({ buffer: file.buffer });
-    return { kind, text: extracted.value.trim(), images: await extractOfficeImages(file.buffer, "word/media") };
+    return {
+      kind,
+      text: sanitizeExtractedText(extracted.value),
+      images: await extractOfficeImages(file.buffer, "word/media"),
+    };
   }
   if (kind === "spreadsheet") {
-    return { kind, text: extractSpreadsheetText(file.buffer), images: await extractOfficeImages(file.buffer, "xl/media") };
+    return {
+      kind,
+      text: sanitizeExtractedText(extractSpreadsheetText(file.buffer)),
+      images: await extractOfficeImages(file.buffer, "xl/media"),
+    };
   }
   throw new Error("Only .docx, .xlsx, and .pdf files are supported");
 }
