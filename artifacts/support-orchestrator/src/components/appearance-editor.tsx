@@ -20,7 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ChatAppearancePreview } from "@/components/chat/chat-appearance-preview";
 import {
   AppearanceTag,
@@ -73,7 +72,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   const updateAgent = useUpdateAgent();
 
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [draft, setDraft] = useState<Draft>({
     ctaColor: DEFAULT_CTA_COLOR,
     backgroundColor: DEFAULT_BACKGROUND_COLOR,
@@ -89,7 +87,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
   useEffect(() => {
     if (!agent) return;
     setName(agent.name);
-    setDescription(agent.description);
   }, [agent]);
 
   useEffect(() => {
@@ -111,7 +108,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
     () =>
       JSON.stringify({
         name: agent?.name ?? "",
-        description: agent?.description ?? "",
         ctaColor: data?.ctaColor ?? DEFAULT_CTA_COLOR,
         backgroundColor: data?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR,
         logoUrl: data?.logoUrl ?? "",
@@ -123,7 +119,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
 
   const currentSnapshot = JSON.stringify({
     name,
-    description,
     ctaColor: draft.ctaColor,
     backgroundColor: draft.backgroundColor,
     logoUrl: draft.logoUrl,
@@ -153,7 +148,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
     try {
       await updateAgent.mutateAsync({
         id: agentId,
-        data: { name: name.trim(), description },
+        data: { name: name.trim() },
       });
       await updateAppearance.mutateAsync({
         id: agentId,
@@ -173,7 +168,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       queryClient.invalidateQueries({ queryKey: ["/api/inbox"] });
       toast({
         title: "Appearance saved",
-        description: "Name, description, colors, logo, and tag are up to date.",
+        description: "Name, colors, logo, and tag are up to date.",
       });
     } catch (error) {
       toast({
@@ -235,18 +230,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
               onChange={(e) => setName(e.target.value)}
               readOnly={!canEdit}
               placeholder="e.g. Billing support"
-            />
-          </FieldBlock>
-
-          <FieldBlock title="Description">
-            <Label htmlFor={`agent-description-${agentId}`} className="sr-only">Description</Label>
-            <Textarea
-              id={`agent-description-${agentId}`}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              readOnly={!canEdit}
-              placeholder="Short summary of this agent"
-              className="min-h-[80px]"
             />
           </FieldBlock>
 
