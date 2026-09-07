@@ -206,6 +206,7 @@ export function toAgent(row: typeof agentsTable.$inferSelect) {
     name: row.name,
     description: row.description,
     isEnabled: row.isEnabled,
+    trustedDomains: row.trustedDomains ?? [],
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: row.updatedAt?.toISOString() ?? new Date().toISOString(),
   };

@@ -40,6 +40,7 @@ router.post("/agents", requireAuth, requireEditor, async (req, res): Promise<voi
       name: parsed.data.name.trim(),
       description: parsed.data.description ?? "",
       isEnabled: parsed.data.isEnabled ?? false,
+      trustedDomains: parsed.data.trustedDomains ?? [],
     })
     .returning();
 
@@ -89,6 +90,7 @@ router.patch("/agents/:id", requireAuth, requireEditor, async (req, res): Promis
   if (parsed.data.name !== undefined) updates.name = parsed.data.name.trim();
   if (parsed.data.description !== undefined) updates.description = parsed.data.description;
   if (parsed.data.isEnabled !== undefined) updates.isEnabled = parsed.data.isEnabled;
+  if (parsed.data.trustedDomains !== undefined) updates.trustedDomains = parsed.data.trustedDomains;
 
   const [row] = await db
     .update(agentsTable)

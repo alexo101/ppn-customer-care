@@ -232,6 +232,7 @@ export interface Agent {
   name: string;
   description: string;
   isEnabled: boolean;
+  trustedDomains: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -240,12 +241,14 @@ export interface AgentInput {
   name: string;
   description?: string;
   isEnabled?: boolean;
+  trustedDomains?: string[];
 }
 
 export interface AgentUpdate {
   name?: string;
   description?: string;
   isEnabled?: boolean;
+  trustedDomains?: string[];
 }
 
 export type ConversationMetadata = { [key: string]: unknown };

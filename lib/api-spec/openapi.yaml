@@ -2294,7 +2294,7 @@ components:
 
     Agent:
       type: object
-      required: [id, name, description, isEnabled, createdAt, updatedAt]
+      required: [id, name, description, isEnabled, trustedDomains, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2304,6 +2304,10 @@ components:
           type: string
         isEnabled:
           type: boolean
+        trustedDomains:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
         updatedAt:
@@ -2319,6 +2323,10 @@ components:
           type: string
         isEnabled:
           type: boolean
+        trustedDomains:
+          type: array
+          items:
+            type: string
 
     AgentUpdate:
       type: object
@@ -2329,6 +2337,10 @@ components:
           type: string
         isEnabled:
           type: boolean
+        trustedDomains:
+          type: array
+          items:
+            type: string
 
     # ── Conversation ──────────────────────────────────────────────────────
     Conversation:

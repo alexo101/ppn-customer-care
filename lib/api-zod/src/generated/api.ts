@@ -25,6 +25,7 @@ export const ListAgentsResponseItem = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
+  "trustedDomains": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -37,7 +38,8 @@ export const ListAgentsResponse = zod.array(ListAgentsResponseItem)
 export const CreateAgentBody = zod.object({
   "name": zod.string(),
   "description": zod.string().optional(),
-  "isEnabled": zod.boolean().optional()
+  "isEnabled": zod.boolean().optional(),
+  "trustedDomains": zod.array(zod.string()).optional()
 })
 
 export const CreateAgentResponse = zod.object({
@@ -45,6 +47,7 @@ export const CreateAgentResponse = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
+  "trustedDomains": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -62,6 +65,7 @@ export const GetAgentResponse = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
+  "trustedDomains": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -77,7 +81,8 @@ export const UpdateAgentParams = zod.object({
 export const UpdateAgentBody = zod.object({
   "name": zod.string().optional(),
   "description": zod.string().optional(),
-  "isEnabled": zod.boolean().optional()
+  "isEnabled": zod.boolean().optional(),
+  "trustedDomains": zod.array(zod.string()).optional()
 })
 
 export const UpdateAgentResponse = zod.object({
@@ -85,6 +90,7 @@ export const UpdateAgentResponse = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "isEnabled": zod.boolean(),
+  "trustedDomains": zod.array(zod.string()),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })

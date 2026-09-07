@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useGetAgent,
   useUpdateAgent,
@@ -6,10 +6,11 @@ import {
   getListAgentsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Rocket } from "lucide-react";
+import { Check, Copy, Plus, Rocket, Save, X } from "lucide-react";
 import { FaHtml5, FaReact, FaVuejs, FaAngular } from "react-icons/fa";
 import type { IconType } from "react-icons";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +19,7 @@ import {
   MutatingControls,
   useWorkspaceAccess,
 } from "@/components/workspace-access";
+import { SettingsSection } from "@/components/settings-section";
 
 const IFRAME_STYLE =
   "position:fixed;right:0;bottom:0;border:0;z-index:2147483647;width:420px;height:720px;background:transparent;";
@@ -192,6 +194,16 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
   const widgetUrl = widgetUrlFor(agentId);
   const enabled = Boolean(agent?.isEnabled);
 
+  const [trustedDomains, setTrustedDomains] = useState<string[]>([]);
+  const [domainInput, setDomainInput] = useState("");
+  const [savingDomains, setSavingDomains] = useState(false);
+
+  useEffect(() => {
+    if (agent?.trustedDomains) {
+      setTrustedDomains(agent.trustedDomains);
+    }
+  }, [agent?.trustedDomains]);
+
   const setEnabled = async (isEnabled: boolean) => {
     if (!canEdit) return;
     try {
@@ -217,6 +229,43 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
     }
   };
 
+  const addDomain = () => {
+    const domain = domainInput.trim().toLowerCase();
+    if (!domain) return;
+    if (trustedDomains.includes(domain)) {
+      toast({ title: "Domain already added", variant: "destructive" });
+      return;
+    }
+    setTrustedDomains([...trustedDomains, domain]);
+    setDomainInput("");
+  };
+
+  const removeDomain = (domain: string) => {
+    setTrustedDomains(trustedDomains.filter((d) => d !== domain));
+  };
+
+  const saveTrustedDomains = async () => {
+    setSavingDomains(true);
+    try {
+      await updateAgent.mutateAsync({
+        id: agentId,
+        data: { trustedDomains },
+      });
+      await queryClient.invalidateQueries({
+        queryKey: getGetAgentQueryKey(agentId),
+      });
+      toast({ title: "Trusted domains saved" });
+    } catch (err) {
+      toast({
+        title: "Could not save trusted domains",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingDomains(false);
+    }
+  };
+
   if (isLoading || !agent) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -227,49 +276,22 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-        <div className="pb-3 border-b border-border">
-          <h3 className="text-sm font-medium">Agent status</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            New agents stay inactive until you enable them. Enable this agent
-            when you are ready to go live.
-          </p>
-        </div>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium">
-              {enabled ? "Active" : "Inactive"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {enabled
-                ? "This agent is enabled and can be embedded on your site."
-                : "This agent is not live yet."}
-            </p>
-          </div>
-          <MutatingControls>
-            <Button
-              size="sm"
-              variant={enabled ? "outline" : "default"}
-              className="h-8 text-xs shrink-0"
-              disabled={updateAgent.isPending}
-              onClick={() => setEnabled(!enabled)}
-            >
-              <Rocket className="w-3.5 h-3.5 mr-1" />
-              {enabled ? "Disable agent" : "Enable agent"}
-            </Button>
-          </MutatingControls>
-        </div>
+      <div className="flex justify-end">
+        <MutatingControls>
+          <Button
+            size="sm"
+            variant={enabled ? "outline" : "default"}
+            className="h-8 text-xs shrink-0"
+            disabled={updateAgent.isPending}
+            onClick={() => setEnabled(!enabled)}
+          >
+            <Rocket className="w-3.5 h-3.5 mr-1" />
+            {enabled ? "Disable agent" : "Enable agent"}
+          </Button>
+        </MutatingControls>
       </div>
 
-      <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-        <div className="pb-3 border-b border-border">
-          <h3 className="text-sm font-medium">Embed snippet</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Choose your stack and paste the snippet into your app to add the
-            chat widget.
-          </p>
-        </div>
-
+      <SettingsSection title="Embed snippet">
         <Tabs defaultValue="html">
           <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
             {FRAMEWORKS.map((framework) => {
@@ -317,7 +339,84 @@ export function DeploymentEditor({ agentId }: { agentId: string }) {
             );
           })}
         </Tabs>
-      </div>
+      </SettingsSection>
+
+      <SettingsSection title="Security" defaultOpen={false}>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label>Trusted domains</Label>
+            <p className="text-xs text-muted-foreground">
+              Restrict the embed snippet to only work on these domains. If no
+              domains are listed, the snippet will work on any website.
+            </p>
+          </div>
+
+          {trustedDomains.length > 0 && (
+            <ul className="space-y-1.5">
+              {trustedDomains.map((domain) => (
+                <li
+                  key={domain}
+                  className="flex items-center justify-between rounded-md border border-border px-3 py-1.5 text-sm"
+                >
+                  <span className="truncate">{domain}</span>
+                  <MutatingControls>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeDomain(domain)}
+                      aria-label={`Remove ${domain}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </MutatingControls>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <MutatingControls>
+            <div className="flex gap-2">
+              <Input
+                placeholder="example.com"
+                value={domainInput}
+                onChange={(e) => setDomainInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addDomain();
+                  }
+                }}
+                disabled={!canEdit}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-9 shrink-0"
+                disabled={!canEdit || !domainInput.trim()}
+                onClick={addDomain}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add
+              </Button>
+            </div>
+          </MutatingControls>
+        </div>
+
+        <MutatingControls>
+          <Button
+            onClick={() => void saveTrustedDomains()}
+            disabled={savingDomains}
+            className="gap-2"
+          >
+            <Save className="h-4 w-4" />
+            {savingDomains ? "Saving..." : "Save security settings"}
+          </Button>
+        </MutatingControls>
+      </SettingsSection>
     </div>
   );
 }
