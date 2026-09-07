@@ -122,10 +122,23 @@ function isCreditBalanceError(error: {
     code === "credit_balance_exhausted" ||
     code === "insufficient_quota" ||
     code === "billing_hard_limit_reached" ||
-    /credit balance|insufficient quota|billing(?: hard)? limit|quota (?:has been )?(?:exhausted|exceeded|insufficient)/i.test(
-      message,
-    )
+    /credit balance|insufficient quota|billing(?: hard)? limit|quota (?:has been )?(?:exhausted|exceeded|insufficient)|(?:exhausted|exceeded|insufficient).{0,40}quota/i.test(message)
   );
+}
+
+function providerFailureCategory(error: {
+  status?: number;
+  code?: string;
+  message?: string;
+}): "credit_balance" | "authentication" | "model_access" | "request" {
+  if (isCreditBalanceError(error)) return "credit_balance";
+  if (error.status === 401 || error.code === "invalid_api_key") {
+    return "authentication";
+  }
+  if (error.status === 403 || error.code === "model_not_found") {
+    return "model_access";
+  }
+  return "request";
 }
 
 export class OpenAIEmbeddingProvider implements EmbeddingProvider {
@@ -192,6 +205,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
     } catch (error) {
       if (error instanceof EmbeddingProviderError) throw error;
       const providerError = readProviderError(error);
+      const failureCategory = providerFailureCategory(providerError);
       logger.error(
         {
           model,
@@ -199,20 +213,21 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
           code: providerError.code,
           requestId: providerError.requestId,
           message: providerError.message,
+          failureCategory,
         },
         "OpenAI embedding request failed",
       );
-      if (isCreditBalanceError(providerError)) {
+      if (failureCategory === "credit_balance") {
         throw new EmbeddingProviderError(EMBEDDING_CREDIT_BALANCE_MESSAGE, {
           cause: error,
         });
       }
-      if (providerError.status === 401 || providerError.code === "invalid_api_key") {
+      if (failureCategory === "authentication") {
         throw new EmbeddingProviderError(EMBEDDING_INVALID_API_KEY_MESSAGE, {
           cause: error,
         });
       }
-      if (providerError.status === 403 || providerError.code === "model_not_found") {
+      if (failureCategory === "model_access") {
         this.verifiedModel = null;
         this.resolvePromise = null;
         throw new EmbeddingProviderError(NO_ACCESSIBLE_EMBEDDING_MODEL_MESSAGE, {
@@ -266,26 +281,25 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
         });
       } catch (error) {
         const providerError = readProviderError(error);
+        const failureCategory = providerFailureCategory(providerError);
         failures.push({
           model,
           reason: providerError.code ?? providerError.message ?? "request failed",
         });
-        if (
-          providerError.status === 401 ||
-          providerError.code === "invalid_api_key"
-        ) {
+        if (failureCategory === "authentication") {
           throw new EmbeddingProviderError(
             EMBEDDING_INVALID_API_KEY_MESSAGE,
             { cause: error },
           );
         }
-        if (isCreditBalanceError(providerError)) {
+        if (failureCategory === "credit_balance") {
           logger.error(
             {
               model,
               status: providerError.status,
               code: providerError.code,
               requestId: providerError.requestId,
+              failureCategory,
             },
             "OpenAI embedding project credit balance is unavailable",
           );
