@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  EMBEDDING_CREDIT_BALANCE_MESSAGE,
+  EMBEDDING_INVALID_API_KEY_MESSAGE,
   OpenAIEmbeddingProvider,
   NO_ACCESSIBLE_EMBEDDING_MODEL_MESSAGE,
   REQUIRED_EMBEDDING_DIMENSIONS,
@@ -13,13 +15,32 @@ function vector(fill = 0.1, dimensions = REQUIRED_EMBEDDING_DIMENSIONS) {
 
 function createClient(options: {
   models: string[];
-  embeddings?: Record<string, { dimensions?: number; error?: { status: number; code: string } }>;
+  embeddings?: Record<string, {
+    dimensions?: number;
+    error?: {
+      status: number;
+      code?: string;
+      message?: string;
+      nested?: boolean;
+    };
+  }>;
   listError?: Error;
 }) {
   const create = vi.fn(async ({ model, input }: { model: string; input: string | string[] }) => {
     const configured = options.embeddings?.[model];
     if (configured?.error) {
-      const error = Object.assign(new Error(configured.error.code), configured.error);
+      const error = Object.assign(
+        new Error(configured.error.message ?? configured.error.code),
+        configured.error.nested
+          ? {
+              status: configured.error.status,
+              error: {
+                code: configured.error.code,
+                message: configured.error.message,
+              },
+            }
+          : configured.error,
+      );
       throw error;
     }
     const texts = Array.isArray(input) ? input : [input];
@@ -145,5 +166,57 @@ describe("OpenAIEmbeddingProvider", () => {
       model: "text-embedding-3-large",
       dimensions: 1536,
     });
+  });
+
+  it("reports exhausted credit balance separately from model access", async () => {
+    const { client } = createClient({
+      models: ["text-embedding-3-small"],
+      embeddings: {
+        "text-embedding-3-small": {
+          error: {
+            status: 429,
+            code: "credit_balance_exhausted",
+            nested: true,
+          },
+        },
+      },
+    });
+    const provider = new OpenAIEmbeddingProvider({ client });
+
+    await expect(provider.resolveModel()).rejects.toThrow(
+      EMBEDDING_CREDIT_BALANCE_MESSAGE,
+    );
+  });
+
+  it("keeps invalid API key failures authentication-specific", async () => {
+    const { client } = createClient({
+      models: ["text-embedding-3-small"],
+      embeddings: {
+        "text-embedding-3-small": {
+          error: { status: 401, code: "invalid_api_key" },
+        },
+      },
+    });
+    const provider = new OpenAIEmbeddingProvider({ client });
+
+    await expect(provider.resolveModel()).rejects.toThrow(
+      EMBEDDING_INVALID_API_KEY_MESSAGE,
+    );
+  });
+
+  it("keeps model access failures on the no-accessible-model path", async () => {
+    const { client } = createClient({
+      models: ["text-embedding-3-small"],
+      embeddings: {
+        "text-embedding-3-small": {
+          error: { status: 404, code: "model_not_found" },
+        },
+      },
+    });
+    const provider = new OpenAIEmbeddingProvider({ client });
+
+    await expect(provider.resolveModel()).rejects.toThrow(
+      NO_ACCESSIBLE_EMBEDDING_MODEL_MESSAGE,
+    );
   });
 });
