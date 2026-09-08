@@ -52,6 +52,7 @@ import {
   PERSON_TYPE_DEFINITIONS,
   PERSON_TYPE_LABELS,
   VALUELESS_OPERATORS,
+  EVERYONE_TARGET_NAME,
   coerceAttribute,
   defaultCondition,
   formatCondition,
@@ -93,8 +94,9 @@ export function TargetsTab({ agentId }: { agentId: string }) {
   const [conditions, setConditions] = useState<TargetConditionInput[]>([defaultCondition("user")]);
 
   const saving = createTarget.isPending || updateTarget.isPending;
+  const targetsQueryKey = getListTargetsQueryKey({ agentId });
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: getListTargetsQueryKey({ agentId }) });
+    return queryClient.invalidateQueries({ queryKey: targetsQueryKey });
   };
 
   const resetForm = (target?: Target | null) => {
@@ -196,12 +198,16 @@ export function TargetsTab({ agentId }: { agentId: string }) {
 
   const handleConfirmDelete = () => {
     if (!canEdit || !toDelete) return;
+    const targetToDelete = toDelete;
     deleteTarget.mutate(
-      { id: toDelete.id },
+      { id: targetToDelete.id },
       {
         onSuccess: () => {
-          invalidate();
-          toast({ title: "Target removed", description: `Deleted "${toDelete.name}"` });
+          queryClient.setQueryData<Target[]>(targetsQueryKey, (current) =>
+            current?.filter((target) => target.id !== targetToDelete.id) ?? current,
+          );
+          void invalidate();
+          toast({ title: "Target removed", description: `Deleted "${targetToDelete.name}"` });
           setToDelete(null);
         },
         onError: (error) => {
@@ -337,7 +343,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                       {target.isEnabled ? "Enabled" : "Disabled"}
                     </Badge>
                   )}
-                  {canEdit ? (
+                  {canEdit && target.name !== EVERYONE_TARGET_NAME ? (
                   <Button
                     variant="ghost"
                     size="icon"

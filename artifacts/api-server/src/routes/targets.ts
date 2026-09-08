@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { getOwnedAgent, ensureEveryoneTarget } from "../lib/agents";
 import {
+  EVERYONE_TARGET_NAME,
   isMatchMode,
   validateTargetCondition,
   type TargetConditionDraft,
@@ -240,6 +241,22 @@ router.delete("/targets/:id", requireAuth, requireEditor, async (req, res): Prom
   const params = DeleteTargetParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [target] = await db
+    .select({ id: audienceTargetsTable.id, name: audienceTargetsTable.name })
+    .from(audienceTargetsTable)
+    .where(eq(audienceTargetsTable.id, params.data.id))
+    .limit(1);
+
+  if (!target) {
+    res.status(404).json({ error: "Target not found" });
+    return;
+  }
+
+  if (target.name === EVERYONE_TARGET_NAME) {
+    res.status(400).json({ error: "The Everyone target cannot be deleted." });
     return;
   }
 
