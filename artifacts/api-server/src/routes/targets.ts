@@ -38,7 +38,6 @@ function toTarget(row: TargetRow, conditions: ConditionRow[]) {
     name: row.name,
     description: row.description,
     matchMode: row.matchMode as "all" | "any",
-    isEnabled: row.isEnabled,
     conditions: conditions
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime())
@@ -159,7 +158,6 @@ router.post("/targets", requireAuth, requireEditor, async (req, res): Promise<vo
       name,
       description: parsed.data.description?.trim() ?? "",
       matchMode,
-      isEnabled: parsed.data.isEnabled ?? true,
     })
     .returning();
 
@@ -216,7 +214,6 @@ router.patch("/targets/:id", requireAuth, requireEditor, async (req, res): Promi
   }
   if (parsed.data.description !== undefined) updates.description = parsed.data.description.trim();
   if (parsed.data.matchMode !== undefined) updates.matchMode = parsed.data.matchMode;
-  if (parsed.data.isEnabled !== undefined) updates.isEnabled = parsed.data.isEnabled;
 
   const [row] = await db
     .update(audienceTargetsTable)

@@ -14,7 +14,6 @@ export interface TargetUpdate {
   /** @maxLength 240 */
   description?: string;
   matchMode?: TargetMatchMode;
-  isEnabled?: boolean;
   /**
      * An empty list matches everyone and does not filter by any criteria.
      * @minItems 0

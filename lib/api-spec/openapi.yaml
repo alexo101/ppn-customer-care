@@ -3313,7 +3313,6 @@ components:
           name,
           description,
           matchMode,
-          isEnabled,
           conditions,
           createdAt,
           updatedAt,
@@ -3327,8 +3326,6 @@ components:
           type: string
         matchMode:
           $ref: "#/components/schemas/TargetMatchMode"
-        isEnabled:
-          type: boolean
         conditions:
           type: array
           items:
@@ -3352,8 +3349,6 @@ components:
           maxLength: 240
         matchMode:
           $ref: "#/components/schemas/TargetMatchMode"
-        isEnabled:
-          type: boolean
         conditions:
           type: array
           minItems: 0
@@ -3373,8 +3368,6 @@ components:
           maxLength: 240
         matchMode:
           $ref: "#/components/schemas/TargetMatchMode"
-        isEnabled:
-          type: boolean
         conditions:
           type: array
           minItems: 0

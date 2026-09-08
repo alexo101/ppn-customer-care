@@ -15,7 +15,6 @@ import { Plus, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -64,14 +63,12 @@ function emptyForm(): {
   name: string;
   description: string;
   matchMode: TargetMatchMode;
-  isEnabled: boolean;
   conditions: TargetConditionInput[];
 } {
   return {
     name: "",
     description: "",
     matchMode: "all",
-    isEnabled: true,
     conditions: [defaultCondition("user")],
   };
 }
@@ -90,7 +87,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [matchMode, setMatchMode] = useState<TargetMatchMode>("all");
-  const [isEnabled, setIsEnabled] = useState(true);
   const [conditions, setConditions] = useState<TargetConditionInput[]>([defaultCondition("user")]);
 
   const saving = createTarget.isPending || updateTarget.isPending;
@@ -105,7 +101,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
           name: target.name,
           description: target.description,
           matchMode: target.matchMode,
-          isEnabled: target.isEnabled,
           conditions: target.conditions.map((condition) => ({
             personType: condition.personType,
             attribute: condition.attribute,
@@ -118,7 +113,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
     setName(next.name);
     setDescription(next.description);
     setMatchMode(next.matchMode);
-    setIsEnabled(next.isEnabled);
     setConditions(next.conditions);
   };
 
@@ -168,7 +162,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
       name: trimmedName,
       description: description.trim(),
       matchMode,
-      isEnabled,
       conditions: conditions.map((condition) => ({
         ...condition,
         value: VALUELESS_OPERATORS.has(condition.operator) ? "" : (condition.value ?? "").trim(),
@@ -319,30 +312,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   <div className="min-w-0 text-left flex-1">{summary}</div>
                 )}
                 <div className="flex items-center gap-3 shrink-0 pt-0.5">
-                  {canEdit ? (
-                    <Switch
-                      checked={target.isEnabled}
-                      onCheckedChange={(checked) => {
-                        updateTarget.mutate(
-                          { id: target.id, data: { isEnabled: checked } },
-                          {
-                            onSuccess: invalidate,
-                            onError: (error) => {
-                              toast({
-                                title: "Could not update target",
-                                description: error instanceof Error ? error.message : "Try again.",
-                                variant: "destructive",
-                              });
-                            },
-                          },
-                        );
-                      }}
-                    />
-                  ) : (
-                    <Badge variant={target.isEnabled ? "default" : "secondary"} className="text-[10px]">
-                      {target.isEnabled ? "Enabled" : "Disabled"}
-                    </Badge>
-                  )}
                   {canEdit && target.name !== EVERYONE_TARGET_NAME ? (
                   <Button
                     variant="ghost"
@@ -524,11 +493,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   );
                 })}
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Switch id="target-enabled" checked={isEnabled} onCheckedChange={setIsEnabled} />
-              <Label htmlFor="target-enabled" className="text-xs">Enabled</Label>
             </div>
 
             <DialogFooter>

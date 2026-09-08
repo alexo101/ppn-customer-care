@@ -13,7 +13,6 @@ export interface Target {
   name: string;
   description: string;
   matchMode: TargetMatchMode;
-  isEnabled: boolean;
   conditions: TargetCondition[];
   createdAt: string;
   updatedAt: string;

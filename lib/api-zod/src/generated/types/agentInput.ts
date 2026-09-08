@@ -10,4 +10,5 @@ export interface AgentInput {
   name: string;
   description?: string;
   isEnabled?: boolean;
+  trustedDomains?: string[];
 }

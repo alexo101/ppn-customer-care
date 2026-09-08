@@ -50,7 +50,6 @@ export type PersonAttributes = {
 };
 
 export type AudienceTargetForMatching = {
-  isEnabled: boolean;
   matchMode: MatchMode;
   conditions: Array<{
     personType: string;
@@ -100,7 +99,6 @@ export function matchesAudienceTarget(
   target: AudienceTargetForMatching,
   person: PersonAttributes,
 ): boolean {
-  if (!target.isEnabled) return false;
   if (isCatchAllTarget(target)) return true;
 
   const results = target.conditions.map((condition) => {

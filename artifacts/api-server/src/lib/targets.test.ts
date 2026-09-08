@@ -14,7 +14,6 @@ describe("matchesAudienceTarget", () => {
     expect(
       matchesAudienceTarget(
         {
-          isEnabled: true,
           matchMode: "all",
           conditions: [
             {
@@ -34,7 +33,6 @@ describe("matchesAudienceTarget", () => {
     expect(
       matchesAudienceTarget(
         {
-          isEnabled: true,
           matchMode: "all",
           conditions: [
             {
@@ -52,7 +50,6 @@ describe("matchesAudienceTarget", () => {
 
   it("supports known and unknown email checks", () => {
     const target = {
-      isEnabled: true,
       matchMode: "all" as const,
       conditions: [
         {
@@ -83,17 +80,14 @@ describe("matchesAudienceTarget", () => {
       },
     ];
 
-    expect(matchesAudienceTarget({ isEnabled: true, matchMode: "any", conditions }, user)).toBe(true);
-    expect(matchesAudienceTarget({ isEnabled: true, matchMode: "all", conditions }, user)).toBe(false);
+    expect(matchesAudienceTarget({ matchMode: "any", conditions }, user)).toBe(true);
+    expect(matchesAudienceTarget({ matchMode: "all", conditions }, user)).toBe(false);
   });
 
-  it("matches everyone when a target has no conditions", () => {
-    const everyone = { isEnabled: true, matchMode: "all" as const, conditions: [] };
+  it("always matches everyone when a target has no conditions", () => {
+    const everyone = { matchMode: "all" as const, conditions: [] };
     expect(matchesAudienceTarget(everyone, user)).toBe(true);
     expect(matchesAudienceTarget(everyone, { personType: "visitor", attributes: {} })).toBe(true);
     expect(matchesAudienceTarget(everyone, { personType: "lead", attributes: { email: "a@b.com" } })).toBe(true);
-    expect(
-      matchesAudienceTarget({ ...everyone, isEnabled: false }, user),
-    ).toBe(false);
   });
 });

@@ -1194,7 +1194,6 @@ async function matchRuleForAgent(
     if (!target) continue;
     const list = audienceTargetsByRule.get(link.ruleId) ?? [];
     list.push({
-      isEnabled: target.isEnabled,
       matchMode: target.matchMode === "any" ? "any" : "all",
       conditions: (conditionsByTarget.get(target.id) ?? []).map(
         (condition) => ({

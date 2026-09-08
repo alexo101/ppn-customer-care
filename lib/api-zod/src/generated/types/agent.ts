@@ -11,6 +11,7 @@ export interface Agent {
   name: string;
   description: string;
   isEnabled: boolean;
+  trustedDomains: string[];
   createdAt: string;
   updatedAt: string;
 }

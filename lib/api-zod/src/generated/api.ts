@@ -1703,7 +1703,6 @@ export const ListTargetsResponseItem = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "matchMode": zod.enum(['all', 'any']),
-  "isEnabled": zod.boolean(),
   "conditions": zod.array(zod.object({
   "id": zod.string(),
   "personType": zod.enum(['visitor', 'lead', 'user']),
@@ -1736,7 +1735,6 @@ export const CreateTargetBody = zod.object({
   "agentId": zod.string(),
   "description": zod.string().max(createTargetBodyDescriptionMax).optional(),
   "matchMode": zod.enum(['all', 'any']).optional(),
-  "isEnabled": zod.boolean().optional(),
   "conditions": zod.array(zod.object({
   "personType": zod.enum(['visitor', 'lead', 'user']),
   "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
@@ -1750,7 +1748,6 @@ export const CreateTargetResponse = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "matchMode": zod.enum(['all', 'any']),
-  "isEnabled": zod.boolean(),
   "conditions": zod.array(zod.object({
   "id": zod.string(),
   "personType": zod.enum(['visitor', 'lead', 'user']),
@@ -1785,7 +1782,6 @@ export const UpdateTargetBody = zod.object({
   "name": zod.string().max(updateTargetBodyNameMax).optional(),
   "description": zod.string().max(updateTargetBodyDescriptionMax).optional(),
   "matchMode": zod.enum(['all', 'any']).optional(),
-  "isEnabled": zod.boolean().optional(),
   "conditions": zod.array(zod.object({
   "personType": zod.enum(['visitor', 'lead', 'user']),
   "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
@@ -1799,7 +1795,6 @@ export const UpdateTargetResponse = zod.object({
   "name": zod.string(),
   "description": zod.string(),
   "matchMode": zod.enum(['all', 'any']),
-  "isEnabled": zod.boolean(),
   "conditions": zod.array(zod.object({
   "id": zod.string(),
   "personType": zod.enum(['visitor', 'lead', 'user']),

@@ -907,7 +907,6 @@ export interface Target {
   name: string;
   description: string;
   matchMode: TargetMatchMode;
-  isEnabled: boolean;
   conditions: TargetCondition[];
   createdAt: string;
   updatedAt: string;
@@ -920,7 +919,6 @@ export interface TargetInput {
   /** @maxLength 240 */
   description?: string;
   matchMode?: TargetMatchMode;
-  isEnabled?: boolean;
   /**
      * An empty list matches everyone and does not filter by any criteria.
      * @minItems 0
@@ -935,7 +933,6 @@ export interface TargetUpdate {
   /** @maxLength 240 */
   description?: string;
   matchMode?: TargetMatchMode;
-  isEnabled?: boolean;
   /**
      * An empty list matches everyone and does not filter by any criteria.
      * @minItems 0
