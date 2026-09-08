@@ -345,7 +345,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSave} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="target-name" className="text-xs">Target name</Label>
                 <Input
@@ -355,22 +355,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   placeholder="e.g. Spanish company users"
                   required
                 />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Match</Label>
-                <Select
-                  value={matchMode}
-                  onValueChange={(value) => setMatchMode(value as TargetMatchMode)}
-                  disabled={conditions.length === 0}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All conditions</SelectItem>
-                    <SelectItem value="any">Any condition</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             <div className="space-y-2">
@@ -493,6 +477,23 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs">Match</Label>
+              <Select
+                value={matchMode}
+                onValueChange={(value) => setMatchMode(value as TargetMatchMode)}
+                disabled={conditions.length === 0}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All conditions</SelectItem>
+                  <SelectItem value="any">Any condition</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <DialogFooter>
