@@ -29,6 +29,10 @@ const TRAINING_LOADER_STEPS = [
   "Shaping the response...",
 ] as const;
 
+const GREETING_WAIT_MS = 12_000;
+const GREETING_WAIT_ERROR =
+  "The greeting never arrived. Try again, or restart the API if this keeps happening.";
+
 function assistantMessageCount(messages: { sender: string }[]): number {
   return messages.reduce((count, message) => count + (message.sender === "assistant" ? 1 : 0), 0);
 }
@@ -110,6 +114,8 @@ export function SupportChatPanel({
   const [input, setInput] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
   const [thinkingVisible, setThinkingVisible] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [welcomeWaitTimedOut, setWelcomeWaitTimedOut] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runIdRef = useRef(0);
   const assistantBaselineRef = useRef(0);
@@ -128,7 +134,20 @@ export function SupportChatPanel({
     query: {
       enabled: Boolean(convoId),
       queryKey: getListMessagesQueryKey(convoId ?? ""),
-      refetchInterval: 5000,
+      refetchInterval: (query) => {
+        if (source !== "training" || welcomeWaitTimedOut) return 5000;
+        const rows = query.state.data;
+        const hasWelcome = Array.isArray(rows)
+          ? rows.some(
+              (msg) =>
+                msg.sender === "assistant" &&
+                Boolean(msg.metadata) &&
+                typeof msg.metadata === "object" &&
+                (msg.metadata as { kind?: string }).kind === "welcome",
+            )
+          : false;
+        return hasWelcome ? 5000 : 1000;
+      },
     },
   });
 
@@ -145,7 +164,9 @@ export function SupportChatPanel({
     source === "training" &&
     Boolean(seedKey) &&
     Boolean(convoId) &&
-    !hasWelcomeMessage;
+    !hasWelcomeMessage &&
+    !welcomeWaitTimedOut &&
+    !sendError;
 
   const beginThinking = (baseline: number) => {
     assistantBaselineRef.current = baseline;
@@ -207,6 +228,7 @@ export function SupportChatPanel({
     setConvoId(null);
     setInput("");
     setSendError(null);
+    setWelcomeWaitTimedOut(false);
     stopThinking();
 
     createConversation(
@@ -233,9 +255,37 @@ export function SupportChatPanel({
             queryKey: getListMessagesQueryKey(data.id),
           });
         },
+        onError: (error) => {
+          if (runId !== runIdRef.current) return;
+          setSendError(
+            error instanceof Error
+              ? error.message
+              : "The training preview could not start.",
+          );
+        },
       },
     );
-  }, [source, agentId, seedKey, seedMessage, runNonce, createConversation, queryClient]);
+  }, [
+    source,
+    agentId,
+    seedKey,
+    seedMessage,
+    runNonce,
+    retryNonce,
+    createConversation,
+    queryClient,
+  ]);
+
+  useEffect(() => {
+    if (!waitingForWelcome) return;
+
+    const timer = window.setTimeout(() => {
+      setWelcomeWaitTimedOut(true);
+      setSendError(GREETING_WAIT_ERROR);
+    }, GREETING_WAIT_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [waitingForWelcome]);
 
   useEffect(() => {
     if (source !== "training") return;
@@ -281,6 +331,12 @@ export function SupportChatPanel({
     sendChatMessage,
     queryClient,
   ]);
+
+  const handleRetry = () => {
+    setSendError(null);
+    setWelcomeWaitTimedOut(false);
+    setRetryNonce((value) => value + 1);
+  };
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -418,9 +474,9 @@ export function SupportChatPanel({
                   <button
                     type="button"
                     className="mt-2 font-medium underline underline-offset-2"
-                    onClick={() => setSendError(null)}
+                    onClick={handleRetry}
                   >
-                    Dismiss
+                    Try again
                   </button>
                 </div>
               )}
@@ -434,8 +490,20 @@ export function SupportChatPanel({
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={waitingForQuestion ? "Select a question to start" : "Type your message..."}
-            disabled={waitingForQuestion || sendingMessage || !convoId || convo?.status === "closed"}
+            placeholder={
+              waitingForQuestion
+                ? "Select a question to start"
+                : waitingForWelcome
+                  ? "Waiting for greeting..."
+                  : "Type your message..."
+            }
+            disabled={
+              waitingForQuestion ||
+              waitingForWelcome ||
+              sendingMessage ||
+              !convoId ||
+              convo?.status === "closed"
+            }
             className="pr-12 rounded-full bg-white border-black/10 focus-visible:ring-1 focus-visible:ring-primary shadow-none"
           />
           <Button
@@ -443,6 +511,7 @@ export function SupportChatPanel({
             size="icon"
             disabled={
               waitingForQuestion ||
+              waitingForWelcome ||
               !input.trim() ||
               sendingMessage ||
               !convoId ||
