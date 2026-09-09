@@ -3,6 +3,21 @@ import {
   SubmitConversationNpsBody,
   UpdateAgentConversationSettingsBody,
 } from "@workspace/api-zod";
+import {
+  DEFAULT_CONVERSATION_SETTINGS,
+  DEFAULT_ESCALATION_MESSAGE,
+} from "./conversation-auto-close";
+
+describe("conversation settings defaults", () => {
+  it("uses the configured default escalation prompt", () => {
+    expect(DEFAULT_CONVERSATION_SETTINGS.escalationMessage).toBe(
+      DEFAULT_ESCALATION_MESSAGE,
+    );
+    expect(DEFAULT_CONVERSATION_SETTINGS.escalationMessage).toContain(
+      "{user_name}",
+    );
+  });
+});
 
 describe("conversation settings input", () => {
   it("accepts a valid auto-close configuration", () => {
@@ -13,6 +28,8 @@ describe("conversation settings input", () => {
       closingMessage: "Thanks 👋",
       welcomeMessage:
         "Hello {user_name}, you are speaking {agent_name} Ai Agent. How can I help you?",
+      escalationMessage:
+        "Sorry {user_name}, I'm not able to answer this message.",
     });
     expect(parsed.success).toBe(true);
   });
@@ -27,6 +44,7 @@ describe("conversation settings input", () => {
         autoCloseMinutes: 0,
         closingMessage: "",
         welcomeMessage,
+        escalationMessage: "Sorry {user_name}, I cannot answer that.",
       }).success,
     ).toBe(false);
     expect(
@@ -36,6 +54,7 @@ describe("conversation settings input", () => {
         autoCloseMinutes: 0,
         closingMessage: "",
         welcomeMessage,
+        escalationMessage: "Sorry {user_name}, I cannot answer that.",
       }).success,
     ).toBe(false);
     expect(
@@ -45,6 +64,7 @@ describe("conversation settings input", () => {
         autoCloseMinutes: 60,
         closingMessage: "",
         welcomeMessage,
+        escalationMessage: "Sorry {user_name}, I cannot answer that.",
       }).success,
     ).toBe(false);
   });
@@ -52,7 +72,9 @@ describe("conversation settings input", () => {
 
 describe("NPS input", () => {
   it("accepts scores from 1 to 10", () => {
-    expect(SubmitConversationNpsBody.safeParse({ score: 1 }).success).toBe(true);
+    expect(SubmitConversationNpsBody.safeParse({ score: 1 }).success).toBe(
+      true,
+    );
     expect(SubmitConversationNpsBody.safeParse({ score: 10 }).success).toBe(
       true,
     );

@@ -17,6 +17,7 @@ const defaultSettings = {
   closingMessage: "Thanks, closing now.",
   welcomeMessage:
     "Hello {user_name}, you are speaking {agent_name} Ai Agent. How can I help you?",
+  escalationMessage: "Sorry {user_name}, I cannot answer that.",
 };
 
 describe("auto-close duration", () => {
@@ -28,6 +29,7 @@ describe("auto-close duration", () => {
         autoCloseMinutes: 0,
         closingMessage: "",
         welcomeMessage: "",
+        escalationMessage: "",
       }),
     ).toBe(0);
   });
@@ -40,6 +42,7 @@ describe("auto-close duration", () => {
         autoCloseMinutes: 30,
         closingMessage: "",
         welcomeMessage: "",
+        escalationMessage: "",
       }),
     ).toBe(((24 + 2) * 60 + 30) * 60 * 1000);
   });

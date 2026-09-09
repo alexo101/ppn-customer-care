@@ -13,6 +13,7 @@ import {
   getListMessagesQueryKey,
   useSubmitFeedback,
   useSubmitConversationNps,
+  useEscalateConversation,
 } from "@workspace/api-client-react";
 import {
   Send,
@@ -28,7 +29,11 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useAppearance } from "@/components/appearance-provider";
-import { AppearanceTag, DEFAULT_TAG_STYLE, isTagStyle } from "@/components/chat/appearance-tag";
+import {
+  AppearanceTag,
+  DEFAULT_TAG_STYLE,
+  isTagStyle,
+} from "@/components/chat/appearance-tag";
 import {
   contrastHex,
   DEFAULT_BACKGROUND_COLOR,
@@ -38,6 +43,7 @@ import {
 import { SourceCitations } from "@/components/chat/source-citations";
 import { NpsSurvey } from "@/components/chat/nps-survey";
 import { isAutoClosedConversation } from "@/lib/conversation-settings";
+import { latestEscalationOffer } from "@/lib/conversation-actions";
 
 export default function Widget() {
   const search = useSearch();
@@ -79,6 +85,7 @@ export default function Widget() {
   const sendMessage = useSendMessage();
   const submitFeedback = useSubmitFeedback();
   const submitNps = useSubmitConversationNps();
+  const escalateConversation = useEscalateConversation();
 
   const { data: convo, refetch: refetchConvo } = useGetConversation(
     convoId ?? "",
@@ -105,6 +112,9 @@ export default function Widget() {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [npsSent, setNpsSent] = useState(false);
+  const [dismissedEscalationMessageId, setDismissedEscalationMessageId] =
+    useState<string | null>(null);
+  const [escalationError, setEscalationError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -118,6 +128,8 @@ export default function Widget() {
     setFeedbackComment("");
     setFeedbackSent(false);
     setNpsSent(false);
+    setDismissedEscalationMessageId(null);
+    setEscalationError(null);
   }, [convoId]);
 
   const handleOpen = () => {
@@ -128,9 +140,7 @@ export default function Widget() {
           data: {
             metadata: {
               source: "widget",
-              ...(browserLanguage
-                ? { browser_language: browserLanguage }
-                : {}),
+              ...(browserLanguage ? { browser_language: browserLanguage } : {}),
             },
             ...(agentId ? { agentId } : {}),
           },
@@ -146,6 +156,8 @@ export default function Widget() {
     e.preventDefault();
     if (!input.trim() || !convoId || sendMessage.isPending) return;
 
+    setEscalationError(null);
+    setDismissedEscalationMessageId(latestUnableToAnswer?.id ?? null);
     sendMessage.mutate(
       {
         id: convoId,
@@ -162,6 +174,34 @@ export default function Widget() {
           setInput("");
           refetch();
           refetchConvo();
+        },
+      },
+    );
+  };
+
+  const latestUnableToAnswer = latestEscalationOffer(messages);
+  const escalationOffer = latestEscalationOffer(
+    messages,
+    dismissedEscalationMessageId,
+  );
+  const handleEscalate = () => {
+    if (!convoId || !escalationOffer || escalateConversation.isPending) return;
+    setDismissedEscalationMessageId(escalationOffer.id);
+    setEscalationError(null);
+    escalateConversation.mutate(
+      { id: convoId, data: { messageId: escalationOffer.id } },
+      {
+        onSuccess: () => {
+          void refetch();
+          void refetchConvo();
+        },
+        onError: (error) => {
+          setDismissedEscalationMessageId(null);
+          setEscalationError(
+            error instanceof Error
+              ? error.message
+              : "Could not escalate this conversation.",
+          );
         },
       },
     );
@@ -316,6 +356,29 @@ export default function Widget() {
                     >
                       {msg.content}
                       {!isUser && <SourceCitations metadata={msg.metadata} />}
+                      {msg.id === escalationOffer?.id && (
+                        <div className="mt-2 border-t border-black/10 pt-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={handleEscalate}
+                            disabled={escalateConversation.isPending}
+                          >
+                            {escalateConversation.isPending
+                              ? "Escalating..."
+                              : "Escalate"}
+                          </Button>
+                          {escalationError && (
+                            <p
+                              className="mt-1 text-xs text-red-700"
+                              role="alert"
+                            >
+                              {escalationError}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

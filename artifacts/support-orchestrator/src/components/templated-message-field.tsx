@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
-  hasRequiredWelcomeTokens,
+  hasRequiredMessageTokens,
   parseWelcomeTemplate,
+  REQUIRED_WELCOME_TOKENS,
   type WelcomeToken,
 } from "@/lib/welcome-message";
 
@@ -38,8 +39,8 @@ function createSegmentNodes(value: string): Node[] {
 function isTokenElement(node: Node | null): node is HTMLElement {
   return Boolean(
     node &&
-      node.nodeType === Node.ELEMENT_NODE &&
-      (node as HTMLElement).dataset.token,
+    node.nodeType === Node.ELEMENT_NODE &&
+    (node as HTMLElement).dataset.token,
   );
 }
 
@@ -85,7 +86,10 @@ function nodeBeforeCaret(range: Range, root: HTMLElement): Node | null {
     return startContainer.previousSibling;
   }
   if (startContainer.nodeType === Node.ELEMENT_NODE) {
-    return startContainer.childNodes[startOffset - 1] ?? startContainer.previousSibling;
+    return (
+      startContainer.childNodes[startOffset - 1] ??
+      startContainer.previousSibling
+    );
   }
   return null;
 }
@@ -138,12 +142,14 @@ export function TemplatedMessageField({
   onChange,
   disabled = false,
   maxLength,
+  requiredTokens = REQUIRED_WELCOME_TOKENS,
 }: {
   id?: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   maxLength: number;
+  requiredTokens?: readonly string[];
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const lastGoodRef = useRef(value);
@@ -160,7 +166,10 @@ export function TemplatedMessageField({
     const root = rootRef.current;
     if (!root) return;
     const next = serializeWelcomeEditor(root);
-    if (!hasRequiredWelcomeTokens(next) || next.length > maxLength) {
+    if (
+      !hasRequiredMessageTokens(next, requiredTokens) ||
+      next.length > maxLength
+    ) {
       paintEditor(root, lastGoodRef.current);
       return;
     }
@@ -198,7 +207,11 @@ export function TemplatedMessageField({
           return;
         }
         const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0 && rangeContainsToken(selection.getRangeAt(0))) {
+        if (
+          selection &&
+          selection.rangeCount > 0 &&
+          rangeContainsToken(selection.getRangeAt(0))
+        ) {
           event.preventDefault();
           return;
         }

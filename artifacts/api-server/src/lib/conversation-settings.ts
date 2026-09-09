@@ -9,7 +9,10 @@ import {
   DEFAULT_CONVERSATION_SETTINGS,
   type ConversationSettingsValues,
 } from "./conversation-auto-close";
-import { hasRequiredWelcomeTokens } from "./welcome-message";
+import {
+  hasRequiredEscalationTokens,
+  hasRequiredWelcomeTokens,
+} from "./welcome-message";
 
 export {
   DEFAULT_CONVERSATION_SETTINGS,
@@ -43,6 +46,7 @@ export function toAgentConversationSettings(
     autoCloseMinutes: row.autoCloseMinutes,
     closingMessage: row.closingMessage,
     welcomeMessage: row.welcomeMessage,
+    escalationMessage: row.escalationMessage,
   };
 }
 
@@ -112,6 +116,11 @@ export async function updateAgentConversationSettings(
       "Welcome message must include {user_name} and {agent_name}.",
     );
   }
+  if (!hasRequiredEscalationTokens(input.escalationMessage)) {
+    throw new ConversationSettingsError(
+      "Escalation message must include {user_name}.",
+    );
+  }
   await ensureAgentConversationSettings(agentId);
   const [row] = await db
     .update(agentConversationSettingsTable)
@@ -121,12 +130,16 @@ export async function updateAgentConversationSettings(
       autoCloseMinutes: Math.trunc(input.autoCloseMinutes),
       closingMessage: input.closingMessage,
       welcomeMessage: input.welcomeMessage,
+      escalationMessage: input.escalationMessage,
       updatedAt: new Date(),
     })
     .where(eq(agentConversationSettingsTable.agentId, agentId))
     .returning();
   if (!row) {
-    throw new ConversationSettingsError("Conversation settings not found.", 404);
+    throw new ConversationSettingsError(
+      "Conversation settings not found.",
+      404,
+    );
   }
   return toAgentConversationSettings(row);
 }

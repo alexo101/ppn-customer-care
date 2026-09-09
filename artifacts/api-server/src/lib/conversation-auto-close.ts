@@ -1,5 +1,7 @@
 export const DEFAULT_WELCOME_MESSAGE =
   "Hello {user_name}, you are speaking {agent_name} Ai Agent. How can I help you?";
+export const DEFAULT_ESCALATION_MESSAGE =
+  "Sorry {user_name}, I'm not able to answer this message. I can escalate this question, or you can ask another question.";
 
 export type ConversationSettingsValues = {
   autoCloseDays: number;
@@ -7,6 +9,7 @@ export type ConversationSettingsValues = {
   autoCloseMinutes: number;
   closingMessage: string;
   welcomeMessage: string;
+  escalationMessage: string;
 };
 
 export const DEFAULT_CONVERSATION_SETTINGS: ConversationSettingsValues = {
@@ -15,11 +18,14 @@ export const DEFAULT_CONVERSATION_SETTINGS: ConversationSettingsValues = {
   autoCloseMinutes: 0,
   closingMessage: "",
   welcomeMessage: DEFAULT_WELCOME_MESSAGE,
+  escalationMessage: DEFAULT_ESCALATION_MESSAGE,
 };
 
 export type AutoCloseAction = "skip" | "close";
 
-export function autoCloseDurationMs(settings: ConversationSettingsValues): number {
+export function autoCloseDurationMs(
+  settings: ConversationSettingsValues,
+): number {
   return (
     ((settings.autoCloseDays * 24 + settings.autoCloseHours) * 60 +
       settings.autoCloseMinutes) *
@@ -50,11 +56,13 @@ export function withAutoClosed(
   };
 }
 
-export function npsSubmitError(conversation: {
-  status: string;
-  npsScore: number | null;
-  metadata: unknown;
-} | null): string | null {
+export function npsSubmitError(
+  conversation: {
+    status: string;
+    npsScore: number | null;
+    metadata: unknown;
+  } | null,
+): string | null {
   if (!conversation) return null;
   if (conversation.status !== "closed") {
     return "NPS can only be submitted after the conversation is closed.";
@@ -79,6 +87,7 @@ export function nextAutoCloseAction(input: {
   const durationMs = autoCloseDurationMs(settings);
   if (durationMs <= 0) return "skip";
   const now = input.now ?? new Date();
-  if (now.getTime() - input.lastActivityAt.getTime() < durationMs) return "skip";
+  if (now.getTime() - input.lastActivityAt.getTime() < durationMs)
+    return "skip";
   return "close";
 }

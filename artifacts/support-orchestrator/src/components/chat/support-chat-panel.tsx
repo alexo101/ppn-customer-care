@@ -6,6 +6,7 @@ import {
   useGetConversation,
   useListMessages,
   useSendMessage,
+  useEscalateConversation,
   getGetAgentAppearanceQueryKey,
   getGetAgentQueryKey,
   getGetConversationQueryKey,
@@ -17,16 +18,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAppearance } from "@/components/appearance-provider";
-import { AppearanceTag, DEFAULT_TAG_STYLE, isTagStyle } from "@/components/chat/appearance-tag";
-import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
+import {
+  AppearanceTag,
+  DEFAULT_TAG_STYLE,
+  isTagStyle,
+} from "@/components/chat/appearance-tag";
+import {
+  contrastHex,
+  DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_CHAT_NAME,
+  DEFAULT_CTA_COLOR,
+} from "@/lib/appearance-theme";
 import { SourceCitations } from "@/components/chat/source-citations";
+import { latestEscalationOffer } from "@/lib/conversation-actions";
 
 const GREETING_WAIT_MS = 12_000;
 const GREETING_WAIT_ERROR =
   "The greeting never arrived. Try again, or restart the API if this keeps happening.";
 
 function assistantMessageCount(messages: { sender: string }[]): number {
-  return messages.reduce((count, message) => count + (message.sender === "assistant" ? 1 : 0), 0);
+  return messages.reduce(
+    (count, message) => count + (message.sender === "assistant" ? 1 : 0),
+    0,
+  );
 }
 
 function TrainingThinkingStatus() {
@@ -80,8 +94,9 @@ export function SupportChatPanel({
     typeof navigator !== "undefined" ? navigator.language : undefined;
 
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
-  const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
-  const logoUrl = source === "training" ? appearance?.logoUrl ?? null : null;
+  const backgroundColor =
+    appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
+  const logoUrl = source === "training" ? (appearance?.logoUrl ?? null) : null;
   const chatName = agent?.name?.trim() || DEFAULT_CHAT_NAME;
   const tagText = appearance?.tagText ?? null;
   const tagStyle =
@@ -96,6 +111,9 @@ export function SupportChatPanel({
   const [thinkingVisible, setThinkingVisible] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [welcomeWaitTimedOut, setWelcomeWaitTimedOut] = useState(false);
+  const [dismissedEscalationMessageId, setDismissedEscalationMessageId] =
+    useState<string | null>(null);
+  const [escalationError, setEscalationError] = useState<string | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<{
     content: string;
     id?: string;
@@ -105,15 +123,21 @@ export function SupportChatPanel({
   const assistantBaselineRef = useRef(0);
   const sentSeedRef = useRef<string | null>(null);
 
-  const { mutate: createConversation, isPending: creatingConversation } = useCreateConversation();
-  const { mutate: sendChatMessage, isPending: sendingMessage } = useSendMessage();
-  const { data: convo, refetch: refetchConvo } = useGetConversation(convoId ?? "", {
-    query: {
-      enabled: Boolean(convoId),
-      queryKey: getGetConversationQueryKey(convoId ?? ""),
-      refetchInterval: 5000,
+  const { mutate: createConversation, isPending: creatingConversation } =
+    useCreateConversation();
+  const { mutate: sendChatMessage, isPending: sendingMessage } =
+    useSendMessage();
+  const escalateConversation = useEscalateConversation();
+  const { data: convo, refetch: refetchConvo } = useGetConversation(
+    convoId ?? "",
+    {
+      query: {
+        enabled: Boolean(convoId),
+        queryKey: getGetConversationQueryKey(convoId ?? ""),
+        refetchInterval: 5000,
+      },
     },
-  });
+  );
   const { data: messages = [], refetch } = useListMessages(convoId ?? "", {
     query: {
       enabled: Boolean(convoId),
@@ -151,6 +175,11 @@ export function SupportChatPanel({
     !hasWelcomeMessage &&
     !welcomeWaitTimedOut &&
     !sendError;
+  const latestUnableToAnswer = latestEscalationOffer(messages);
+  const escalationOffer = latestEscalationOffer(
+    messages,
+    dismissedEscalationMessageId,
+  );
 
   const beginThinking = (baseline: number) => {
     assistantBaselineRef.current = baseline;
@@ -181,9 +210,7 @@ export function SupportChatPanel({
         data: {
           metadata: {
             source: "widget",
-            ...(browserLanguage
-              ? { browser_language: browserLanguage }
-              : {}),
+            ...(browserLanguage ? { browser_language: browserLanguage } : {}),
           },
           ...(agentId ? { agentId } : {}),
         },
@@ -214,6 +241,8 @@ export function SupportChatPanel({
     setSendError(null);
     setWelcomeWaitTimedOut(false);
     setPendingUserMessage(null);
+    setDismissedEscalationMessageId(null);
+    setEscalationError(null);
     stopThinking();
 
     createConversation(
@@ -225,9 +254,7 @@ export function SupportChatPanel({
               ? { subject: seedMessage.slice(0, 80) }
               : {}),
             ...(seedKey ? { trainingQuestionId: seedKey } : {}),
-            ...(browserLanguage
-              ? { browser_language: browserLanguage }
-              : {}),
+            ...(browserLanguage ? { browser_language: browserLanguage } : {}),
           },
           agentId,
         },
@@ -327,11 +354,36 @@ export function SupportChatPanel({
     setRetryNonce((value) => value + 1);
   };
 
+  const handleEscalate = () => {
+    if (!convoId || !escalationOffer || escalateConversation.isPending) return;
+    setDismissedEscalationMessageId(escalationOffer.id);
+    setEscalationError(null);
+    escalateConversation.mutate(
+      { id: convoId, data: { messageId: escalationOffer.id } },
+      {
+        onSuccess: () => {
+          void refetch();
+          void refetchConvo();
+        },
+        onError: (error) => {
+          setDismissedEscalationMessageId(null);
+          setEscalationError(
+            error instanceof Error
+              ? error.message
+              : "Could not escalate this conversation.",
+          );
+        },
+      },
+    );
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !convoId || sendingMessage) return;
 
     setSendError(null);
+    setEscalationError(null);
+    setDismissedEscalationMessageId(latestUnableToAnswer?.id ?? null);
     const submittedMessage = input.trim();
     setPendingUserMessage({ content: submittedMessage });
     if (source === "training") {
@@ -351,7 +403,11 @@ export function SupportChatPanel({
         },
         onError: (error) => {
           stopThinking();
-          setSendError(error instanceof Error ? error.message : "The training preview could not complete.");
+          setSendError(
+            error instanceof Error
+              ? error.message
+              : "The training preview could not complete.",
+          );
         },
       },
     );
@@ -368,7 +424,11 @@ export function SupportChatPanel({
       >
         <div className="flex items-center gap-2 min-w-0">
           {logoUrl ? (
-            <img src={logoUrl} alt="Chat logo" className="w-7 h-7 rounded-md object-contain bg-white/90 p-0.5" />
+            <img
+              src={logoUrl}
+              alt="Chat logo"
+              className="w-7 h-7 rounded-md object-contain bg-white/90 p-0.5"
+            />
           ) : (
             <Bot className="w-5 h-5" />
           )}
@@ -430,7 +490,13 @@ export function SupportChatPanel({
               {messages.map((msg) => {
                 const isUser = msg.sender === "user";
                 return (
-                  <div key={msg.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+                  <div
+                    key={msg.id}
+                    className={cn(
+                      "flex",
+                      isUser ? "justify-end" : "justify-start",
+                    )}
+                  >
                     <div
                       className={cn(
                         "max-w-[85%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap",
@@ -438,10 +504,37 @@ export function SupportChatPanel({
                           ? "rounded-tr-sm"
                           : "bg-white text-slate-800 rounded-tl-sm shadow-sm border border-black/5",
                       )}
-                      style={isUser ? { backgroundColor: ctaColor, color: onCta } : undefined}
+                      style={
+                        isUser
+                          ? { backgroundColor: ctaColor, color: onCta }
+                          : undefined
+                      }
                     >
                       {msg.content}
                       {!isUser && <SourceCitations metadata={msg.metadata} />}
+                      {msg.id === escalationOffer?.id && (
+                        <div className="mt-2 border-t border-black/10 pt-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={handleEscalate}
+                            disabled={escalateConversation.isPending}
+                          >
+                            {escalateConversation.isPending
+                              ? "Escalating..."
+                              : "Escalate"}
+                          </Button>
+                          {escalationError && (
+                            <p
+                              className="mt-1 text-xs text-red-700"
+                              role="alert"
+                            >
+                              {escalationError}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -465,7 +558,9 @@ export function SupportChatPanel({
                   </div>
                 )}
 
-              {source === "training" && thinkingVisible && <TrainingThinkingStatus />}
+              {source === "training" && thinkingVisible && (
+                <TrainingThinkingStatus />
+              )}
 
               {source !== "training" && sendingMessage && (
                 <div className="flex justify-start">
@@ -482,7 +577,9 @@ export function SupportChatPanel({
                   className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
                 >
                   <p className="font-medium">Training could not complete</p>
-                  <p className="mt-1">{sendError.replace(/^HTTP \d+\s[^:]+:\s*/, "")}</p>
+                  <p className="mt-1">
+                    {sendError.replace(/^HTTP \d+\s[^:]+:\s*/, "")}
+                  </p>
                   <button
                     type="button"
                     className="mt-2 font-medium underline underline-offset-2"

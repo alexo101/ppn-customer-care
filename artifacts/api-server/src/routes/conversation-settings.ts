@@ -60,6 +60,7 @@ router.patch(
           autoCloseMinutes: parsed.data.autoCloseMinutes,
           closingMessage: parsed.data.closingMessage,
           welcomeMessage: parsed.data.welcomeMessage,
+          escalationMessage: parsed.data.escalationMessage,
         }),
       );
     } catch (error) {

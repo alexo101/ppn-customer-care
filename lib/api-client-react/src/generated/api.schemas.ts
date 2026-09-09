@@ -108,6 +108,8 @@ export interface AgentConversationSettings {
   closingMessage: string;
   /** @maxLength 2000 */
   welcomeMessage: string;
+  /** @maxLength 2000 */
+  escalationMessage: string;
 }
 
 export interface AgentConversationSettingsInput {
@@ -130,6 +132,8 @@ export interface AgentConversationSettingsInput {
   closingMessage: string;
   /** @maxLength 2000 */
   welcomeMessage: string;
+  /** @maxLength 2000 */
+  escalationMessage: string;
 }
 
 export interface InboxTeam {
@@ -396,6 +400,24 @@ export interface SendMessageResult {
   stages: OrchestratorStage[];
   classification: ClassificationResult;
   shouldAskResolution: boolean;
+}
+
+export interface EscalateConversationInput {
+  messageId: string;
+}
+
+export type EscalateConversationResultStatus = typeof EscalateConversationResultStatus[keyof typeof EscalateConversationResultStatus];
+
+
+export const EscalateConversationResultStatus = {
+  escalated: 'escalated',
+} as const;
+
+export interface EscalateConversationResult {
+  conversationId: string;
+  status: EscalateConversationResultStatus;
+  /** @nullable */
+  escalationId: string | null;
 }
 
 export type FeedbackInputRating = typeof FeedbackInputRating[keyof typeof FeedbackInputRating];

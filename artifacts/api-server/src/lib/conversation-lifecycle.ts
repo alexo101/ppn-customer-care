@@ -103,6 +103,7 @@ export async function closeInactiveConversations(
           autoCloseMinutes: row.settings.autoCloseMinutes,
           closingMessage: row.settings.closingMessage,
           welcomeMessage: row.settings.welcomeMessage,
+          escalationMessage: row.settings.escalationMessage,
         }
       : DEFAULT_CONVERSATION_SETTINGS;
     const action = nextAutoCloseAction({

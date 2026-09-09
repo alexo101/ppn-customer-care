@@ -43,6 +43,8 @@ import type {
   CurrentMember,
   DeploymentToken,
   ErrorResponse,
+  EscalateConversationInput,
+  EscalateConversationResult,
   EscalationAssignment,
   EscalationReplyInput,
   FeedbackInput,
@@ -2448,6 +2450,78 @@ export const useSendMessage = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getSendMessageMutationOptions(options));
+    }
+
+export const getEscalateConversationUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/escalate`
+}
+
+/**
+ * @summary Escalate an unanswered conversation to the agent inbox
+ */
+export const escalateConversation = async (id: string,
+    escalateConversationInput: EscalateConversationInput, options?: Parameters<typeof customFetch>[1]): Promise<EscalateConversationResult> => {
+
+  return customFetch<EscalateConversationResult>(getEscalateConversationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(escalateConversationInput)
+  }
+);}
+
+
+
+
+
+export const getEscalateConversationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateConversation>>, TError,{id: string;data: BodyType<EscalateConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof escalateConversation>>, TError,{id: string;data: BodyType<EscalateConversationInput>}, TContext> => {
+
+const mutationKey = ['escalateConversation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof escalateConversation>>, {id: string;data: BodyType<EscalateConversationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  escalateConversation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EscalateConversationMutationResult = NonNullable<Awaited<ReturnType<typeof escalateConversation>>>
+    export type EscalateConversationMutationBody = BodyType<EscalateConversationInput>
+    export type EscalateConversationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Escalate an unanswered conversation to the agent inbox
+ */
+export const useEscalateConversation = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateConversation>>, TError,{id: string;data: BodyType<EscalateConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof escalateConversation>>,
+        TError,
+        {id: string;data: BodyType<EscalateConversationInput>},
+        TContext
+      > => {
+      return useMutation(getEscalateConversationMutationOptions(options));
     }
 
 export const getSubmitFeedbackUrl = (id: string,) => {

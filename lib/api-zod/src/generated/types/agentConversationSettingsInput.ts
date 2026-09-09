@@ -26,4 +26,6 @@ export interface AgentConversationSettingsInput {
   closingMessage: string;
   /** @maxLength 2000 */
   welcomeMessage: string;
+  /** @maxLength 2000 */
+  escalationMessage: string;
 }

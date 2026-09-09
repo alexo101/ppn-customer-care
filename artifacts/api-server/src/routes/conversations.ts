@@ -16,6 +16,7 @@ import {
   targetConditionsTable,
   knowledgeSourcesTable,
   agentSettingsTable,
+  agentConversationSettingsTable,
 } from "@workspace/db";
 import {
   ListConversationsQueryParams,
@@ -32,6 +33,7 @@ import {
   ListQuestionsQueryParams,
   SubmitConversationNpsBody,
   SubmitConversationNpsParams,
+  EscalateConversationBody,
 } from "@workspace/api-zod";
 import type { ClassificationResult } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
@@ -41,12 +43,16 @@ import {
   countryMatchesDomain,
   normalizeAction,
 } from "../lib/rule-engine";
-import {
-  resolveUserDisplayName,
-  resolveUserEmail,
-} from "../lib/identity";
+import { resolveUserDisplayName, resolveUserEmail } from "../lib/identity";
 import { sendWelcomeMessageIfNeeded } from "../lib/welcome-message";
 import { fallbackClarificationPrompt } from "../lib/reply-locale";
+import { DEFAULT_CONVERSATION_SETTINGS } from "../lib/conversation-auto-close";
+import {
+  ESCALATE_MESSAGE_ACTION,
+  interpolateEscalationMessage,
+  UNABLE_TO_ANSWER_MESSAGE_KIND,
+  isUnableToAnswerMessageMetadata,
+} from "../lib/unanswered-message";
 import {
   AnswerProviderError,
   ClassificationProviderError,
@@ -315,6 +321,124 @@ router.get(
   },
 );
 
+router.post(
+  "/conversations/:id/escalate",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = GetConversationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = EscalateConversationBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const [conversation] = await db
+      .select()
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.id, params.data.id),
+          eq(conversationsTable.userId, req.userId),
+        ),
+      );
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    if (!conversation.agentId) {
+      res.status(400).json({ error: "Conversation has no assigned agent" });
+      return;
+    }
+
+    const messages = await db
+      .select()
+      .from(messagesTable)
+      .where(eq(messagesTable.conversationId, conversation.id))
+      .orderBy(messagesTable.createdAt);
+    const latestOffer = [...messages]
+      .reverse()
+      .find((message) => isUnableToAnswerMessageMetadata(message.metadata));
+    if (!latestOffer || latestOffer.id !== parsed.data.messageId) {
+      res.status(400).json({
+        error: "That escalation offer is no longer available.",
+      });
+      return;
+    }
+    const offerIndex = messages.findIndex(
+      (message) => message.id === latestOffer.id,
+    );
+    if (
+      messages
+        .slice(offerIndex + 1)
+        .some((message) => message.sender === "user")
+    ) {
+      res.status(400).json({
+        error: "Ask a new question before escalating this message.",
+      });
+      return;
+    }
+
+    const userQuestion = [...messages]
+      .slice(0, offerIndex)
+      .reverse()
+      .find((message) => message.sender === "user");
+    if (!userQuestion) {
+      res
+        .status(400)
+        .json({ error: "No user question is available to escalate." });
+      return;
+    }
+    const [latestLog] = await db
+      .select()
+      .from(orchestratorLogsTable)
+      .where(eq(orchestratorLogsTable.conversationId, conversation.id))
+      .orderBy(desc(orchestratorLogsTable.createdAt))
+      .limit(1);
+
+    const escalation = await upsertEscalationForConversation({
+      conversationId: conversation.id,
+      agentId: conversation.agentId,
+      reason: "The visitor requested escalation after an unanswered question.",
+      category: latestLog?.detectedCategory ?? "General",
+      subcategory: "",
+      retrievedInformation: [],
+      previousAnswer: latestOffer.content,
+      context: {
+        userQuestion: userQuestion.content,
+        userId: req.userId,
+        ...(latestLog
+          ? {
+              resolutionStatus: latestLog.resolutionStatus,
+              ruleUsed: latestLog.ruleUsed,
+            }
+          : {}),
+      },
+    });
+    if (!escalation) {
+      res.status(400).json({ error: "Could not create an escalation." });
+      return;
+    }
+
+    await db
+      .update(conversationsTable)
+      .set({
+        status: "escalated",
+        lastActivityAt: new Date(),
+      })
+      .where(eq(conversationsTable.id, conversation.id));
+
+    res.json({
+      conversationId: conversation.id,
+      status: "escalated",
+      escalationId: escalation.id,
+    });
+  },
+);
+
 // ── Send message (orchestrator) ────────────────────────────────────────────
 router.post(
   "/conversations/:id/send",
@@ -457,6 +581,7 @@ router.post(
     let answerTokens = 0;
     let promptAssembled = "";
     let citations: Array<Record<string, unknown>> = [];
+    let assistantMetadata: Record<string, unknown> = { citations };
     let dataSourcesQueried: string[] = [];
     let retrievalNeedsClarification = false;
     let retrievalAccessDenied = false;
@@ -572,7 +697,10 @@ router.post(
                 });
               }
             } catch (error) {
-              logger.warn({ error, endpointUrl }, "Live data endpoint call failed");
+              logger.warn(
+                { error, endpointUrl },
+                "Live data endpoint call failed",
+              );
             }
           }
           dataSourcesQueried = [...new Set(dataSourcesQueried)];
@@ -634,53 +762,111 @@ router.post(
             .where(eq(agentSettingsTable.agentId, conv.agentId))
             .limit(1)
         : [];
-      const answerResult = await generateAnswer(
-        parsed.data.content,
-        classification,
-        answerRule,
-        prevMessages,
-        person.attributes,
-        retrievedChunks,
-        requiresAnswerProvider(parsed.data.content, rule)
-          ? createAnswerProvider()
-          : undefined,
-        {
-          ...requestContext,
-          ...(existingMeta.browser_language != null
-            ? { browser_language: existingMeta.browser_language }
-            : {}),
-          ...(agentSettings?.prompt
-            ? { agentPrompt: agentSettings.prompt }
-            : {}),
-          ...(agentSettings?.targetAudience
-            ? { targetAudience: agentSettings.targetAudience }
-            : {}),
-        },
-      );
-      responseText = answerResult.responseText;
-      resolutionStatus = answerResult.resolutionStatus;
-      shouldAskResolution = answerResult.shouldAskResolution;
-      answerModel = answerResult.model;
-      answerTokens = answerResult.totalTokens;
-      promptAssembled = answerResult.promptAssembled;
-      citations = answerResult.citations;
-      const guardrailResult = applyGuardrails(responseText, {
-        retrievedChunks,
-        rule: answerRule,
-        personAttributes: person.attributes,
-      });
-      responseText = guardrailResult.responseText;
-      if (guardrailResult.blocked) {
+      const [conversationSettings] = conv.agentId
+        ? await db
+            .select()
+            .from(agentConversationSettingsTable)
+            .where(eq(agentConversationSettingsTable.agentId, conv.agentId))
+            .limit(1)
+        : [];
+      const definitiveUnableToAnswer =
+        !rule || (!retrievalAccessDenied && retrievalNeedsClarification);
+
+      if (definitiveUnableToAnswer) {
+        const userName =
+          typeof person.attributes.name === "string"
+            ? person.attributes.name
+            : typeof person.attributes.user_name === "string"
+              ? person.attributes.user_name
+              : await resolveUserDisplayName(req.userId, req.userEmail);
+        const template =
+          conversationSettings?.escalationMessage ??
+          DEFAULT_CONVERSATION_SETTINGS.escalationMessage;
+        responseText = interpolateEscalationMessage(template, userName);
         resolutionStatus = "pending_clarification";
         shouldAskResolution = false;
+        answerModel = "deterministic-unable-to-answer";
+        assistantMetadata = {
+          citations: [],
+          kind: UNABLE_TO_ANSWER_MESSAGE_KIND,
+          actions: [ESCALATE_MESSAGE_ACTION],
+        };
+        stages[5].details = {
+          resolution_status: resolutionStatus,
+          model: answerModel,
+          chunks_used: retrievedChunks.length,
+          guardrails: [],
+        };
+      } else {
+        const answerResult = await generateAnswer(
+          parsed.data.content,
+          classification,
+          answerRule,
+          prevMessages,
+          person.attributes,
+          retrievedChunks,
+          requiresAnswerProvider(parsed.data.content, rule)
+            ? createAnswerProvider()
+            : undefined,
+          {
+            ...requestContext,
+            ...(existingMeta.browser_language != null
+              ? { browser_language: existingMeta.browser_language }
+              : {}),
+            ...(agentSettings?.prompt
+              ? { agentPrompt: agentSettings.prompt }
+              : {}),
+            ...(agentSettings?.targetAudience
+              ? { targetAudience: agentSettings.targetAudience }
+              : {}),
+          },
+        );
+        responseText = answerResult.responseText;
+        resolutionStatus = answerResult.resolutionStatus;
+        shouldAskResolution = answerResult.shouldAskResolution;
+        answerModel = answerResult.model;
+        answerTokens = answerResult.totalTokens;
+        promptAssembled = answerResult.promptAssembled;
+        citations = answerResult.citations;
+        const guardrailResult = applyGuardrails(responseText, {
+          retrievedChunks,
+          rule: answerRule,
+          personAttributes: person.attributes,
+        });
+        responseText = guardrailResult.responseText;
+        if (guardrailResult.blocked) {
+          const userName =
+            typeof person.attributes.name === "string"
+              ? person.attributes.name
+              : typeof person.attributes.user_name === "string"
+                ? person.attributes.user_name
+                : await resolveUserDisplayName(req.userId, req.userEmail);
+          responseText = interpolateEscalationMessage(
+            conversationSettings?.escalationMessage ??
+              DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
+            userName,
+          );
+          resolutionStatus = "pending_clarification";
+          shouldAskResolution = false;
+          answerModel = "deterministic-unable-to-answer";
+          assistantMetadata = {
+            citations: [],
+            kind: UNABLE_TO_ANSWER_MESSAGE_KIND,
+            actions: [ESCALATE_MESSAGE_ACTION],
+          };
+        }
+        assistantMetadata = {
+          ...assistantMetadata,
+          ...(guardrailResult.blocked ? {} : { citations }),
+        };
+        stages[5].details = {
+          resolution_status: resolutionStatus,
+          model: answerModel,
+          chunks_used: retrievedChunks.length,
+          guardrails: guardrailResult.actions,
+        };
       }
       stages[5].status = "completed";
-      stages[5].details = {
-        resolution_status: resolutionStatus,
-        model: answerModel,
-        chunks_used: retrievedChunks.length,
-        guardrails: guardrailResult.actions,
-      };
     } catch (error) {
       const message = workflowProviderErrorMessage(error);
       res.status(503).json({ error: message });
@@ -697,7 +883,7 @@ router.post(
         conversationId: conv.id,
         sender: "assistant",
         content: responseText,
-        metadata: { citations },
+        metadata: assistantMetadata,
       })
       .returning();
 

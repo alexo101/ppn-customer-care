@@ -24,9 +24,13 @@ import { SettingsSection } from "@/components/settings-section";
 import { TemplatedMessageField } from "@/components/templated-message-field";
 import { toast } from "@/hooks/use-toast";
 import {
+  DEFAULT_ESCALATION_MESSAGE,
   DEFAULT_WELCOME_MESSAGE,
+  ESCALATION_MESSAGE_MAX,
+  hasRequiredEscalationTokens,
   WELCOME_MESSAGE_MAX,
   hasRequiredWelcomeTokens,
+  REQUIRED_ESCALATION_TOKENS,
 } from "@/lib/welcome-message";
 
 const EMOJIS = [
@@ -114,6 +118,9 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
   const [minutes, setMinutes] = useState(0);
   const [closingMessage, setClosingMessage] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
+  const [escalationMessage, setEscalationMessage] = useState(
+    DEFAULT_ESCALATION_MESSAGE,
+  );
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectionRef = useRef<{ start: number; end: number }>({
@@ -131,6 +138,11 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
       hasRequiredWelcomeTokens(data.welcomeMessage)
         ? data.welcomeMessage
         : DEFAULT_WELCOME_MESSAGE,
+    );
+    setEscalationMessage(
+      hasRequiredEscalationTokens(data.escalationMessage)
+        ? data.escalationMessage
+        : DEFAULT_ESCALATION_MESSAGE,
     );
     selectionRef.current = {
       start: data.closingMessage.length,
@@ -152,10 +164,11 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
 
   const insertEmoji = (emoji: string) => {
     const { start, end } = selectionRef.current;
-    const next = `${closingMessage.slice(0, start)}${emoji}${closingMessage.slice(end)}`.slice(
-      0,
-      CLOSING_MESSAGE_MAX,
-    );
+    const next =
+      `${closingMessage.slice(0, start)}${emoji}${closingMessage.slice(end)}`.slice(
+        0,
+        CLOSING_MESSAGE_MAX,
+      );
     const cursor = Math.min(start + emoji.length, next.length);
     selectionRef.current = { start: cursor, end: cursor };
     setClosingMessage(next);
@@ -177,12 +190,21 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
       });
       return;
     }
+    if (!hasRequiredEscalationTokens(escalationMessage)) {
+      toast({
+        title: "Escalation message is missing {user_name}",
+        description: "Keep {user_name} in the message.",
+        variant: "destructive",
+      });
+      return;
+    }
     const input: AgentConversationSettingsInput = {
       autoCloseDays: days,
       autoCloseHours: hours,
       autoCloseMinutes: minutes,
       closingMessage: closingMessage.slice(0, CLOSING_MESSAGE_MAX),
       welcomeMessage: welcomeMessage.slice(0, WELCOME_MESSAGE_MAX),
+      escalationMessage: escalationMessage.slice(0, ESCALATION_MESSAGE_MAX),
     };
     try {
       await updateSettings.mutateAsync({ id: agentId, data: input });
@@ -222,6 +244,24 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
           <p className="text-xs text-muted-foreground">
             Sent as the first message when a conversation starts.{" "}
             {"{user_name}"} and {"{agent_name}"} cannot be edited or removed.
+          </p>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="Unable-to-answer message">
+        <div className="space-y-2">
+          <Label htmlFor="escalation-message">Escalation prompt</Label>
+          <TemplatedMessageField
+            id="escalation-message"
+            value={escalationMessage}
+            onChange={setEscalationMessage}
+            disabled={!canEdit}
+            maxLength={ESCALATION_MESSAGE_MAX}
+            requiredTokens={REQUIRED_ESCALATION_TOKENS}
+          />
+          <p className="text-xs text-muted-foreground">
+            Sent when the agent cannot verify an answer. {"{user_name}"} cannot
+            be edited or removed.
           </p>
         </div>
       </SettingsSection>
@@ -330,18 +370,14 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            This text, including any emojis you add, is sent as the last
-            message when the conversation closes.
+            This text, including any emojis you add, is sent as the last message
+            when the conversation closes.
           </p>
         </div>
       </SettingsSection>
 
       <MutatingControls>
-        <Button
-          onClick={() => void save()}
-          disabled={saving}
-          className="gap-2"
-        >
+        <Button onClick={() => void save()} disabled={saving} className="gap-2">
           <Save className="h-4 w-4" />
           {saving ? "Saving..." : "Save conversation settings"}
         </Button>

@@ -57,6 +57,20 @@
       "when": 1787849000000,
       "tag": "0007_welcome_message",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787850000000,
+      "tag": "0008_trusted_domains",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787851000000,
+      "tag": "0009_escalation_message",
+      "breakpoints": true
     }
   ]
 }

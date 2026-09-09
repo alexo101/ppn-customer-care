@@ -16,6 +16,11 @@ export const agentConversationSettingsTable = pgTable(
       .default(
         "Hello {user_name}, you are speaking {agent_name} Ai Agent. How can I help you?",
       ),
+    escalationMessage: text("escalation_message")
+      .notNull()
+      .default(
+        "Sorry {user_name}, I'm not able to answer this message. I can escalate this question, or you can ask another question.",
+      ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

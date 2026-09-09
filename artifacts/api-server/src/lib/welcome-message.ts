@@ -15,10 +15,15 @@ import {
 } from "./llm/openai-welcome-message-translator";
 
 export const REQUIRED_WELCOME_TOKENS = ["{user_name}", "{agent_name}"] as const;
+export const REQUIRED_ESCALATION_TOKENS = ["{user_name}"] as const;
 export const DEFAULT_AGENT_DISPLAY_NAME = "Support Assistant";
 
 export function hasRequiredWelcomeTokens(message: string): boolean {
   return REQUIRED_WELCOME_TOKENS.every((token) => message.includes(token));
+}
+
+export function hasRequiredEscalationTokens(message: string): boolean {
+  return REQUIRED_ESCALATION_TOKENS.every((token) => message.includes(token));
 }
 
 export function interpolateWelcomeMessage(

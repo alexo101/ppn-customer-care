@@ -25,8 +25,7 @@ export function applyGuardrails(
 
   if (requiresGrounding && input.retrievedChunks.length === 0) {
     return {
-      responseText:
-        "I could not verify enough information to answer that request. Could you provide a little more detail or contact a human support agent?",
+      responseText: guarded,
       actions: ["grounding_required"],
       blocked: true,
     };

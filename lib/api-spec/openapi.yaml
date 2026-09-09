@@ -719,6 +719,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /conversations/{id}/escalate:
+    post:
+      operationId: escalateConversation
+      tags: [conversations]
+      summary: Escalate an unanswered conversation to the agent inbox
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EscalateConversationInput"
+      responses:
+        "200":
+          description: Conversation escalated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EscalateConversationResult"
+        "400":
+          description: Invalid escalation request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /conversations/{id}/feedback:
     post:
       operationId: submitFeedback
@@ -2129,8 +2166,7 @@ components:
 
     AgentEscalation:
       type: object
-      required:
-        [agentId, name, notifyAssignedMembers, members]
+      required: [agentId, name, notifyAssignedMembers, members]
       properties:
         agentId: { type: string }
         name: { type: string }
@@ -2160,6 +2196,7 @@ components:
           autoCloseMinutes,
           closingMessage,
           welcomeMessage,
+          escalationMessage,
         ]
       properties:
         agentId: { type: string }
@@ -2168,6 +2205,7 @@ components:
         autoCloseMinutes: { type: number, minimum: 0, maximum: 59 }
         closingMessage: { type: string, maxLength: 2000 }
         welcomeMessage: { type: string, maxLength: 2000 }
+        escalationMessage: { type: string, maxLength: 2000 }
 
     AgentConversationSettingsInput:
       type: object
@@ -2178,6 +2216,7 @@ components:
           autoCloseMinutes,
           closingMessage,
           welcomeMessage,
+          escalationMessage,
         ]
       properties:
         autoCloseDays: { type: number, minimum: 0, maximum: 365 }
@@ -2185,6 +2224,7 @@ components:
         autoCloseMinutes: { type: number, minimum: 0, maximum: 59 }
         closingMessage: { type: string, maxLength: 2000 }
         welcomeMessage: { type: string, maxLength: 2000 }
+        escalationMessage: { type: string, maxLength: 2000 }
 
     InboxTeam:
       type: object
@@ -2294,7 +2334,8 @@ components:
 
     Agent:
       type: object
-      required: [id, name, description, isEnabled, trustedDomains, createdAt, updatedAt]
+      required:
+        [id, name, description, isEnabled, trustedDomains, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2536,6 +2577,25 @@ components:
           $ref: "#/components/schemas/ClassificationResult"
         shouldAskResolution:
           type: boolean
+
+    EscalateConversationInput:
+      type: object
+      required: [messageId]
+      properties:
+        messageId:
+          type: string
+
+    EscalateConversationResult:
+      type: object
+      required: [conversationId, status, escalationId]
+      properties:
+        conversationId:
+          type: string
+        status:
+          type: string
+          enum: [escalated]
+        escalationId:
+          type: ["string", "null"]
 
     FeedbackInput:
       type: object
@@ -3308,15 +3368,7 @@ components:
     Target:
       type: object
       required:
-        [
-          id,
-          name,
-          description,
-          matchMode,
-          conditions,
-          createdAt,
-          updatedAt,
-        ]
+        [id, name, description, matchMode, conditions, createdAt, updatedAt]
       properties:
         id:
           type: string
