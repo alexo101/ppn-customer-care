@@ -127,8 +127,84 @@ describe("generateAnswer", () => {
     );
 
     expect(result.shouldAskResolution).toBe(true);
-    expect(result.responseText).toContain("¿Esta respuesta responde a tu pregunta?");
-    expect(result.responseText).not.toContain("Does this answer your question?");
+    expect(result.responseText).toContain(
+      "¿Esta respuesta responde a tu pregunta?",
+    );
+    expect(result.responseText).not.toContain(
+      "Does this answer your question?",
+    );
+  });
+
+  it("prefers the provider language over the browser language", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "Tu factura está lista.",
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-5-nano",
+      totalTokens: 12,
+      promptAssembled: "assembled",
+    });
+
+    const result = await generateAnswer(
+      "Can I download it?",
+      classification,
+      rule,
+      [
+        { sender: "user", content: "Where is my invoice?" },
+        { sender: "user", content: "Can I download it?" },
+      ],
+      {},
+      [],
+      { generate } as AnswerProvider,
+      { browser_language: "en-US" },
+    );
+
+    expect(result.responseText).toContain(
+      "¿Esta respuesta responde a tu pregunta?",
+    );
+    expect(result.responseText).not.toContain(
+      "Does this answer your question?",
+    );
+  });
+
+  it("suppresses resolution follow-up text for insufficient answers", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "No encontré esa información.",
+      answerable: false,
+      replyLanguage: "es",
+      model: "gpt-5-nano",
+      totalTokens: 12,
+      promptAssembled: "assembled",
+    });
+
+    const result = await generateAnswer(
+      "Which email is on file?",
+      classification,
+      rule,
+      [
+        { sender: "user", content: "I need account details." },
+        { sender: "user", content: "Which email is on file?" },
+      ],
+      {},
+      [
+        {
+          sourceId: "source",
+          sourceName: "Help Center",
+          content: "Account settings are available here.",
+          distance: 0.1,
+        },
+      ],
+      { generate } as AnswerProvider,
+      { browser_language: "en-US" },
+    );
+
+    expect(result.answerable).toBe(false);
+    expect(result.resolutionStatus).toBe("pending_clarification");
+    expect(result.shouldAskResolution).toBe(false);
+    expect(result.responseText).toBe("No encontré esa información.");
+    expect(result.responseText).not.toContain(
+      "Does this answer your question?",
+    );
   });
 
   it("propagates answer provider failures", async () => {

@@ -40,7 +40,6 @@ import {
   DEFAULT_CHAT_NAME,
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
-import { SourceCitations } from "@/components/chat/source-citations";
 import { NpsSurvey } from "@/components/chat/nps-survey";
 import { isAutoClosedConversation } from "@/lib/conversation-settings";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
@@ -355,7 +354,6 @@ export default function Widget() {
                       }
                     >
                       {msg.content}
-                      {!isUser && <SourceCitations metadata={msg.metadata} />}
                       {msg.id === escalationOffer?.id && (
                         <div className="mt-2 border-t border-black/10 pt-2">
                           <Button

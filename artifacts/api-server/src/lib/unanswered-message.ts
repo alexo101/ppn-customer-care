@@ -8,6 +8,22 @@ export function interpolateEscalationMessage(
   return template.replaceAll("{user_name}", userName.trim() || "there").trim();
 }
 
+export function buildUnableToAnswerResponse(
+  template: string,
+  userName: string,
+) {
+  return {
+    responseText: interpolateEscalationMessage(template, userName),
+    metadata: {
+      citations: [],
+      kind: UNABLE_TO_ANSWER_MESSAGE_KIND,
+      actions: [ESCALATE_MESSAGE_ACTION],
+    },
+    resolutionStatus: "pending_clarification",
+    shouldAskResolution: false,
+  } as const;
+}
+
 export function isUnableToAnswerMessageMetadata(
   metadata: unknown,
 ): metadata is {

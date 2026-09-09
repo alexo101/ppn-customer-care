@@ -30,6 +30,8 @@ export type AnswerProviderInput = {
 
 export type AnswerProviderResult = {
   responseText: string;
+  answerable: boolean;
+  replyLanguage?: string;
   model: string;
   totalTokens: number;
   promptAssembled: string;

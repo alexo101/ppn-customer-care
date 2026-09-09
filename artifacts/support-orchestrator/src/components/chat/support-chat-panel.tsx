@@ -29,7 +29,6 @@ import {
   DEFAULT_CHAT_NAME,
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
-import { SourceCitations } from "@/components/chat/source-citations";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
 
 const GREETING_WAIT_MS = 12_000;
@@ -559,7 +558,6 @@ export function SupportChatPanel({
                       }
                     >
                       {msg.content}
-                      {!isUser && <SourceCitations metadata={msg.metadata} />}
                       {msg.id === escalationOffer?.id && (
                         <div className="mt-2 border-t border-black/10 pt-2">
                           <Button

@@ -16,6 +16,8 @@ type HistoryMessage = { sender: string; content: string };
 
 export type GeneratedAnswer = {
   responseText: string;
+  answerable: boolean;
+  replyLanguage?: string;
   resolutionStatus: string;
   shouldAskResolution: boolean;
   model: string;
@@ -60,7 +62,9 @@ export async function generateAnswer(
   }
   if (isGreeting(lower)) {
     return localAnswer(
-      GREETINGS_RESPONSES[Math.floor(Math.random() * GREETINGS_RESPONSES.length)],
+      GREETINGS_RESPONSES[
+        Math.floor(Math.random() * GREETINGS_RESPONSES.length)
+      ],
       "active",
     );
   }
@@ -105,14 +109,26 @@ export async function generateAnswer(
     personAttributes,
     context,
   });
-  const userMessageCount = history.filter((item) => item.sender === "user").length;
-  const shouldAskResolution = userMessageCount >= (rule ? 2 : 3);
+  const answerable = result.answerable !== false;
+  const userMessageCount = history.filter(
+    (item) => item.sender === "user",
+  ).length;
+  const shouldAskResolution = answerable && userMessageCount >= (rule ? 2 : 3);
   const responseText = shouldAskResolution
-    ? `${result.responseText}\n\n${resolutionFollowUp(context.browser_language)}`
+    ? `${result.responseText}\n\n${resolutionFollowUp(
+        result.replyLanguage,
+        context.browser_language,
+      )}`
     : result.responseText;
   return {
     responseText,
-    resolutionStatus: shouldAskResolution ? "pending_resolution" : "active",
+    answerable,
+    ...(result.replyLanguage ? { replyLanguage: result.replyLanguage } : {}),
+    resolutionStatus: answerable
+      ? shouldAskResolution
+        ? "pending_resolution"
+        : "active"
+      : "pending_clarification",
     shouldAskResolution,
     model: result.model,
     totalTokens: result.totalTokens,
@@ -121,9 +137,13 @@ export async function generateAnswer(
   };
 }
 
-function localAnswer(responseText: string, resolutionStatus: string): GeneratedAnswer {
+function localAnswer(
+  responseText: string,
+  resolutionStatus: string,
+): GeneratedAnswer {
   return {
     responseText,
+    answerable: true,
     resolutionStatus,
     shouldAskResolution: false,
     model: "deterministic-shortcut",
@@ -137,10 +157,13 @@ function renderTemplate(
   template: string,
   attributes: Record<string, unknown>,
 ): string {
-  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, key: string) => {
-    const value = attributes[key];
-    return value == null ? "" : String(value);
-  });
+  return template.replace(
+    /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
+    (_, key: string) => {
+      const value = attributes[key];
+      return value == null ? "" : String(value);
+    },
+  );
 }
 
 function isResolution(message: string): boolean {

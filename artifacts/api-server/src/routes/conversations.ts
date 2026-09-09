@@ -48,9 +48,7 @@ import { sendWelcomeMessageIfNeeded } from "../lib/welcome-message";
 import { fallbackClarificationPrompt } from "../lib/reply-locale";
 import { DEFAULT_CONVERSATION_SETTINGS } from "../lib/conversation-auto-close";
 import {
-  ESCALATE_MESSAGE_ACTION,
-  interpolateEscalationMessage,
-  UNABLE_TO_ANSWER_MESSAGE_KIND,
+  buildUnableToAnswerResponse,
   isUnableToAnswerMessageMetadata,
 } from "../lib/unanswered-message";
 import {
@@ -782,15 +780,12 @@ router.post(
         const template =
           conversationSettings?.escalationMessage ??
           DEFAULT_CONVERSATION_SETTINGS.escalationMessage;
-        responseText = interpolateEscalationMessage(template, userName);
-        resolutionStatus = "pending_clarification";
-        shouldAskResolution = false;
+        const unableToAnswer = buildUnableToAnswerResponse(template, userName);
+        responseText = unableToAnswer.responseText;
+        resolutionStatus = unableToAnswer.resolutionStatus;
+        shouldAskResolution = unableToAnswer.shouldAskResolution;
         answerModel = "deterministic-unable-to-answer";
-        assistantMetadata = {
-          citations: [],
-          kind: UNABLE_TO_ANSWER_MESSAGE_KIND,
-          actions: [ESCALATE_MESSAGE_ACTION],
-        };
+        assistantMetadata = unableToAnswer.metadata;
         stages[5].details = {
           resolution_status: resolutionStatus,
           model: answerModel,
@@ -828,42 +823,58 @@ router.post(
         answerTokens = answerResult.totalTokens;
         promptAssembled = answerResult.promptAssembled;
         citations = answerResult.citations;
-        const guardrailResult = applyGuardrails(responseText, {
-          retrievedChunks,
-          rule: answerRule,
-          personAttributes: person.attributes,
-        });
-        responseText = guardrailResult.responseText;
-        if (guardrailResult.blocked) {
+        let guardrailActions: string[] = [];
+        if (!answerResult.answerable) {
           const userName =
             typeof person.attributes.name === "string"
               ? person.attributes.name
               : typeof person.attributes.user_name === "string"
                 ? person.attributes.user_name
                 : await resolveUserDisplayName(req.userId, req.userEmail);
-          responseText = interpolateEscalationMessage(
+          const unableToAnswer = buildUnableToAnswerResponse(
             conversationSettings?.escalationMessage ??
               DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
             userName,
           );
-          resolutionStatus = "pending_clarification";
-          shouldAskResolution = false;
+          responseText = unableToAnswer.responseText;
+          resolutionStatus = unableToAnswer.resolutionStatus;
+          shouldAskResolution = unableToAnswer.shouldAskResolution;
           answerModel = "deterministic-unable-to-answer";
-          assistantMetadata = {
-            citations: [],
-            kind: UNABLE_TO_ANSWER_MESSAGE_KIND,
-            actions: [ESCALATE_MESSAGE_ACTION],
-          };
+          assistantMetadata = unableToAnswer.metadata;
+        } else {
+          const guardrailResult = applyGuardrails(responseText, {
+            retrievedChunks,
+            rule: answerRule,
+            personAttributes: person.attributes,
+          });
+          guardrailActions = guardrailResult.actions;
+          responseText = guardrailResult.responseText;
+          if (guardrailResult.blocked) {
+            const userName =
+              typeof person.attributes.name === "string"
+                ? person.attributes.name
+                : typeof person.attributes.user_name === "string"
+                  ? person.attributes.user_name
+                  : await resolveUserDisplayName(req.userId, req.userEmail);
+            const unableToAnswer = buildUnableToAnswerResponse(
+              conversationSettings?.escalationMessage ??
+                DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
+              userName,
+            );
+            responseText = unableToAnswer.responseText;
+            resolutionStatus = unableToAnswer.resolutionStatus;
+            shouldAskResolution = unableToAnswer.shouldAskResolution;
+            answerModel = "deterministic-unable-to-answer";
+            assistantMetadata = unableToAnswer.metadata;
+          } else {
+            assistantMetadata = { citations };
+          }
         }
-        assistantMetadata = {
-          ...assistantMetadata,
-          ...(guardrailResult.blocked ? {} : { citations }),
-        };
         stages[5].details = {
           resolution_status: resolutionStatus,
           model: answerModel,
           chunks_used: retrievedChunks.length,
-          guardrails: guardrailResult.actions,
+          guardrails: guardrailActions,
         };
       }
       stages[5].status = "completed";

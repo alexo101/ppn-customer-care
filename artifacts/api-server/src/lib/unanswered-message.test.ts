@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ESCALATE_MESSAGE_ACTION,
+  buildUnableToAnswerResponse,
   interpolateEscalationMessage,
   isUnableToAnswerMessageMetadata,
   UNABLE_TO_ANSWER_MESSAGE_KIND,
@@ -20,6 +21,26 @@ describe("interpolateEscalationMessage", () => {
         "",
       ),
     ).toBe("Sorry there, I cannot answer that.");
+  });
+});
+
+describe("buildUnableToAnswerResponse", () => {
+  it("uses the configured message and preserves the escalation action", () => {
+    expect(
+      buildUnableToAnswerResponse(
+        "Sorry {user_name}, please escalate this.",
+        "Ada",
+      ),
+    ).toEqual({
+      responseText: "Sorry Ada, please escalate this.",
+      metadata: {
+        citations: [],
+        kind: UNABLE_TO_ANSWER_MESSAGE_KIND,
+        actions: [ESCALATE_MESSAGE_ACTION],
+      },
+      resolutionStatus: "pending_clarification",
+      shouldAskResolution: false,
+    });
   });
 });
 
