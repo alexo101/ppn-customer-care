@@ -124,7 +124,7 @@ export function SupportChatPanel({
       refetchInterval: 5000,
     },
   });
-  const { data: messages = [], refetch, isFetched } = useListMessages(convoId ?? "", {
+  const { data: messages = [], refetch } = useListMessages(convoId ?? "", {
     query: {
       enabled: Boolean(convoId),
       queryKey: getListMessagesQueryKey(convoId ?? ""),
@@ -141,6 +141,11 @@ export function SupportChatPanel({
       typeof msg.metadata === "object" &&
       (msg.metadata as { kind?: string }).kind === "welcome",
   );
+  const waitingForWelcome =
+    source === "training" &&
+    Boolean(seedKey) &&
+    Boolean(convoId) &&
+    !hasWelcomeMessage;
 
   const beginThinking = (baseline: number) => {
     assistantBaselineRef.current = baseline;
@@ -236,7 +241,7 @@ export function SupportChatPanel({
     if (source !== "training") return;
     if (!seedKey || !seedMessage?.trim() || !convoId || sendingMessage) return;
     if (messages.some((msg) => msg.sender === "user")) return;
-    if (!hasWelcomeMessage && !isFetched) return;
+    if (!hasWelcomeMessage) return;
     const seedToken = `${convoId}:${seedKey}`;
     if (sentSeedRef.current === seedToken) return;
     sentSeedRef.current = seedToken;
@@ -273,7 +278,6 @@ export function SupportChatPanel({
     sendingMessage,
     messages,
     hasWelcomeMessage,
-    isFetched,
     sendChatMessage,
     queryClient,
   ]);
@@ -355,22 +359,20 @@ export function SupportChatPanel({
             </div>
           ) : (
             <>
-              {source === "training" && seedMessage && !messages.some((msg) => msg.sender === "user") && (
-                <div className="flex justify-end">
-                  <div
-                    className="max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2 text-sm whitespace-pre-wrap"
-                    style={{ backgroundColor: ctaColor, color: onCta }}
-                  >
-                    {seedMessage}
-                  </div>
-                </div>
-              )}
-
               {!convoId && busy && (
                 <div className="flex justify-start">
                   <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     Starting chat...
+                  </div>
+                </div>
+              )}
+
+              {waitingForWelcome && messages.length === 0 && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Preparing greeting...
                   </div>
                 </div>
               )}
