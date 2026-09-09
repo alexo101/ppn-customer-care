@@ -4,6 +4,7 @@ import {
   buildUnableToAnswerResponse,
   interpolateEscalationMessage,
   isUnableToAnswerMessageMetadata,
+  translateEscalationTemplate,
   UNABLE_TO_ANSWER_MESSAGE_KIND,
 } from "./unanswered-message";
 
@@ -41,6 +42,45 @@ describe("buildUnableToAnswerResponse", () => {
       resolutionStatus: "pending_clarification",
       shouldAskResolution: false,
     });
+  });
+});
+
+describe("translateEscalationTemplate", () => {
+  it("translates using the reply language and preserves the user placeholder", async () => {
+    const translator = {
+      translate: async (_template: string, locale: string) =>
+        `Lo siento {user_name}, no puedo responder a eso. (${locale})`,
+    };
+
+    await expect(
+      translateEscalationTemplate(
+        "Sorry {user_name}, I cannot answer that.",
+        ["es-ES"],
+        translator,
+      ),
+    ).resolves.toBe(
+      "Lo siento {user_name}, no puedo responder a eso. (es-es)",
+    );
+  });
+
+  it("keeps the configured template when translation loses the placeholder", async () => {
+    const template = "Sorry {user_name}, I cannot answer that.";
+    const translator = {
+      translate: async () => "Lo siento, no puedo responder a eso.",
+    };
+
+    await expect(
+      translateEscalationTemplate(template, ["es"], translator),
+    ).resolves.toBe(template);
+  });
+
+  it("does not translate when no reply language is available", async () => {
+    const template = "Sorry {user_name}, I cannot answer that.";
+    const translator = { translate: async () => "unexpected" };
+
+    await expect(
+      translateEscalationTemplate(template, [], translator),
+    ).resolves.toBe(template);
   });
 });
 

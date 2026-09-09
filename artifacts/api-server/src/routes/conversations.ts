@@ -50,6 +50,7 @@ import { DEFAULT_CONVERSATION_SETTINGS } from "../lib/conversation-auto-close";
 import {
   buildUnableToAnswerResponse,
   isUnableToAnswerMessageMetadata,
+  translateEscalationTemplate,
 } from "../lib/unanswered-message";
 import {
   AnswerProviderError,
@@ -780,7 +781,14 @@ router.post(
         const template =
           conversationSettings?.escalationMessage ??
           DEFAULT_CONVERSATION_SETTINGS.escalationMessage;
-        const unableToAnswer = buildUnableToAnswerResponse(template, userName);
+        const localizedTemplate = await translateEscalationTemplate(
+          template,
+          replyLocaleCandidates,
+        );
+        const unableToAnswer = buildUnableToAnswerResponse(
+          localizedTemplate,
+          userName,
+        );
         responseText = unableToAnswer.responseText;
         resolutionStatus = unableToAnswer.resolutionStatus;
         shouldAskResolution = unableToAnswer.shouldAskResolution;
@@ -831,9 +839,13 @@ router.post(
               : typeof person.attributes.user_name === "string"
                 ? person.attributes.user_name
                 : await resolveUserDisplayName(req.userId, req.userEmail);
-          const unableToAnswer = buildUnableToAnswerResponse(
+          const localizedTemplate = await translateEscalationTemplate(
             conversationSettings?.escalationMessage ??
               DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
+            [answerResult.replyLanguage, ...replyLocaleCandidates],
+          );
+          const unableToAnswer = buildUnableToAnswerResponse(
+            localizedTemplate,
             userName,
           );
           responseText = unableToAnswer.responseText;
@@ -856,9 +868,13 @@ router.post(
                 : typeof person.attributes.user_name === "string"
                   ? person.attributes.user_name
                   : await resolveUserDisplayName(req.userId, req.userEmail);
-            const unableToAnswer = buildUnableToAnswerResponse(
+            const localizedTemplate = await translateEscalationTemplate(
               conversationSettings?.escalationMessage ??
                 DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
+              [answerResult.replyLanguage, ...replyLocaleCandidates],
+            );
+            const unableToAnswer = buildUnableToAnswerResponse(
+              localizedTemplate,
               userName,
             );
             responseText = unableToAnswer.responseText;

@@ -1,3 +1,10 @@
+import { logger } from "./logger";
+import {
+  OpenAIWelcomeMessageTranslator,
+  type WelcomeMessageTranslator,
+} from "./llm/openai-welcome-message-translator";
+import { normalizeBrowserLanguage } from "./welcome-message";
+
 export const UNABLE_TO_ANSWER_MESSAGE_KIND = "unable_to_answer";
 export const ESCALATE_MESSAGE_ACTION = "escalate";
 
@@ -6,6 +13,34 @@ export function interpolateEscalationMessage(
   userName: string,
 ): string {
   return template.replaceAll("{user_name}", userName.trim() || "there").trim();
+}
+
+export async function translateEscalationTemplate(
+  template: string,
+  replyLanguageCandidates: unknown[],
+  translator?: WelcomeMessageTranslator,
+): Promise<string> {
+  const locale = replyLanguageCandidates
+    .map(normalizeBrowserLanguage)
+    .find((candidate): candidate is string => Boolean(candidate));
+  if (!locale) return template;
+
+  try {
+    const translated = await (
+      translator ??
+      new OpenAIWelcomeMessageTranslator()
+    ).translate(template, locale);
+    if (!translated.trim() || !translated.includes("{user_name}")) {
+      throw new Error("Translated escalation message lost the user placeholder.");
+    }
+    return translated;
+  } catch (error) {
+    logger.warn(
+      { err: error, locale },
+      "Failed to translate escalation message; using configured template",
+    );
+    return template;
+  }
 }
 
 export function buildUnableToAnswerResponse(

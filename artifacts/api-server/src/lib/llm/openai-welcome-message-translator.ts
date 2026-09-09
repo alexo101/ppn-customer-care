@@ -29,14 +29,25 @@ export class OpenAIWelcomeMessageTranslator
   }
 
   async translate(template: string, locale: string): Promise<string> {
-    const protectedTemplate = template
-      .replaceAll("{user_name}", "__WELCOME_USER_NAME__")
-      .replaceAll("{agent_name}", "__WELCOME_AGENT_NAME__");
+    const placeholders = [
+      ...new Set(template.match(/\{[a-zA-Z0-9_]+\}/g) ?? []),
+    ];
+    const placeholderTokens = new Map(
+      placeholders.map((placeholder, index) => [
+        placeholder,
+        `__SUPPORT_PLACEHOLDER_${index}__`,
+      ]),
+    );
+    const protectedTemplate = placeholders.reduce(
+      (message, placeholder) =>
+        message.replaceAll(placeholder, placeholderTokens.get(placeholder)!),
+      template,
+    );
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       {
         role: "system",
         content:
-          "Translate the supplied customer-support welcome message into the requested browser locale. Return only the translated message. Preserve __WELCOME_USER_NAME__ and __WELCOME_AGENT_NAME__ exactly, including spelling and position.",
+          "Translate the supplied customer-support message into the requested locale. Return only the translated message. Preserve every __SUPPORT_PLACEHOLDER_N__ token exactly, including spelling and position.",
       },
       {
         role: "user",
@@ -68,14 +79,18 @@ export class OpenAIWelcomeMessageTranslator
     }
     const translated = response.choices[0]?.message.content?.trim() ?? "";
     if (
-      !translated.includes("__WELCOME_USER_NAME__") ||
-      !translated.includes("__WELCOME_AGENT_NAME__")
+      placeholders.some(
+        (placeholder) =>
+          !translated.includes(placeholderTokens.get(placeholder)!),
+      )
     ) {
-      throw new Error("Translated welcome message lost a required placeholder.");
+      throw new Error("Translated message lost a required placeholder.");
     }
-    return translated
-      .replaceAll("__WELCOME_USER_NAME__", "{user_name}")
-      .replaceAll("__WELCOME_AGENT_NAME__", "{agent_name}");
+    return placeholders.reduce(
+      (message, placeholder) =>
+        message.replaceAll(placeholderTokens.get(placeholder)!, placeholder),
+      translated,
+    );
   }
 }
 
