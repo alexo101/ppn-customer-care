@@ -21,14 +21,6 @@ import { AppearanceTag, DEFAULT_TAG_STYLE, isTagStyle } from "@/components/chat/
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
 import { SourceCitations } from "@/components/chat/source-citations";
 
-const TRAINING_LOADER_STEPS = [
-  "Classifying...",
-  "Checking sources",
-  "Checking target settled",
-  "Checking the rules",
-  "Shaping the response...",
-] as const;
-
 const GREETING_WAIT_MS = 12_000;
 const GREETING_WAIT_ERROR =
   "The greeting never arrived. Try again, or restart the API if this keeps happening.";
@@ -38,23 +30,11 @@ function assistantMessageCount(messages: { sender: string }[]): number {
 }
 
 function TrainingThinkingStatus() {
-  const [step, setStep] = useState(0);
-  const lastStep = TRAINING_LOADER_STEPS.length - 1;
-
-  useEffect(() => {
-    if (step >= lastStep) return;
-
-    const id = window.setTimeout(() => {
-      setStep((current) => Math.min(current + 1, lastStep));
-    }, 5000);
-    return () => window.clearTimeout(id);
-  }, [step, lastStep]);
-
   return (
     <div className="flex justify-start">
       <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        {TRAINING_LOADER_STEPS[step]}
+        Preparing response...
       </div>
     </div>
   );
@@ -116,6 +96,10 @@ export function SupportChatPanel({
   const [thinkingVisible, setThinkingVisible] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [welcomeWaitTimedOut, setWelcomeWaitTimedOut] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState<{
+    content: string;
+    id?: string;
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runIdRef = useRef(0);
   const assistantBaselineRef = useRef(0);
@@ -229,6 +213,7 @@ export function SupportChatPanel({
     setInput("");
     setSendError(null);
     setWelcomeWaitTimedOut(false);
+    setPendingUserMessage(null);
     stopThinking();
 
     createConversation(
@@ -297,12 +282,16 @@ export function SupportChatPanel({
     sentSeedRef.current = seedToken;
 
     const runId = runIdRef.current;
+    setPendingUserMessage({ content: seedMessage.trim() });
     beginThinking(assistantMessageCount(messages));
     sendChatMessage(
       { id: convoId, data: { content: seedMessage } },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           if (runId !== runIdRef.current) return;
+          setPendingUserMessage((current) =>
+            current ? { ...current, id: data.message.id } : current,
+          );
           stopThinking();
           setSendError(null);
           queryClient.invalidateQueries({
@@ -343,14 +332,19 @@ export function SupportChatPanel({
     if (!input.trim() || !convoId || sendingMessage) return;
 
     setSendError(null);
+    const submittedMessage = input.trim();
+    setPendingUserMessage({ content: submittedMessage });
     if (source === "training") {
       beginThinking(assistantMessageCount(messages));
     }
     sendChatMessage(
-      { id: convoId, data: { content: input } },
+      { id: convoId, data: { content: submittedMessage } },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           stopThinking();
+          setPendingUserMessage((current) =>
+            current ? { ...current, id: data.message.id } : current,
+          );
           setInput("");
           refetch();
           refetchConvo();
@@ -452,6 +446,24 @@ export function SupportChatPanel({
                   </div>
                 );
               })}
+
+              {pendingUserMessage &&
+                !messages.some(
+                  (msg) =>
+                    msg.sender === "user" &&
+                    (pendingUserMessage.id
+                      ? msg.id === pendingUserMessage.id
+                      : msg.content === pendingUserMessage.content),
+                ) && (
+                  <div className="flex justify-end">
+                    <div
+                      className="max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2 text-sm whitespace-pre-wrap"
+                      style={{ backgroundColor: ctaColor, color: onCta }}
+                    >
+                      {pendingUserMessage.content}
+                    </div>
+                  </div>
+                )}
 
               {source === "training" && thinkingVisible && <TrainingThinkingStatus />}
 
