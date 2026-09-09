@@ -29,15 +29,22 @@ const TRAINING_LOADER_STEPS = [
   "Shaping the response...",
 ] as const;
 
+function assistantMessageCount(messages: { sender: string }[]): number {
+  return messages.reduce((count, message) => count + (message.sender === "assistant" ? 1 : 0), 0);
+}
+
 function TrainingThinkingStatus() {
   const [step, setStep] = useState(0);
+  const lastStep = TRAINING_LOADER_STEPS.length - 1;
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setStep((current) => (current + 1) % TRAINING_LOADER_STEPS.length);
-    }, 3000);
-    return () => window.clearInterval(id);
-  }, []);
+    if (step >= lastStep) return;
+
+    const id = window.setTimeout(() => {
+      setStep((current) => Math.min(current + 1, lastStep));
+    }, 5000);
+    return () => window.clearTimeout(id);
+  }, [step, lastStep]);
 
   return (
     <div className="flex justify-start">
@@ -85,6 +92,8 @@ export function SupportChatPanel({
     },
   });
   const appearance = agentAppearance ?? sessionAppearance;
+  const browserLanguage =
+    typeof navigator !== "undefined" ? navigator.language : undefined;
 
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
   const backgroundColor = appearance?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR;
@@ -100,8 +109,11 @@ export function SupportChatPanel({
   const [convoId, setConvoId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [thinkingVisible, setThinkingVisible] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runIdRef = useRef(0);
+  const assistantBaselineRef = useRef(0);
+  const sentSeedRef = useRef<string | null>(null);
 
   const { mutate: createConversation, isPending: creatingConversation } = useCreateConversation();
   const { mutate: sendChatMessage, isPending: sendingMessage } = useSendMessage();
@@ -112,7 +124,7 @@ export function SupportChatPanel({
       refetchInterval: 5000,
     },
   });
-  const { data: messages = [], refetch } = useListMessages(convoId ?? "", {
+  const { data: messages = [], refetch, isFetched } = useListMessages(convoId ?? "", {
     query: {
       enabled: Boolean(convoId),
       queryKey: getListMessagesQueryKey(convoId ?? ""),
@@ -122,6 +134,32 @@ export function SupportChatPanel({
 
   const waitingForQuestion = source === "training" && !seedKey;
   const busy = creatingConversation || sendingMessage;
+  const hasWelcomeMessage = messages.some(
+    (msg) =>
+      msg.sender === "assistant" &&
+      Boolean(msg.metadata) &&
+      typeof msg.metadata === "object" &&
+      (msg.metadata as { kind?: string }).kind === "welcome",
+  );
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c47481'},body:JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H1',location:'support-chat-panel.tsx:state',message:'training chat welcome visibility',data:{source,waitingForQuestion,hasSeedKey:Boolean(seedKey),hasConvoId:Boolean(convoId),messageCount:messages.length,assistantCount:assistantMessageCount(messages),firstSender:messages[0]?.sender ?? null,hasWelcomeMeta:hasWelcomeMessage,isFetched},timestamp:Date.now()})}).catch(()=>{});
+  }, [source, waitingForQuestion, seedKey, convoId, messages, hasWelcomeMessage, isFetched]);
+  // #endregion
+
+  const beginThinking = (baseline: number) => {
+    assistantBaselineRef.current = baseline;
+    setThinkingVisible(true);
+  };
+
+  const stopThinking = () => setThinkingVisible(false);
+
+  useEffect(() => {
+    if (!thinkingVisible) return;
+    if (assistantMessageCount(messages) > assistantBaselineRef.current) {
+      setThinkingVisible(false);
+    }
+  }, [messages, thinkingVisible]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -134,7 +172,17 @@ export function SupportChatPanel({
 
     let cancelled = false;
     createConversation(
-      { data: { metadata: { source: "widget" }, ...(agentId ? { agentId } : {}) } },
+      {
+        data: {
+          metadata: {
+            source: "widget",
+            ...(browserLanguage
+              ? { browser_language: browserLanguage }
+              : {}),
+          },
+          ...(agentId ? { agentId } : {}),
+        },
+      },
       {
         onSuccess: (data) => {
           if (!cancelled) setConvoId(data.id);
@@ -149,67 +197,114 @@ export function SupportChatPanel({
 
   useEffect(() => {
     if (source !== "training") return;
-
-    if (!seedKey || !seedMessage?.trim()) {
+    if (!agentId) {
       setConvoId(null);
-      setInput("");
-      setSendError(null);
       return;
     }
 
     const runId = ++runIdRef.current;
+    sentSeedRef.current = null;
     setConvoId(null);
     setInput("");
     setSendError(null);
+    stopThinking();
 
     createConversation(
       {
         data: {
           metadata: {
             source: "training",
-            subject: seedMessage.slice(0, 80),
-            trainingQuestionId: seedKey,
+            ...(seedMessage?.trim()
+              ? { subject: seedMessage.slice(0, 80) }
+              : {}),
+            ...(seedKey ? { trainingQuestionId: seedKey } : {}),
+            ...(browserLanguage
+              ? { browser_language: browserLanguage }
+              : {}),
           },
-          ...(agentId ? { agentId } : {}),
+          agentId,
         },
       },
       {
         onSuccess: (data) => {
           if (runId !== runIdRef.current) return;
+          // #region agent log
+          fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c47481'},body:JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H4',location:'support-chat-panel.tsx:createConversation:success',message:'training conversation created',data:{hasAgentId:Boolean(agentId),conversationId:data.id,hasSeedKey:Boolean(seedKey)},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           setConvoId(data.id);
-          sendChatMessage(
-            { id: data.id, data: { content: seedMessage } },
-            {
-              onSuccess: () => {
-                if (runId !== runIdRef.current) return;
-                setSendError(null);
-                queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(data.id) });
-              },
-              onError: (error) => {
-                if (runId !== runIdRef.current) return;
-                setSendError(error instanceof Error ? error.message : "The training preview could not complete.");
-              },
-            },
+          queryClient.invalidateQueries({
+            queryKey: getListMessagesQueryKey(data.id),
+          });
+        },
+      },
+    );
+  }, [source, agentId, seedKey, seedMessage, runNonce, createConversation, queryClient]);
+
+  useEffect(() => {
+    if (source !== "training") return;
+    if (!seedKey || !seedMessage?.trim() || !convoId || sendingMessage) return;
+    if (messages.some((msg) => msg.sender === "user")) return;
+    if (!hasWelcomeMessage && !isFetched) return;
+    const seedToken = `${convoId}:${seedKey}`;
+    if (sentSeedRef.current === seedToken) return;
+    sentSeedRef.current = seedToken;
+
+    const runId = runIdRef.current;
+    beginThinking(assistantMessageCount(messages));
+    sendChatMessage(
+      { id: convoId, data: { content: seedMessage } },
+      {
+        onSuccess: () => {
+          if (runId !== runIdRef.current) return;
+          stopThinking();
+          setSendError(null);
+          queryClient.invalidateQueries({
+            queryKey: getListMessagesQueryKey(convoId),
+          });
+        },
+        onError: (error) => {
+          if (runId !== runIdRef.current) return;
+          stopThinking();
+          setSendError(
+            error instanceof Error
+              ? error.message
+              : "The training preview could not complete.",
           );
         },
       },
     );
-  }, [source, agentId, seedKey, seedMessage, runNonce, createConversation, sendChatMessage, queryClient]);
+  }, [
+    source,
+    seedKey,
+    seedMessage,
+    convoId,
+    sendingMessage,
+    messages,
+    hasWelcomeMessage,
+    isFetched,
+    sendChatMessage,
+    queryClient,
+  ]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !convoId || sendingMessage) return;
 
     setSendError(null);
+    if (source === "training") {
+      beginThinking(assistantMessageCount(messages));
+    }
     sendChatMessage(
       { id: convoId, data: { content: input } },
       {
         onSuccess: () => {
+          stopThinking();
           setInput("");
           refetch();
           refetchConvo();
         },
         onError: (error) => {
+          stopThinking();
           setSendError(error instanceof Error ? error.message : "The training preview could not complete.");
         },
       },
@@ -262,18 +357,12 @@ export function SupportChatPanel({
 
       <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
         <div className="space-y-4">
-          {waitingForQuestion ? (
+          {waitingForQuestion && messages.length === 0 && !convoId && !busy ? (
             <div className="h-full min-h-[220px] flex items-center justify-center px-6">
               <p className="text-center text-sm text-slate-500">{emptyHint}</p>
             </div>
           ) : (
             <>
-              <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-2 text-sm bg-white text-slate-800 shadow-sm border border-black/5">
-                  Hi — how can we help today?
-                </div>
-              </div>
-
               {source === "training" && seedMessage && !messages.some((msg) => msg.sender === "user") && (
                 <div className="flex justify-end">
                   <div
@@ -314,17 +403,16 @@ export function SupportChatPanel({
                 );
               })}
 
-              {sendingMessage &&
-                (source === "training" ? (
-                  <TrainingThinkingStatus />
-                ) : (
-                  <div className="flex justify-start">
-                    <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Typing...
-                    </div>
+              {source === "training" && thinkingVisible && <TrainingThinkingStatus />}
+
+              {source !== "training" && sendingMessage && (
+                <div className="flex justify-start">
+                  <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Typing...
                   </div>
-                ))}
+                </div>
+              )}
 
               {source === "training" && sendError && (
                 <div

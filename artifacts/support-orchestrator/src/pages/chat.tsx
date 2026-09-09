@@ -50,6 +50,8 @@ export default function Chat({ agentId }: { agentId?: string }) {
   const [searchText, setSearch] = useState('');
   const [debugOpen, setDebugOpen] = useState(true);
   const { appearance } = useAppearance();
+  const browserLanguage =
+    typeof navigator !== "undefined" ? navigator.language : undefined;
   
   const queryClient = useQueryClient();
   const { data: conversations = [], isLoading: loadingConvos } = useListConversations(agentId ? { agentId } : undefined);
@@ -67,7 +69,16 @@ export default function Chat({ agentId }: { agentId?: string }) {
   
   const handleCreate = () => {
     createConvo.mutate({ 
-      data: { metadata: { subject: "New Support Query", source: "console" }, ...(agentId ? { agentId } : {}) }
+      data: {
+        metadata: {
+          subject: "New Support Query",
+          source: "console",
+          ...(browserLanguage
+            ? { browser_language: browserLanguage }
+            : {}),
+        },
+        ...(agentId ? { agentId } : {}),
+      }
     }, {
       onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey: getListConversationsQueryKey(agentId ? { agentId } : undefined) });

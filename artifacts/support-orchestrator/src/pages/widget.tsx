@@ -44,6 +44,8 @@ export default function Widget() {
   const params = new URLSearchParams(search);
   const agentId = params.get("agentId") || undefined;
   const pageDomain = params.get("pageDomain") || undefined;
+  const browserLanguage =
+    typeof navigator !== "undefined" ? navigator.language : undefined;
   const [isOpen, setIsOpen] = useState(false);
   const [convoId, setConvoId] = useState<string | null>(null);
   const { appearance: sessionAppearance } = useAppearance();
@@ -124,7 +126,12 @@ export default function Widget() {
       createConvo.mutate(
         {
           data: {
-            metadata: { source: "widget" },
+            metadata: {
+              source: "widget",
+              ...(browserLanguage
+                ? { browser_language: browserLanguage }
+                : {}),
+            },
             ...(agentId ? { agentId } : {}),
           },
         },

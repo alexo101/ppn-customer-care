@@ -18,6 +18,10 @@ import {
   EmbeddingProviderError,
   type EmbeddingProvider,
 } from "./embedding-provider";
+export {
+  OpenAIWelcomeMessageTranslator,
+  type WelcomeMessageTranslator,
+} from "./openai-welcome-message-translator";
 
 export * from "./rule-authoring-provider";
 export * from "./classification-provider";

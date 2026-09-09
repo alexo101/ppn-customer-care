@@ -46,6 +46,7 @@ import {
   resolveUserEmail,
 } from "../lib/identity";
 import { sendWelcomeMessageIfNeeded } from "../lib/welcome-message";
+import { fallbackClarificationPrompt } from "../lib/reply-locale";
 import {
   AnswerProviderError,
   ClassificationProviderError,
@@ -597,13 +598,19 @@ router.post(
 
       // Stage 6: generate a grounded answer with the configured LLM.
       stages[5].status = "running";
+      const replyLocaleCandidates = [
+        existingMeta.browser_language,
+        requestContext.browser_language,
+      ];
       const answerRule = !rule
         ? {
             action: "ask clarification",
             description: "",
             promptTemplate: "",
-            requiresClarificationPrompt:
-              "I couldn't identify a configured support workflow for that request. Could you provide more detail?",
+            requiresClarificationPrompt: fallbackClarificationPrompt(
+              "noMatchingRule",
+              ...replyLocaleCandidates,
+            ),
             escalationTrigger: false,
           }
         : retrievalAccessDenied || retrievalNeedsClarification
@@ -612,8 +619,10 @@ router.post(
               action: "ask clarification",
               ...(retrievalAccessDenied
                 ? {
-                    requiresClarificationPrompt:
-                      "I don't have permission to access the information needed for this request. Please contact an administrator or human support agent.",
+                    requiresClarificationPrompt: fallbackClarificationPrompt(
+                      "accessDenied",
+                      ...replyLocaleCandidates,
+                    ),
                   }
                 : {}),
             }
