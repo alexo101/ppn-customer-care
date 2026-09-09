@@ -483,7 +483,7 @@ function EscalationDetail({
                       )}
                     >
                       <div className="mb-1 text-[10px] text-muted-foreground">
-                        {human ? "Support member" : user ? "User" : "Fin"}
+                        {human ? "Support member" : user ? "User" : "AppPro Copilot"}
                       </div>
                       <div
                         className={cn(
@@ -511,7 +511,10 @@ function EscalationDetail({
           <aside className="h-fit rounded-xl border border-border bg-card p-4 text-sm">
             <h3 className="font-semibold">Escalation context</h3>
             <Separator className="my-3" />
-            <ContextRow label="Why Fin escalated" value={escalation.reason} />
+            <ContextRow
+              label="Why AppPro Copilot escalated"
+              value={escalation.reason}
+            />
             <ContextRow
               label="Customer"
               value={escalation.customerName || escalation.customerEmail || "—"}
