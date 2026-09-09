@@ -116,7 +116,11 @@ export function SupportChatPanel({
   const [escalationError, setEscalationError] = useState<string | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<{
     content: string;
-    id?: string;
+    // Ids already in the list when this send started. The API send response
+    // returns the assistant message (not the user one) on the normal path, so
+    // reconciliation matches by content — but only against rows that arrive
+    // after the send, so an older identical message cannot reconcile a new one.
+    baselineIds: ReadonlySet<string>;
   } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const runIdRef = useRef(0);
@@ -185,8 +189,8 @@ export function SupportChatPanel({
     messages.some(
       (msg) =>
         msg.sender === "user" &&
-        (msg.id === pendingUserMessage.id ||
-          msg.content.trim() === pendingUserMessage.content.trim()),
+        !pendingUserMessage.baselineIds.has(msg.id) &&
+        msg.content.trim() === pendingUserMessage.content.trim(),
     );
 
   const beginThinking = (baseline: number) => {
@@ -208,6 +212,20 @@ export function SupportChatPanel({
       setPendingUserMessage(null);
     }
   }, [pendingUserMessageReconciled]);
+
+  // Failsafe: if the message list keeps failing to refresh, keep the composer
+  // blocked and surface an error. The "Try again" action re-syncs explicitly —
+  // silently dropping the bubble here would let a new identical send reconcile
+  // against the earlier row once refreshes resume.
+  useEffect(() => {
+    if (!pendingUserMessage || sendError) return;
+    const timer = window.setTimeout(() => {
+      setSendError(
+        "We couldn't confirm your message was received. Check the connection and try again.",
+      );
+    }, GREETING_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [pendingUserMessage, sendError]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -323,16 +341,16 @@ export function SupportChatPanel({
     sentSeedRef.current = seedToken;
 
     const runId = runIdRef.current;
-    setPendingUserMessage({ content: seedMessage.trim() });
+    setPendingUserMessage({
+      content: seedMessage.trim(),
+      baselineIds: new Set(messages.map((msg) => msg.id)),
+    });
     beginThinking(assistantMessageCount(messages));
     sendChatMessage(
       { id: convoId, data: { content: seedMessage.trim() } },
       {
-        onSuccess: (data) => {
+        onSuccess: () => {
           if (runId !== runIdRef.current) return;
-          setPendingUserMessage((current) =>
-            current ? { ...current, id: data.message.id } : current,
-          );
           stopThinking();
           setSendError(null);
           queryClient.invalidateQueries({
@@ -363,6 +381,11 @@ export function SupportChatPanel({
   ]);
 
   const handleRetry = () => {
+    // Retry always starts a fresh training run: this clears pending state and
+    // seed tracking, and bumps runIdRef so any in-flight send/refetch
+    // callbacks from the failed run become no-ops. In-place recovery would
+    // need to distinguish whether the failed send persisted its user row;
+    // a new conversation sidesteps that ambiguity entirely.
     setSendError(null);
     setWelcomeWaitTimedOut(false);
     setRetryNonce((value) => value + 1);
@@ -393,30 +416,41 @@ export function SupportChatPanel({
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !convoId || sendingMessage) return;
+    // Block new sends until the previous submission's user row is visible in
+    // the list; otherwise an identical earlier message could reconcile the
+    // new pending bubble before its own row arrives.
+    if (!input.trim() || !convoId || sendingMessage || pendingUserMessage)
+      return;
 
     setSendError(null);
     setEscalationError(null);
     setDismissedEscalationMessageId(latestUnableToAnswer?.id ?? null);
     const submittedMessage = input.trim();
-    setPendingUserMessage({ content: submittedMessage });
+    const runId = runIdRef.current;
+    setPendingUserMessage({
+      content: submittedMessage,
+      baselineIds: new Set(messages.map((msg) => msg.id)),
+    });
     if (source === "training") {
       beginThinking(assistantMessageCount(messages));
     }
     sendChatMessage(
       { id: convoId, data: { content: submittedMessage } },
       {
-        onSuccess: (data) => {
+        onSuccess: () => {
+          if (runId !== runIdRef.current) return;
           stopThinking();
-          setPendingUserMessage((current) =>
-            current ? { ...current, id: data.message.id } : current,
-          );
           setInput("");
           refetch();
           refetchConvo();
         },
         onError: (error) => {
+          if (runId !== runIdRef.current) return;
           stopThinking();
+          // Keep the pending bubble: a failed response does not prove the
+          // user row was never persisted (the API inserts it before answer
+          // generation). The composer stays blocked until the user re-syncs
+          // via "Try again", which establishes the true message list.
           setSendError(
             error instanceof Error
               ? error.message
@@ -617,6 +651,7 @@ export function SupportChatPanel({
               waitingForQuestion ||
               waitingForWelcome ||
               sendingMessage ||
+              Boolean(pendingUserMessage) ||
               !convoId ||
               convo?.status === "closed"
             }
@@ -630,6 +665,7 @@ export function SupportChatPanel({
               waitingForWelcome ||
               !input.trim() ||
               sendingMessage ||
+              Boolean(pendingUserMessage) ||
               !convoId ||
               convo?.status === "closed"
             }
