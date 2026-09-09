@@ -64,24 +64,6 @@ const NAMED_COLORS: Record<string, string> = {
   forestgreen: "#228B22",
 };
 
-function debugLog(location: string, message: string, data: Record<string, unknown>, hypothesisId: string) {
-  // #region agent log
-  fetch("http://127.0.0.1:7743/ingest/fbcc6644-f5ef-42d5-8361-4b0eb31d88ad", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e104fc" },
-    body: JSON.stringify({
-      sessionId: "e104fc",
-      runId: "post-fix",
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-}
-
 export async function importWebsiteStyles(rawUrl: string): Promise<ImportedWebsiteStyle> {
   const startUrl = normalizeHttpUrl(rawUrl);
   const htmlResponse = await safeFetch(startUrl);
@@ -97,34 +79,6 @@ export async function importWebsiteStyles(rawUrl: string): Promise<ImportedWebsi
   const cssTexts = [...extractStyleTagCss($), ...(await collectStylesheets($, finalUrl))];
   const combinedCss = cssTexts.join("\n");
   const cssVars = extractCssVariables(combinedCss);
-  const brandLikeVarNames = Object.keys(cssVars)
-    .filter((name) => /primary|accent|brand|cta|button|violet|purple|indigo/i.test(name))
-    .slice(0, 30);
-
-  const haystack = `${html}\n${combinedCss}`;
-  // #region agent log
-  debugLog(
-    "importWebsiteStyles.ts:importWebsiteStyles",
-    "Fetched site CSS/HTML for CTA detection",
-    {
-      finalUrl,
-      htmlBytes: Buffer.byteLength(html),
-      stylesheetHrefCount: stylesheetHrefs.length,
-      stylesheetHrefs: stylesheetHrefs.slice(0, 8),
-      fetchedCssCount: cssTexts.length,
-      styleTagCount: extractStyleTagCss($).length,
-      cssVarCount: Object.keys(cssVars).length,
-      brandLikeVarNames,
-      brandLikeVarSamples: Object.fromEntries(
-        brandLikeVarNames.slice(0, 12).map((name) => [name, cssVars[name]?.slice(0, 80)]),
-      ),
-      contains5A52FF: /#5A52FF|#5a52ff|90,\s*82,\s*255|90 82 255/i.test(haystack),
-      containsOklch: /oklch\(/i.test(haystack),
-      containsColorMix: /color-mix\(/i.test(haystack),
-    },
-    "A,B,C",
-  );
-  // #endregion
 
   const ctaScored = detectCtaColors($, cssTexts, cssVars, html);
   const backgroundScored = detectBackgroundColors($, cssTexts, cssVars);
@@ -444,34 +398,9 @@ function detectCtaColors($: CheerioAPI, cssTexts: string[], vars: CssVars, html 
     addColor(scored, colorFromDeclaration(body, "background", vars), score - 1);
   }
 
-  const beforeFilter = [...scored].sort((a, b) => b.score - a.score).slice(0, 12);
   const filtered = scored
     .filter((c) => isLikelyCta(c.hex))
     .sort((a, b) => b.score - a.score);
-  // #region agent log
-  debugLog(
-    "importWebsiteStyles.ts:detectCtaColors",
-    "CTA color scoring result",
-    {
-      rawScoreCount: scored.length,
-      filteredCount: filtered.length,
-      topBeforeFilter: beforeFilter,
-      topAfterFilter: filtered.slice(0, 8),
-      found5A52FF: scored.some((c) => c.hex === "#5A52FF"),
-      resolvedPrimary500: toHex(vars["--c-primary-500"], vars),
-      resolvedPrimaryHsl: toHex(
-        vars["--c-primary-h"] && vars["--c-primary-s"] && vars["--c-primary-l"]
-          ? `hsl(${vars["--c-primary-h"]}, ${vars["--c-primary-s"]}, ${vars["--c-primary-l"]})`
-          : undefined,
-        vars,
-      ),
-      chosenCta: filtered[0]?.hex ?? null,
-      htmlHasCtaClass: /cta|btn-primary|button-primary/i.test(html),
-      cssRuleHits: (cssTexts.join("\n").match(/([^{}]+)\{([^{}]+)\}/g) || []).length,
-    },
-    "C,D",
-  );
-  // #endregion
   return filtered;
 }
 

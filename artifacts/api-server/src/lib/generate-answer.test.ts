@@ -104,6 +104,33 @@ describe("generateAnswer", () => {
     expect(result.responseText).toContain("Your invoice is ready.");
   });
 
+  it("localizes the resolution follow-up from the answer context", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "Tu factura está lista.",
+      model: "gpt-5-nano",
+      totalTokens: 12,
+      promptAssembled: "assembled",
+    });
+
+    const result = await generateAnswer(
+      "Can I download it?",
+      classification,
+      rule,
+      [
+        { sender: "user", content: "Where is my invoice?" },
+        { sender: "user", content: "Can I download it?" },
+      ],
+      {},
+      [],
+      { generate } as AnswerProvider,
+      { browser_language: "es-ES" },
+    );
+
+    expect(result.shouldAskResolution).toBe(true);
+    expect(result.responseText).toContain("¿Esta respuesta responde a tu pregunta?");
+    expect(result.responseText).not.toContain("Does this answer your question?");
+  });
+
   it("propagates answer provider failures", async () => {
     const error = new Error("provider failed");
     const provider: AnswerProvider = {

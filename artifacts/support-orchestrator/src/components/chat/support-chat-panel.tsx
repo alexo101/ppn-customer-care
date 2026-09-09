@@ -141,11 +141,6 @@ export function SupportChatPanel({
       typeof msg.metadata === "object" &&
       (msg.metadata as { kind?: string }).kind === "welcome",
   );
-  // #region agent log
-  useEffect(() => {
-    fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c47481'},body:JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H1',location:'support-chat-panel.tsx:state',message:'training chat welcome visibility',data:{source,waitingForQuestion,hasSeedKey:Boolean(seedKey),hasConvoId:Boolean(convoId),messageCount:messages.length,assistantCount:assistantMessageCount(messages),firstSender:messages[0]?.sender ?? null,hasWelcomeMeta:hasWelcomeMessage,isFetched},timestamp:Date.now()})}).catch(()=>{});
-  }, [source, waitingForQuestion, seedKey, convoId, messages, hasWelcomeMessage, isFetched]);
-  // #endregion
 
   const beginThinking = (baseline: number) => {
     assistantBaselineRef.current = baseline;
@@ -228,9 +223,6 @@ export function SupportChatPanel({
       {
         onSuccess: (data) => {
           if (runId !== runIdRef.current) return;
-          // #region agent log
-          fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c47481'},body:JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H4',location:'support-chat-panel.tsx:createConversation:success',message:'training conversation created',data:{hasAgentId:Boolean(agentId),conversationId:data.id,hasSeedKey:Boolean(seedKey)},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           setConvoId(data.id);
           queryClient.invalidateQueries({
             queryKey: getListMessagesQueryKey(data.id),

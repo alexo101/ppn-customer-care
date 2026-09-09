@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { appendFileSync } from "node:fs";
 import {
   agentConversationSettingsTable,
   db,
@@ -71,7 +70,7 @@ export async function translateWelcomeTemplate(
     return translated;
   } catch (error) {
     logger.warn(
-      { error, locale },
+      { err: error, locale },
       "Failed to translate welcome message; using configured template",
     );
     return template;
@@ -86,10 +85,6 @@ export async function sendWelcomeMessageIfNeeded(input: {
   agentName?: string | null;
   translator?: WelcomeMessageTranslator;
 }): Promise<void> {
-  // #region agent log
-  fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c47481'},body:JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H2',location:'welcome-message.ts:sendWelcomeMessageIfNeeded:entry',message:'welcome send started',data:{hasAgentId:Boolean(input.agentId),source:isPlainMetadata(input.metadata)?input.metadata.source:null,isTraining:isTrainingConversation(input.metadata)},timestamp:Date.now()})}).catch(()=>{});
-  try{appendFileSync('/home/runner/workspace/.cursor/debug-c47481.log',JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H2',location:'welcome-message.ts:sendWelcomeMessageIfNeeded:entry',message:'welcome send started',data:{hasAgentId:Boolean(input.agentId),source:isPlainMetadata(input.metadata)?input.metadata.source:null,isTraining:isTrainingConversation(input.metadata)},timestamp:Date.now()})+'\n');}catch{}
-  // #endregion
   if (!input.agentId) return;
 
   try {
@@ -132,14 +127,7 @@ export async function sendWelcomeMessageIfNeeded(input: {
           : {}),
       },
     });
-    // #region agent log
-    fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c47481'},body:JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H3',location:'welcome-message.ts:sendWelcomeMessageIfNeeded:inserted',message:'welcome message inserted',data:{conversationId:input.conversationId,hasTemplate:Boolean(template),locale:browserLanguage,contentLength:content.length,isTraining:isTrainingConversation(input.metadata)},timestamp:Date.now()})}).catch(()=>{});
-    try{appendFileSync('/home/runner/workspace/.cursor/debug-c47481.log',JSON.stringify({sessionId:'c47481',runId:'post-fix',hypothesisId:'H3',location:'welcome-message.ts:sendWelcomeMessageIfNeeded:inserted',message:'welcome message inserted',data:{conversationId:input.conversationId,hasTemplate:Boolean(template),locale:browserLanguage,contentLength:content.length,isTraining:isTrainingConversation(input.metadata)},timestamp:Date.now()})+'\n');}catch{}
-    // #endregion
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c47481'},body:JSON.stringify({sessionId:'c47481',runId:'pre-fix',hypothesisId:'H3',location:'welcome-message.ts:sendWelcomeMessageIfNeeded:error',message:'welcome message failed',data:{errorName:error instanceof Error?error.name:'unknown'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    logger.error({ error }, "Failed to send welcome message");
+    logger.error({ err: error }, "Failed to send welcome message");
   }
 }

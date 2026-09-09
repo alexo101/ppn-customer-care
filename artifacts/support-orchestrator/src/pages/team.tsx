@@ -97,22 +97,13 @@ export default function Team() {
 
   const handleCopyInvite = async (member: WorkspaceMember) => {
     setCopyingId(member.id);
-    // #region agent log
-    fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify({sessionId:'e273e6',runId:'pre-fix',hypothesisId:'B',location:'team.tsx:handleCopyInvite',message:'copy invite clicked',data:{memberId:member.id,status:member.status,idType:typeof member.id},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     try {
       const issued = await regenerateInvite.mutateAsync({ id: member.id });
-      // #region agent log
-      fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify({sessionId:'e273e6',runId:'pre-fix',hypothesisId:'E',location:'team.tsx:handleCopyInvite:success',message:'regenerate succeeded',data:{hasToken:Boolean(issued?.token),hasInvitePath:Boolean(issued?.invitePath)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       await navigator.clipboard.writeText(inviteUrlForToken(issued.token));
       toast({ title: "Invite link copied" });
       invalidate();
     } catch (err) {
       const apiErr = err as { message?: string; status?: number; data?: unknown; url?: string };
-      // #region agent log
-      fetch('http://127.0.0.1:7600/ingest/a2a2da46-8d04-4e69-ad9d-61a4005dfe74',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e273e6'},body:JSON.stringify({sessionId:'e273e6',runId:'pre-fix',hypothesisId:'A',location:'team.tsx:handleCopyInvite:catch',message:'copy invite failed',data:{errMessage:apiErr?.message,status:apiErr?.status,url:apiErr?.url,data:apiErr?.data},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       toast({
         title: "Could not copy the invite link",
         description: apiErrorMessage(err, "Try again, or copy it manually from a new link."),

@@ -646,6 +646,9 @@ router.post(
           : undefined,
         {
           ...requestContext,
+          ...(existingMeta.browser_language != null
+            ? { browser_language: existingMeta.browser_language }
+            : {}),
           ...(agentSettings?.prompt
             ? { agentPrompt: agentSettings.prompt }
             : {}),

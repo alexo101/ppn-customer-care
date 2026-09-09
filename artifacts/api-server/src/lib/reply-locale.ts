@@ -15,6 +15,12 @@ const FALLBACK_MESSAGES = {
     it: "Non ho il permesso di accedere alle informazioni necessarie per questa richiesta. Contatta un amministratore o un agente di supporto umano.",
     fr: "Je n’ai pas l’autorisation d’accéder aux informations nécessaires pour cette demande. Veuillez contacter un administrateur ou un agent de support humain.",
   },
+  resolutionFollowUp: {
+    en: "Does this answer your question? Please let me know if you need further assistance.",
+    es: "¿Esta respuesta responde a tu pregunta? Avísame si necesitas más ayuda.",
+    it: "Questa risposta risponde alla tua domanda? Fammi sapere se hai bisogno di ulteriore assistenza.",
+    fr: "Cette réponse répond-elle à votre question ? N’hésitez pas à me dire si vous avez besoin d’aide supplémentaire.",
+  },
 } as const;
 
 export function resolveReplyLocale(
@@ -38,4 +44,8 @@ export function fallbackClarificationPrompt(
 ): string {
   const locale = resolveReplyLocale(...localeCandidates);
   return FALLBACK_MESSAGES[kind][locale];
+}
+
+export function resolutionFollowUp(...localeCandidates: unknown[]): string {
+  return fallbackClarificationPrompt("resolutionFollowUp", ...localeCandidates);
 }

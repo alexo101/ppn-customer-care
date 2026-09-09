@@ -2,6 +2,7 @@ import type { ClassificationResult } from "@workspace/api-zod";
 import { normalizeAction } from "./rule-engine";
 import type { AnswerProvider, RetrievedChunk } from "./llm";
 import { AnswerProviderError } from "./llm";
+import { resolutionFollowUp } from "./reply-locale";
 
 type Rule = {
   action: string;
@@ -107,7 +108,7 @@ export async function generateAnswer(
   const userMessageCount = history.filter((item) => item.sender === "user").length;
   const shouldAskResolution = userMessageCount >= (rule ? 2 : 3);
   const responseText = shouldAskResolution
-    ? `${result.responseText}\n\nDoes this answer your question? Please let me know if you need further assistance.`
+    ? `${result.responseText}\n\n${resolutionFollowUp(context.browser_language)}`
     : result.responseText;
   return {
     responseText,

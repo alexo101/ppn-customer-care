@@ -1,4 +1,7 @@
 import OpenAI from "openai";
+import { logger } from "../logger";
+
+export const DEFAULT_WELCOME_MESSAGE_MODEL = "gpt-5-nano";
 
 export type WelcomeMessageTranslator = {
   translate(template: string, locale: string): Promise<string>;
@@ -19,31 +22,50 @@ export class OpenAIWelcomeMessageTranslator
     }
     this.client = new OpenAI({ apiKey });
     this.model =
-      options?.model ??
-      process.env.WELCOME_MESSAGE_MODEL ??
-      process.env.ANSWER_MODEL ??
-      process.env.OPENAI_MODEL ??
-      "gpt-5-nano";
+      options?.model?.trim() ||
+      process.env.WELCOME_MESSAGE_MODEL?.trim() ||
+      process.env.OPENAI_MODEL?.trim() ||
+      DEFAULT_WELCOME_MESSAGE_MODEL;
   }
 
   async translate(template: string, locale: string): Promise<string> {
     const protectedTemplate = template
       .replaceAll("{user_name}", "__WELCOME_USER_NAME__")
       .replaceAll("{agent_name}", "__WELCOME_AGENT_NAME__");
-    const response = await this.client.chat.completions.create({
-      model: this.model,
-      messages: [
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content:
+          "Translate the supplied customer-support welcome message into the requested browser locale. Return only the translated message. Preserve __WELCOME_USER_NAME__ and __WELCOME_AGENT_NAME__ exactly, including spelling and position.",
+      },
+      {
+        role: "user",
+        content: `Browser locale: ${locale}\n\nMessage:\n${protectedTemplate}`,
+      },
+    ];
+    const request = (model: string) =>
+      this.client.chat.completions.create({ model, messages });
+
+    let response;
+    try {
+      response = await request(this.model);
+    } catch (error) {
+      if (
+        !isModelAccessError(error) ||
+        this.model === DEFAULT_WELCOME_MESSAGE_MODEL
+      ) {
+        throw error;
+      }
+      logger.warn(
         {
-          role: "system",
-          content:
-            "Translate the supplied customer-support welcome message into the requested browser locale. Return only the translated message. Preserve __WELCOME_USER_NAME__ and __WELCOME_AGENT_NAME__ exactly, including spelling and position.",
+          err: error,
+          configuredModel: this.model,
+          fallbackModel: DEFAULT_WELCOME_MESSAGE_MODEL,
         },
-        {
-          role: "user",
-          content: `Browser locale: ${locale}\n\nMessage:\n${protectedTemplate}`,
-        },
-      ],
-    });
+        "Configured welcome-message model is unavailable; retrying with fallback model",
+      );
+      response = await request(DEFAULT_WELCOME_MESSAGE_MODEL);
+    }
     const translated = response.choices[0]?.message.content?.trim() ?? "";
     if (
       !translated.includes("__WELCOME_USER_NAME__") ||
@@ -55,4 +77,16 @@ export class OpenAIWelcomeMessageTranslator
       .replaceAll("__WELCOME_USER_NAME__", "{user_name}")
       .replaceAll("__WELCOME_AGENT_NAME__", "{agent_name}");
   }
+}
+
+function isModelAccessError(error: unknown): boolean {
+  const providerError = error as {
+    code?: string;
+    status?: number;
+  };
+  return (
+    providerError.code === "model_not_found" ||
+    providerError.status === 403 ||
+    providerError.status === 404
+  );
 }
