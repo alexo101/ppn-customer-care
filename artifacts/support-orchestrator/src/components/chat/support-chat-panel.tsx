@@ -180,6 +180,14 @@ export function SupportChatPanel({
     messages,
     dismissedEscalationMessageId,
   );
+  const pendingUserMessageReconciled =
+    pendingUserMessage !== null &&
+    messages.some(
+      (msg) =>
+        msg.sender === "user" &&
+        (msg.id === pendingUserMessage.id ||
+          msg.content.trim() === pendingUserMessage.content.trim()),
+    );
 
   const beginThinking = (baseline: number) => {
     assistantBaselineRef.current = baseline;
@@ -194,6 +202,12 @@ export function SupportChatPanel({
       setThinkingVisible(false);
     }
   }, [messages, thinkingVisible]);
+
+  useEffect(() => {
+    if (pendingUserMessageReconciled) {
+      setPendingUserMessage(null);
+    }
+  }, [pendingUserMessageReconciled]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -312,7 +326,7 @@ export function SupportChatPanel({
     setPendingUserMessage({ content: seedMessage.trim() });
     beginThinking(assistantMessageCount(messages));
     sendChatMessage(
-      { id: convoId, data: { content: seedMessage } },
+      { id: convoId, data: { content: seedMessage.trim() } },
       {
         onSuccess: (data) => {
           if (runId !== runIdRef.current) return;
@@ -540,14 +554,7 @@ export function SupportChatPanel({
                 );
               })}
 
-              {pendingUserMessage &&
-                !messages.some(
-                  (msg) =>
-                    msg.sender === "user" &&
-                    (pendingUserMessage.id
-                      ? msg.id === pendingUserMessage.id
-                      : msg.content === pendingUserMessage.content),
-                ) && (
+              {pendingUserMessage && !pendingUserMessageReconciled && (
                   <div className="flex justify-end">
                     <div
                       className="max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2 text-sm whitespace-pre-wrap"
