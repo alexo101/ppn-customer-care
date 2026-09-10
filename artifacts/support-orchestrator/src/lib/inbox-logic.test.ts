@@ -14,6 +14,7 @@ import {
   initialsFromName,
 } from "./inbox-format";
 import { customerContextFields } from "./inbox-context";
+import { INBOX_PRIORITY_LABELS } from "./inbox-priority";
 import { isActiveInboxStatus } from "./inbox-status";
 
 function escalation(
@@ -26,7 +27,7 @@ function escalation(
     agentName: "AppPro Support",
     teamName: "Customer Care B2B",
     status: "open",
-    priority: "normal",
+    priority: "none",
     reason: "The visitor requested escalation after an unanswered question.",
     category: "Billing",
     subcategory: "Automatic transactions",
@@ -63,17 +64,19 @@ describe("inbox list helpers", () => {
       }),
     ];
     expect(
-      filterInboxEscalations(items, {
-        status: "open",
-        search: "",
-        category: null,
-      }).map((item) => item.id),
+        filterInboxEscalations(items, {
+          status: "open",
+          search: "",
+          category: null,
+          priority: null,
+        }).map((item) => item.id),
     ).toEqual(["esc-1"]);
     expect(
       filterInboxEscalations(items, {
         status: "all",
         search: "marta",
         category: null,
+        priority: null,
       }).map((item) => item.id),
     ).toEqual(["esc-2"]);
     expect(
@@ -81,8 +84,17 @@ describe("inbox list helpers", () => {
         status: "all",
         search: "",
         category: "Refunds",
+        priority: null,
       }).map((item) => item.id),
     ).toEqual(["esc-2"]);
+    expect(
+      filterInboxEscalations(items, {
+        status: "all",
+        search: "",
+        category: null,
+        priority: "urgent",
+      }).map((item) => item.id),
+    ).toEqual([]);
   });
 
   it("sorts longest waiting first", () => {
@@ -138,6 +150,8 @@ describe("inbox formatting", () => {
     );
     expect(isActiveInboxStatus("open")).toBe(true);
     expect(isActiveInboxStatus("resolved")).toBe(false);
+    expect(INBOX_PRIORITY_LABELS.none).toBe("No priority");
+    expect(INBOX_PRIORITY_LABELS.urgent).toBe("Urgent");
   });
 
   it("exposes extra customer context without duplicating identity fields", () => {

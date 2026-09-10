@@ -10,8 +10,9 @@ export type InboxEscalationPriority = typeof InboxEscalationPriority[keyof typeo
 
 
 export const InboxEscalationPriority = {
+  none: 'none',
   low: 'low',
-  normal: 'normal',
+  medium: 'medium',
   high: 'high',
   urgent: 'urgent',
 } as const;

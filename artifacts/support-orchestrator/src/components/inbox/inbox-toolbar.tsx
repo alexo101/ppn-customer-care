@@ -1,12 +1,17 @@
 import { Search, X } from "lucide-react";
-import type { InboxTeam } from "@workspace/api-client-react";
+import type { InboxEscalationPriority, InboxTeam } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import {
   INBOX_STATUS_TAB_LABELS,
   INBOX_STATUS_TABS,
   type InboxStatusTab,
 } from "@/lib/inbox-status";
+import {
+  INBOX_PRIORITIES,
+  INBOX_PRIORITY_LABELS,
+} from "@/lib/inbox-priority";
 import type { InboxSort } from "@/lib/inbox-filters";
+import { InboxPriorityIcon } from "@/components/inbox/inbox-priority-icon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,12 +32,14 @@ export function InboxToolbar({
   selectedTeamId,
   categories,
   category,
+  priority,
   assignee,
   sort,
   onStatusChange,
   onSearchChange,
   onTeamChange,
   onCategoryChange,
+  onPriorityChange,
   onAssigneeChange,
   onSortChange,
   onClearFilters,
@@ -44,12 +51,14 @@ export function InboxToolbar({
   selectedTeamId: string | null;
   categories: string[];
   category: string | null;
+  priority: InboxEscalationPriority | null;
   assignee: AssigneeFilter;
   sort: InboxSort;
   onStatusChange: (status: InboxStatusTab) => void;
   onSearchChange: (value: string) => void;
   onTeamChange: (teamId: string | null) => void;
   onCategoryChange: (category: string | null) => void;
+  onPriorityChange: (priority: InboxEscalationPriority | null) => void;
   onAssigneeChange: (assignee: AssigneeFilter) => void;
   onSortChange: (sort: InboxSort) => void;
   onClearFilters: () => void;
@@ -58,6 +67,7 @@ export function InboxToolbar({
   const filterCount =
     Number(Boolean(selectedTeamId)) +
     Number(Boolean(category)) +
+    Number(Boolean(priority)) +
     Number(assignee !== "everyone");
   const hasFilters = filterCount > 0;
 
@@ -143,6 +153,32 @@ export function InboxToolbar({
         </Select>
 
         <Select
+          value={priority ?? "all"}
+          onValueChange={(value) =>
+            onPriorityChange(
+              value === "all" ? null : (value as InboxEscalationPriority),
+            )
+          }
+        >
+          <SelectTrigger className="h-8 w-[12.5rem] bg-background text-xs">
+            <SelectValue placeholder="Priority">
+              Priority: {priority ? INBOX_PRIORITY_LABELS[priority] : "Any priority"}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any priority</SelectItem>
+            {INBOX_PRIORITIES.map((item) => (
+              <SelectItem key={item} value={item}>
+                <span className="flex items-center gap-2">
+                  <InboxPriorityIcon priority={item} />
+                  {INBOX_PRIORITY_LABELS[item]}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
           value={assignee}
           onValueChange={(value) => onAssigneeChange(value as AssigneeFilter)}
         >
@@ -191,6 +227,12 @@ export function InboxToolbar({
             <FilterChip
               label={`Category: ${category}`}
               onRemove={() => onCategoryChange(null)}
+            />
+          ) : null}
+          {priority ? (
+            <FilterChip
+              label={`Priority: ${INBOX_PRIORITY_LABELS[priority]}`}
+              onRemove={() => onPriorityChange(null)}
             />
           ) : null}
           {assignee !== "everyone" ? (

@@ -5,8 +5,10 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { InboxEscalationUpdatePriority } from './inboxEscalationUpdatePriority';
 import type { InboxEscalationUpdateStatus } from './inboxEscalationUpdateStatus';
 
 export interface InboxEscalationUpdate {
-  status: InboxEscalationUpdateStatus;
+  status?: InboxEscalationUpdateStatus;
+  priority?: InboxEscalationUpdatePriority;
 }

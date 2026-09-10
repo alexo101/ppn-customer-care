@@ -60,6 +60,7 @@ export * from './inboxEscalationPriority';
 export * from './inboxEscalationRetrievedInformationItem';
 export * from './inboxEscalationStatus';
 export * from './inboxEscalationUpdate';
+export * from './inboxEscalationUpdatePriority';
 export * from './inboxEscalationUpdateStatus';
 export * from './inboxTeam';
 export * from './intentCategory';

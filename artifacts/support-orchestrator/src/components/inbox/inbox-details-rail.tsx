@@ -1,9 +1,18 @@
 import type { ReactNode } from "react";
-import { Clock, Loader2, Sparkles } from "lucide-react";
-import type { InboxEscalation } from "@workspace/api-client-react";
+import { ChevronDown, Clock, Loader2, Sparkles } from "lucide-react";
+import type {
+  InboxEscalation,
+  InboxEscalationPriority,
+} from "@workspace/api-client-react";
 import { customerContextFields, humanizeKey, stringValue } from "@/lib/inbox-context";
 import { customerDisplayName, formatWaitingDuration } from "@/lib/inbox-format";
+import { InboxPrioritySelect } from "@/components/inbox/inbox-priority-select";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
 
 export function InboxDetailsRail({
@@ -11,58 +20,52 @@ export function InboxDetailsRail({
   messageCount,
   resolutionStatus,
   isGenerating,
+  isUpdatingPriority,
   onGenerateSummary,
+  onPriorityChange,
 }: {
   escalation: InboxEscalation;
   messageCount?: number;
   resolutionStatus?: string;
   isGenerating?: boolean;
+  isUpdatingPriority?: boolean;
   onGenerateSummary: () => void;
+  onPriorityChange: (priority: InboxEscalationPriority) => void;
 }) {
   const extraFields = customerContextFields(escalation.context);
   const customer = customerDisplayName(escalation);
 
   return (
     <aside className="flex h-full w-[320px] shrink-0 flex-col overflow-y-auto border-l border-border bg-background">
-      <section className="p-4">
-        <div className="flex items-start gap-2">
-          <Sparkles className="mt-0.5 h-4 w-4 text-primary" />
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide">
-              AI summary
-            </h3>
-            {escalation.aiSummary ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
-                {escalation.aiSummary}
-              </p>
+      <CollapsibleSection
+        icon={<Sparkles className="h-4 w-4 text-primary" />}
+        title="AI summary"
+      >
+        {escalation.aiSummary ? (
+          <p className="whitespace-pre-wrap text-sm leading-6">
+            {escalation.aiSummary}
+          </p>
+        ) : (
+          <Button
+            className="gap-2"
+            size="sm"
+            onClick={onGenerateSummary}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <>
-                <Button
-                  className="mt-3 gap-2"
-                  size="sm"
-                  onClick={onGenerateSummary}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  )}
-                  Generate summary
-                </Button>
-              </>
+              <Sparkles className="h-3.5 w-3.5" />
             )}
-          </div>
-        </div>
-      </section>
+            Generate summary
+          </Button>
+        )}
+      </CollapsibleSection>
 
       <Separator />
 
-      <section className="p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide">
-          Escalation context
-        </h3>
-        <div className="mt-4 space-y-4">
+      <CollapsibleSection title="Escalation context">
+        <div className="space-y-4">
           <ContextRow
             label="Why the agent escalated"
             value={escalation.reason || "—"}
@@ -95,15 +98,29 @@ export function InboxDetailsRail({
               value={escalation.subcategory || "—"}
             />
           </div>
-          <ContextRow
-            label="Waiting"
-            value={
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                {formatWaitingDuration(escalation.lastActivityAt)}
-              </span>
-            }
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <ContextRow
+              label="Priority"
+              value={
+                <InboxPrioritySelect
+                  compact
+                  value={escalation.priority}
+                  disabled={isUpdatingPriority}
+                  onValueChange={onPriorityChange}
+                  className="mt-0.5 h-8 w-full"
+                />
+              }
+            />
+            <ContextRow
+              label="Waiting"
+              value={
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                  {formatWaitingDuration(escalation.lastActivityAt)}
+                </span>
+              }
+            />
+          </div>
           {escalation.retrievedInformation.length > 0 ? (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -127,23 +144,52 @@ export function InboxDetailsRail({
             </div>
           ) : null}
         </div>
-      </section>
+      </CollapsibleSection>
 
       <Separator />
 
-      <section className="p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide">
-          Customer
-        </h3>
-        <div className="mt-4 space-y-4">
+      <CollapsibleSection title="Customer">
+        <div className="space-y-4">
           <ContextRow label="Name" value={customer} />
           <ContextRow label="Email" value={escalation.customerEmail || "—"} />
           {extraFields.map((field) => (
             <ContextRow key={field.key} label={field.label} value={field.value} />
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
     </aside>
+  );
+}
+
+function CollapsibleSection({
+  icon,
+  title,
+  children,
+}: {
+  icon?: ReactNode;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <Collapsible defaultOpen>
+      <section className="p-4">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="group flex w-full items-center justify-between gap-3 text-left"
+          >
+            <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+              {icon}
+              {title}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=closed]:-rotate-90" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-4">
+          {children}
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }
 

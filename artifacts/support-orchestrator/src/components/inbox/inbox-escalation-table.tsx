@@ -1,5 +1,9 @@
 import { ChevronRight, Clock } from "lucide-react";
-import type { InboxEscalation, InboxEscalationStatus } from "@workspace/api-client-react";
+import type {
+  InboxEscalation,
+  InboxEscalationPriority,
+  InboxEscalationStatus,
+} from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import {
   assigneeDisplayName,
@@ -9,6 +13,7 @@ import {
   formatWaitingDuration,
   initialsFromName,
 } from "@/lib/inbox-format";
+import { InboxPrioritySelect } from "@/components/inbox/inbox-priority-select";
 import { InboxStatusSelect } from "@/components/inbox/inbox-status-select";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -19,6 +24,7 @@ export function InboxEscalationTable({
   totalCount,
   onOpen,
   onStatusChange,
+  onPriorityChange,
 }: {
   items: InboxEscalation[];
   isLoading?: boolean;
@@ -28,6 +34,10 @@ export function InboxEscalationTable({
   onStatusChange: (
     escalation: InboxEscalation,
     status: InboxEscalationStatus,
+  ) => void;
+  onPriorityChange: (
+    escalation: InboxEscalation,
+    priority: InboxEscalationPriority,
   ) => void;
 }) {
   return (
@@ -42,6 +52,7 @@ export function InboxEscalationTable({
               <th className="px-4 py-3 font-medium">Escalation</th>
               <th className="px-4 py-3 font-medium">Reason</th>
               <th className="px-4 py-3 font-medium">Category</th>
+              <th className="px-4 py-3 font-medium">Priority</th>
               <th className="px-4 py-3 font-medium">Waiting</th>
               <th className="px-4 py-3 font-medium">Assignee</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -52,7 +63,7 @@ export function InboxEscalationTable({
             {isLoading ? (
               Array.from({ length: 4 }).map((_, index) => (
                 <tr key={index} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3" colSpan={7}>
+                    <td className="px-4 py-3" colSpan={8}>
                     <Skeleton className="h-10 w-full" />
                   </td>
                 </tr>
@@ -60,7 +71,7 @@ export function InboxEscalationTable({
             ) : items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-16 text-center text-sm text-muted-foreground"
                 >
                   No escalations match the current filters.
@@ -114,6 +125,18 @@ export function InboxEscalationTable({
                           {item.subcategory}
                         </p>
                       ) : null}
+                    </td>
+                    <td
+                      className="px-4 py-3"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <InboxPrioritySelect
+                        compact
+                        value={item.priority}
+                        onValueChange={(priority) =>
+                          onPriorityChange(item, priority)
+                        }
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">

@@ -443,7 +443,7 @@ export const ListInboxEscalationsResponseItem = zod.object({
   "agentName": zod.string(),
   "teamName": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved']),
-  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "priority": zod.enum(['none', 'low', 'medium', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),
@@ -489,7 +489,7 @@ export const ListTeamInboxEscalationsResponseItem = zod.object({
   "agentName": zod.string(),
   "teamName": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved']),
-  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "priority": zod.enum(['none', 'low', 'medium', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),
@@ -554,7 +554,7 @@ export const ClaimEscalationResponse = zod.object({
   "agentName": zod.string(),
   "teamName": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved']),
-  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "priority": zod.enum(['none', 'low', 'medium', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),
@@ -604,14 +604,15 @@ export const ReplyToEscalationResponse = zod.object({
 
 
 /**
- * @summary Update an inbox escalation status
+ * @summary Update an inbox escalation status or priority
  */
 export const UpdateInboxEscalationParams = zod.object({
   "id": zod.coerce.string()
 })
 
 export const UpdateInboxEscalationBody = zod.object({
-  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved'])
+  "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved']).optional(),
+  "priority": zod.enum(['none', 'low', 'medium', 'high', 'urgent']).optional()
 })
 
 export const UpdateInboxEscalationResponse = zod.object({
@@ -621,7 +622,7 @@ export const UpdateInboxEscalationResponse = zod.object({
   "agentName": zod.string(),
   "teamName": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved']),
-  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "priority": zod.enum(['none', 'low', 'medium', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),
@@ -659,7 +660,7 @@ export const ResolveEscalationResponse = zod.object({
   "agentName": zod.string(),
   "teamName": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved']),
-  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "priority": zod.enum(['none', 'low', 'medium', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),
@@ -697,7 +698,7 @@ export const GenerateInboxEscalationSummaryResponse = zod.object({
   "agentName": zod.string(),
   "teamName": zod.string(),
   "status": zod.enum(['open', 'in_progress', 'waiting_on_customer', 'resolved']),
-  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "priority": zod.enum(['none', 'low', 'medium', 'high', 'urgent']),
   "reason": zod.string(),
   "category": zod.string(),
   "subcategory": zod.string(),

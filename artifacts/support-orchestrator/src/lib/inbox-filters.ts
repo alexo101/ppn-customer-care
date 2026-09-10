@@ -1,4 +1,4 @@
-import type { InboxEscalation } from "@workspace/api-client-react";
+import type { InboxEscalation, InboxEscalationPriority } from "@workspace/api-client-react";
 import type { InboxStatusTab } from "./inbox-status";
 
 export type InboxSort = "longest_waiting" | "recent";
@@ -9,6 +9,7 @@ export function filterInboxEscalations(
     status: InboxStatusTab;
     search: string;
     category: string | null;
+    priority: InboxEscalationPriority | null;
   },
 ) {
   const query = options.search.trim().toLowerCase();
@@ -17,6 +18,7 @@ export function filterInboxEscalations(
     if (options.category && (item.category || "Support") !== options.category) {
       return false;
     }
+    if (options.priority && item.priority !== options.priority) return false;
     if (!query) return true;
     const haystack = [
       item.customerName,

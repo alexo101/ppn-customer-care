@@ -36,6 +36,7 @@ import {
   escalationStatusPatch,
   inboxTeamLabel,
   matchesAssigneeFilter,
+  normalizeInboxPriority,
 } from "./escalations";
 
 function queryChain(result: unknown) {
@@ -150,5 +151,15 @@ describe("escalation status workflow", () => {
     expect(matchesAssigneeFilter("member-1", "member-1", "unassigned")).toBe(
       false,
     );
+  });
+});
+
+describe("inbox priority", () => {
+  it("treats missing, unknown, and legacy normal values as no priority", () => {
+    expect(normalizeInboxPriority("none")).toBe("none");
+    expect(normalizeInboxPriority("normal")).toBe("none");
+    expect(normalizeInboxPriority("")).toBe("none");
+    expect(normalizeInboxPriority("urgent")).toBe("urgent");
+    expect(normalizeInboxPriority("medium")).toBe("medium");
   });
 });

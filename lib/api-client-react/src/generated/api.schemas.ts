@@ -168,8 +168,9 @@ export type InboxEscalationPriority = typeof InboxEscalationPriority[keyof typeo
 
 
 export const InboxEscalationPriority = {
+  none: 'none',
   low: 'low',
-  normal: 'normal',
+  medium: 'medium',
   high: 'high',
   urgent: 'urgent',
 } as const;
@@ -235,8 +236,20 @@ export const InboxEscalationUpdateStatus = {
   resolved: 'resolved',
 } as const;
 
+export type InboxEscalationUpdatePriority = typeof InboxEscalationUpdatePriority[keyof typeof InboxEscalationUpdatePriority];
+
+
+export const InboxEscalationUpdatePriority = {
+  none: 'none',
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
 export interface InboxEscalationUpdate {
-  status: InboxEscalationUpdateStatus;
+  status?: InboxEscalationUpdateStatus;
+  priority?: InboxEscalationUpdatePriority;
 }
 
 export interface EscalationReplyInput {

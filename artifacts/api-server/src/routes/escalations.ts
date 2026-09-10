@@ -31,7 +31,7 @@ import {
   resolveAssignedEscalation,
   toAssignment,
   updateAgentEscalation,
-  updateInboxEscalationStatus,
+  updateInboxEscalation,
 } from "../lib/escalations";
 import { EscalationSummaryProviderError } from "../lib/llm";
 
@@ -258,11 +258,11 @@ router.patch(
     }
     try {
       res.json(
-        await updateInboxEscalationStatus(
+        await updateInboxEscalation(
           params.data.id,
           memberId,
           req.memberRole,
-          parsed.data.status,
+          parsed.data,
         ),
       );
     } catch (error) {

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type {
   InboxEscalation,
+  InboxEscalationPriority,
   InboxEscalationStatus,
   Message,
 } from "@workspace/api-client-react";
@@ -43,6 +44,7 @@ export function InboxWorkspace({
   onNext,
   onClaim,
   onStatusChange,
+  onPriorityChange,
   onResolve,
   onSend,
   onGenerateSummary,
@@ -62,6 +64,7 @@ export function InboxWorkspace({
   onNext: () => void;
   onClaim: () => void;
   onStatusChange: (status: InboxEscalationStatus) => void;
+  onPriorityChange: (priority: InboxEscalationPriority) => void;
   onResolve: () => void;
   onSend: (content: string) => void;
   onGenerateSummary: () => void;
@@ -74,7 +77,9 @@ export function InboxWorkspace({
       messageCount={messages.length}
       resolutionStatus={resolutionStatus}
       isGenerating={isGeneratingSummary}
+      isUpdatingPriority={isUpdatingStatus}
       onGenerateSummary={onGenerateSummary}
+      onPriorityChange={onPriorityChange}
     />
   );
 

@@ -1865,7 +1865,7 @@ export const getUpdateInboxEscalationUrl = (id: string,) => {
 }
 
 /**
- * @summary Update an inbox escalation status
+ * @summary Update an inbox escalation status or priority
  */
 export const updateInboxEscalation = async (id: string,
     inboxEscalationUpdate: InboxEscalationUpdate, options?: Parameters<typeof customFetch>[1]): Promise<InboxEscalation> => {
@@ -1915,7 +1915,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateInboxEscalationMutationError = ErrorType<void>
 
     /**
- * @summary Update an inbox escalation status
+ * @summary Update an inbox escalation status or priority
  */
 export const useUpdateInboxEscalation = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInboxEscalation>>, TError,{id: string;data: BodyType<InboxEscalationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}

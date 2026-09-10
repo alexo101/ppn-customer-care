@@ -3,6 +3,7 @@ import {
   getGetInboxUnreadCountQueryKey,
   getListMessagesQueryKey,
   type InboxEscalation,
+  type InboxEscalationPriority,
   type InboxEscalationStatus,
   type ListInboxEscalationsAssignee,
   useClaimEscalation,
@@ -47,6 +48,9 @@ export default function InboxPage() {
   const [search, setSearch] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
+  const [priority, setPriority] = useState<InboxEscalationPriority | null>(
+    null,
+  );
   const [assignee, setAssignee] =
     useState<ListInboxEscalationsAssignee>("everyone");
   const [sort, setSort] = useState<InboxSort>("longest_waiting");
@@ -80,10 +84,15 @@ export default function InboxPage() {
   const filtered = useMemo(
     () =>
       sortInboxEscalations(
-        filterInboxEscalations(escalations, { status, search, category }),
+        filterInboxEscalations(escalations, {
+          status,
+          search,
+          category,
+          priority,
+        }),
         sort,
       ),
-    [escalations, status, search, category, sort],
+    [escalations, status, search, category, priority, sort],
   );
   const selected =
     escalations.find((item) => item.id === selectedId) ??
@@ -133,6 +142,28 @@ export default function InboxPage() {
         onError: (error) =>
           toast({
             title: "Could not update status",
+            description: errorMessage(error, "Try again."),
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+
+  const changePriority = (
+    item: InboxEscalation,
+    nextPriority: InboxEscalationPriority,
+  ) => {
+    if (item.priority === nextPriority) return;
+    updateStatus.mutate(
+      { id: item.id, data: { priority: nextPriority } },
+      {
+        onSuccess: () => {
+          toast({ title: "Priority updated" });
+          refreshInbox();
+        },
+        onError: (error) =>
+          toast({
+            title: "Could not update priority",
             description: errorMessage(error, "Try again."),
             variant: "destructive",
           }),
@@ -203,6 +234,7 @@ export default function InboxPage() {
               )
             }
             onStatusChange={(next) => changeStatus(selected, next)}
+            onPriorityChange={(next) => changePriority(selected, next)}
             onResolve={() => changeStatus(selected, "resolved")}
             onSend={(content) =>
               reply.mutate(
@@ -251,17 +283,20 @@ export default function InboxPage() {
               selectedTeamId={selectedTeamId}
               categories={categories}
               category={category}
+              priority={priority}
               assignee={assignee}
               sort={sort}
               onStatusChange={setStatus}
               onSearchChange={setSearch}
               onTeamChange={setSelectedTeamId}
               onCategoryChange={setCategory}
+              onPriorityChange={setPriority}
               onAssigneeChange={setAssignee}
               onSortChange={setSort}
               onClearFilters={() => {
                 setSelectedTeamId(null);
                 setCategory(null);
+                setPriority(null);
                 setAssignee("everyone");
                 setSearch("");
               }}
@@ -276,6 +311,7 @@ export default function InboxPage() {
                 }
                 onOpen={openEscalation}
                 onStatusChange={changeStatus}
+                onPriorityChange={changePriority}
               />
             </div>
           </div>
@@ -297,6 +333,7 @@ function SelectedWorkspace({
   onOpen,
   onClaim,
   onStatusChange,
+  onPriorityChange,
   onResolve,
   onSend,
   onGenerateSummary,
@@ -312,6 +349,7 @@ function SelectedWorkspace({
   onOpen: (item: InboxEscalation) => void;
   onClaim: () => void;
   onStatusChange: (status: InboxEscalationStatus) => void;
+  onPriorityChange: (priority: InboxEscalationPriority) => void;
   onResolve: () => void;
   onSend: (content: string) => void;
   onGenerateSummary: () => void;
@@ -350,6 +388,7 @@ function SelectedWorkspace({
       }}
       onClaim={onClaim}
       onStatusChange={onStatusChange}
+      onPriorityChange={onPriorityChange}
       onResolve={onResolve}
       onSend={onSend}
       onGenerateSummary={onGenerateSummary}

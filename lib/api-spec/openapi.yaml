@@ -2411,12 +2411,16 @@ components:
 
     InboxEscalationUpdate:
       type: object
-      required: [status]
       properties:
         status:
           {
             type: string,
             enum: [open, in_progress, waiting_on_customer, resolved],
+          }
+        priority:
+          {
+            type: string,
+            enum: [none, low, medium, high, urgent],
           }
 
     EscalationReplyInput:

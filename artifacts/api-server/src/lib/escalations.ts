@@ -52,9 +52,32 @@ export type InboxEscalationStatus =
   (typeof INBOX_ESCALATION_STATUSES)[number];
 export type InboxListStatus = InboxEscalationStatus | "all";
 export type InboxAssigneeFilter = "everyone" | "mine" | "unassigned";
+export const INBOX_ESCALATION_PRIORITIES = [
+  "none",
+  "low",
+  "medium",
+  "high",
+  "urgent",
+] as const;
+export type InboxEscalationPriority =
+  (typeof INBOX_ESCALATION_PRIORITIES)[number];
 
 export function isResolvedEscalationStatus(status: string) {
   return status === "resolved";
+}
+
+export function normalizeInboxPriority(value: string): InboxEscalationPriority {
+  if (value === "normal") return "none";
+  if (
+    value === "none" ||
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "urgent"
+  ) {
+    return value;
+  }
+  return "none";
 }
 
 export function matchesAssigneeFilter(
@@ -879,20 +902,23 @@ export async function resolveAssignedEscalation(
   memberId: string,
   memberRole?: string,
 ) {
-  return updateInboxEscalationStatus(
-    escalationId,
-    memberId,
-    memberRole,
-    "resolved",
-  );
+  return updateInboxEscalation(escalationId, memberId, memberRole, {
+    status: "resolved",
+  });
 }
 
-export async function updateInboxEscalationStatus(
+export async function updateInboxEscalation(
   escalationId: string,
   memberId: string,
   memberRole: string | undefined,
-  status: InboxEscalationStatus,
+  patch: {
+    status?: InboxEscalationStatus;
+    priority?: InboxEscalationPriority;
+  },
 ) {
+  if (!patch.status && !patch.priority) {
+    throw new EscalationError("Provide a status or priority to update.", 400);
+  }
   const [existing] = await db
     .select({
       id: escalationsTable.id,
@@ -907,23 +933,35 @@ export async function updateInboxEscalationStatus(
   if (!canView) throw new EscalationError("Escalation not found.", 404);
 
   const now = new Date();
-  const patch = escalationStatusPatch(status, now);
+  const escalationPatch: {
+    status?: InboxEscalationStatus;
+    resolvedAt?: Date | null;
+    updatedAt: Date;
+    priority?: InboxEscalationPriority;
+  } = { updatedAt: now };
+  if (patch.priority) {
+    escalationPatch.priority = patch.priority;
+  }
+  if (patch.status) {
+    const statusPatch = escalationStatusPatch(patch.status, now);
+    Object.assign(escalationPatch, statusPatch.escalation);
+    await db
+      .update(conversationsTable)
+      .set(statusPatch.conversation)
+      .where(eq(conversationsTable.id, existing.conversationId));
+    if (patch.status === "resolved") {
+      await db
+        .update(escalationAssignmentsTable)
+        .set({ isRead: true, updatedAt: now })
+        .where(eq(escalationAssignmentsTable.escalationId, escalationId));
+    }
+  }
   const [escalation] = await db
     .update(escalationsTable)
-    .set(patch.escalation)
+    .set(escalationPatch)
     .where(eq(escalationsTable.id, escalationId))
     .returning();
   if (!escalation) throw new EscalationError("Escalation not found.", 404);
-  if (status === "resolved") {
-    await db
-      .update(escalationAssignmentsTable)
-      .set({ isRead: true, updatedAt: now })
-      .where(eq(escalationAssignmentsTable.escalationId, escalationId));
-  }
-  await db
-    .update(conversationsTable)
-    .set(patch.conversation)
-    .where(eq(conversationsTable.id, escalation.conversationId));
   return getInboxEscalationForMember(escalationId, memberId, memberRole);
 }
 
@@ -1067,7 +1105,7 @@ function toInboxEscalation(
     agentName,
     teamName: inboxTeamLabel(teamName, agentName),
     status: escalation.status as InboxEscalationStatus,
-    priority: escalation.priority as "low" | "normal" | "high" | "urgent",
+    priority: normalizeInboxPriority(escalation.priority),
     reason: escalation.reason,
     category: escalation.category,
     subcategory: escalation.subcategory,
