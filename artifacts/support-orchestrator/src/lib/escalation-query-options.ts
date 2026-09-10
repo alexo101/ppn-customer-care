@@ -5,6 +5,8 @@ import {
   getListInboxTeamsQueryKey,
   getListMessagesQueryKey,
   getListTeamInboxEscalationsQueryKey,
+  type ListInboxEscalationsParams,
+  type ListTeamInboxEscalationsParams,
 } from "@workspace/api-client-react";
 
 export function getAgentEscalationQueryOptions(agentId: string) {
@@ -15,21 +17,18 @@ export function getAgentEscalationQueryOptions(agentId: string) {
 }
 
 export function getInboxEscalationsQueryOptions(
-  status: "open" | "resolved" | "all",
-  agentId?: string,
+  params: ListInboxEscalationsParams = { status: "all" },
 ) {
   return {
-    queryKey: getListInboxEscalationsQueryKey({ status, ...(agentId ? { agentId } : {}) }),
+    queryKey: getListInboxEscalationsQueryKey(params),
     refetchInterval: 10000,
     retry: false as const,
   };
 }
 
 export function getTeamEscalationsQueryOptions(
-  agentId: string,
-  status: "open" | "resolved" | "all",
+  params: ListTeamInboxEscalationsParams,
 ) {
-  const params = { agentId, status };
   return {
     queryKey: getListTeamInboxEscalationsQueryKey(params),
     refetchInterval: 10000,

@@ -11,6 +11,8 @@ export type ListTeamInboxEscalationsStatus = typeof ListTeamInboxEscalationsStat
 
 export const ListTeamInboxEscalationsStatus = {
   open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
   resolved: 'resolved',
   all: 'all',
 } as const;

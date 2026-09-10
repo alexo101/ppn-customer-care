@@ -17,8 +17,13 @@ describe("escalation query options", () => {
   });
 
   it("keeps inbox polling fail-fast", () => {
-    expect(getInboxEscalationsQueryOptions("open")).toMatchObject({
-      queryKey: ["/api/inbox/escalations", { status: "open" }],
+    expect(
+      getInboxEscalationsQueryOptions({ status: "open", assignee: "everyone" }),
+    ).toMatchObject({
+      queryKey: [
+        "/api/inbox/escalations",
+        { status: "open", assignee: "everyone" },
+      ],
       refetchInterval: 10000,
       retry: false,
     });
@@ -35,8 +40,17 @@ describe("escalation query options", () => {
   });
 
   it("keeps team queues independently cacheable and polled", () => {
-    expect(getTeamEscalationsQueryOptions("agent-1", "open")).toMatchObject({
-      queryKey: ["/api/inbox/team-escalations", { agentId: "agent-1", status: "open" }],
+    expect(
+      getTeamEscalationsQueryOptions({
+        agentId: "agent-1",
+        status: "open",
+        assignee: "mine",
+      }),
+    ).toMatchObject({
+      queryKey: [
+        "/api/inbox/team-escalations",
+        { agentId: "agent-1", status: "open", assignee: "mine" },
+      ],
       refetchInterval: 10000,
       retry: false,
     });

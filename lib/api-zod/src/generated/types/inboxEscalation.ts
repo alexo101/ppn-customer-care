@@ -44,4 +44,8 @@ export interface InboxEscalation {
   updatedAt: Date;
   /** @nullable */
   resolvedAt?: Date | null;
+  /** @nullable */
+  aiSummary: string | null;
+  /** @nullable */
+  aiSummaryGeneratedAt: Date | null;
 }

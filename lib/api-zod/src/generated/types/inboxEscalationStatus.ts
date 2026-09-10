@@ -11,5 +11,7 @@ export type InboxEscalationStatus = typeof InboxEscalationStatus[keyof typeof In
 
 export const InboxEscalationStatus = {
   open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
   resolved: 'resolved',
 } as const;

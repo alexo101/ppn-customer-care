@@ -52,6 +52,7 @@ import type {
   ImportAppearanceInput,
   ImportAppearanceResult,
   InboxEscalation,
+  InboxEscalationUpdate,
   InboxTeam,
   IntentCategory,
   InvitationStatus,
@@ -1855,6 +1856,78 @@ export const useReplyToEscalation = <TError = ErrorType<unknown>,
       return useMutation(getReplyToEscalationMutationOptions(options));
     }
 
+export const getUpdateInboxEscalationUrl = (id: string,) => {
+
+
+
+
+  return `/api/inbox/escalations/${id}`
+}
+
+/**
+ * @summary Update an inbox escalation status
+ */
+export const updateInboxEscalation = async (id: string,
+    inboxEscalationUpdate: InboxEscalationUpdate, options?: Parameters<typeof customFetch>[1]): Promise<InboxEscalation> => {
+
+  return customFetch<InboxEscalation>(getUpdateInboxEscalationUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inboxEscalationUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateInboxEscalationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInboxEscalation>>, TError,{id: string;data: BodyType<InboxEscalationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInboxEscalation>>, TError,{id: string;data: BodyType<InboxEscalationUpdate>}, TContext> => {
+
+const mutationKey = ['updateInboxEscalation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInboxEscalation>>, {id: string;data: BodyType<InboxEscalationUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInboxEscalation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInboxEscalationMutationResult = NonNullable<Awaited<ReturnType<typeof updateInboxEscalation>>>
+    export type UpdateInboxEscalationMutationBody = BodyType<InboxEscalationUpdate>
+    export type UpdateInboxEscalationMutationError = ErrorType<void>
+
+    /**
+ * @summary Update an inbox escalation status
+ */
+export const useUpdateInboxEscalation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInboxEscalation>>, TError,{id: string;data: BodyType<InboxEscalationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInboxEscalation>>,
+        TError,
+        {id: string;data: BodyType<InboxEscalationUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateInboxEscalationMutationOptions(options));
+    }
+
 export const getResolveEscalationUrl = (id: string,) => {
 
 
@@ -1924,6 +1997,77 @@ export const useResolveEscalation = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getResolveEscalationMutationOptions(options));
+    }
+
+export const getGenerateInboxEscalationSummaryUrl = (id: string,) => {
+
+
+
+
+  return `/api/inbox/escalations/${id}/summary`
+}
+
+/**
+ * @summary Generate a one-time AI summary for an inbox escalation
+ */
+export const generateInboxEscalationSummary = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<InboxEscalation> => {
+
+  return customFetch<InboxEscalation>(getGenerateInboxEscalationSummaryUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getGenerateInboxEscalationSummaryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateInboxEscalationSummary>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateInboxEscalationSummary>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['generateInboxEscalationSummary'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateInboxEscalationSummary>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  generateInboxEscalationSummary(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateInboxEscalationSummaryMutationResult = NonNullable<Awaited<ReturnType<typeof generateInboxEscalationSummary>>>
+
+    export type GenerateInboxEscalationSummaryMutationError = ErrorType<void>
+
+    /**
+ * @summary Generate a one-time AI summary for an inbox escalation
+ */
+export const useGenerateInboxEscalationSummary = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateInboxEscalationSummary>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateInboxEscalationSummary>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getGenerateInboxEscalationSummaryMutationOptions(options));
     }
 
 export const getAssignAgentSourceUrl = (agentId: string,

@@ -63,7 +63,7 @@ export const escalationsTable = pgTable("escalations", {
     .notNull()
     .references(() => agentsTable.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("open"),
-  priority: text("priority").notNull().default("normal"),
+  priority: text("priority").notNull().default("none"),
   assigneeMemberId: uuid("assignee_member_id").references(
     () => workspaceMembersTable.id,
     { onDelete: "set null" },
@@ -75,6 +75,10 @@ export const escalationsTable = pgTable("escalations", {
   retrievedInformation: jsonb("retrieved_information").notNull().default([]),
   previousAnswer: text("previous_answer").notNull().default(""),
   context: jsonb("context").notNull().default({}),
+  aiSummary: text("ai_summary"),
+  aiSummaryGeneratedAt: timestamp("ai_summary_generated_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

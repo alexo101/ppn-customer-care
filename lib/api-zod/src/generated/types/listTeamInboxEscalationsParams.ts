@@ -5,10 +5,12 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListTeamInboxEscalationsAssignee } from './listTeamInboxEscalationsAssignee';
 import type { ListTeamInboxEscalationsStatus } from './listTeamInboxEscalationsStatus';
 
 export type ListTeamInboxEscalationsParams = {
 agentId: string;
 status?: ListTeamInboxEscalationsStatus;
 unreadOnly?: boolean;
+assignee?: ListTeamInboxEscalationsAssignee;
 };

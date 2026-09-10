@@ -159,6 +159,8 @@ export type InboxEscalationStatus = typeof InboxEscalationStatus[keyof typeof In
 
 export const InboxEscalationStatus = {
   open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
   resolved: 'resolved',
 } as const;
 
@@ -217,6 +219,24 @@ export interface InboxEscalation {
   updatedAt: string;
   /** @nullable */
   resolvedAt?: string | null;
+  /** @nullable */
+  aiSummary: string | null;
+  /** @nullable */
+  aiSummaryGeneratedAt: string | null;
+}
+
+export type InboxEscalationUpdateStatus = typeof InboxEscalationUpdateStatus[keyof typeof InboxEscalationUpdateStatus];
+
+
+export const InboxEscalationUpdateStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
+  resolved: 'resolved',
+} as const;
+
+export interface InboxEscalationUpdate {
+  status: InboxEscalationUpdateStatus;
 }
 
 export interface EscalationReplyInput {
@@ -1127,6 +1147,7 @@ export type ListInboxEscalationsParams = {
 agentId?: string;
 status?: ListInboxEscalationsStatus;
 unreadOnly?: boolean;
+assignee?: ListInboxEscalationsAssignee;
 };
 
 export type ListInboxEscalationsStatus = typeof ListInboxEscalationsStatus[keyof typeof ListInboxEscalationsStatus];
@@ -1134,14 +1155,26 @@ export type ListInboxEscalationsStatus = typeof ListInboxEscalationsStatus[keyof
 
 export const ListInboxEscalationsStatus = {
   open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
   resolved: 'resolved',
   all: 'all',
+} as const;
+
+export type ListInboxEscalationsAssignee = typeof ListInboxEscalationsAssignee[keyof typeof ListInboxEscalationsAssignee];
+
+
+export const ListInboxEscalationsAssignee = {
+  everyone: 'everyone',
+  mine: 'mine',
+  unassigned: 'unassigned',
 } as const;
 
 export type ListTeamInboxEscalationsParams = {
 agentId: string;
 status?: ListTeamInboxEscalationsStatus;
 unreadOnly?: boolean;
+assignee?: ListTeamInboxEscalationsAssignee;
 };
 
 export type ListTeamInboxEscalationsStatus = typeof ListTeamInboxEscalationsStatus[keyof typeof ListTeamInboxEscalationsStatus];
@@ -1149,8 +1182,19 @@ export type ListTeamInboxEscalationsStatus = typeof ListTeamInboxEscalationsStat
 
 export const ListTeamInboxEscalationsStatus = {
   open: 'open',
+  in_progress: 'in_progress',
+  waiting_on_customer: 'waiting_on_customer',
   resolved: 'resolved',
   all: 'all',
+} as const;
+
+export type ListTeamInboxEscalationsAssignee = typeof ListTeamInboxEscalationsAssignee[keyof typeof ListTeamInboxEscalationsAssignee];
+
+
+export const ListTeamInboxEscalationsAssignee = {
+  everyone: 'everyone',
+  mine: 'mine',
+  unassigned: 'unassigned',
 } as const;
 
 export type ListConversationsParams = {

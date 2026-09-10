@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   ClaimEscalationParams,
+  GenerateInboxEscalationSummaryParams,
   GetAgentEscalationParams,
   ListInboxEscalationsQueryParams,
   ListTeamInboxEscalationsQueryParams,
@@ -10,6 +11,8 @@ import {
   ResolveEscalationParams,
   UpdateAgentEscalationBody,
   UpdateAgentEscalationParams,
+  UpdateInboxEscalationBody,
+  UpdateInboxEscalationParams,
 } from "@workspace/api-zod";
 import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import { getOwnedAgent } from "../lib/agents";
@@ -17,6 +20,7 @@ import {
   EscalationError,
   countUnreadEscalations,
   claimEscalation,
+  generateInboxEscalationSummary,
   getAgentEscalation,
   getInboxEscalationForMember,
   listAssignedEscalations,
@@ -27,7 +31,9 @@ import {
   resolveAssignedEscalation,
   toAssignment,
   updateAgentEscalation,
+  updateInboxEscalationStatus,
 } from "../lib/escalations";
+import { EscalationSummaryProviderError } from "../lib/llm";
 
 const router: IRouter = Router();
 
@@ -119,6 +125,8 @@ router.get(
         parsed.data.status,
         parsed.data.unreadOnly,
         parsed.data.agentId,
+        parsed.data.assignee,
+        req.memberRole,
       ),
     );
   },
@@ -143,6 +151,7 @@ router.get(
           req.memberRole,
           parsed.data.status,
           parsed.data.unreadOnly,
+          parsed.data.assignee,
         ),
       );
     } catch (error) {
@@ -195,7 +204,7 @@ router.post(
     }
     try {
       await claimEscalation(params.data.id, memberId);
-      res.json(await getInboxEscalationForMember(params.data.id, memberId));
+      res.json(await getInboxEscalationForMember(params.data.id, memberId, req.memberRole));
     } catch (error) {
       if (!sendEscalationError(res, error)) throw error;
     }
@@ -231,6 +240,37 @@ router.post(
   },
 );
 
+router.patch(
+  "/inbox/escalations/:id",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const memberId = memberIdOrUnauthorized(req, res);
+    if (!memberId) return;
+    const params = UpdateInboxEscalationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = UpdateInboxEscalationBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    try {
+      res.json(
+        await updateInboxEscalationStatus(
+          params.data.id,
+          memberId,
+          req.memberRole,
+          parsed.data.status,
+        ),
+      );
+    } catch (error) {
+      if (!sendEscalationError(res, error)) throw error;
+    }
+  },
+);
+
 router.post(
   "/inbox/escalations/:id/resolve",
   requireAuth,
@@ -243,27 +283,44 @@ router.post(
       return;
     }
     try {
-      const escalation = await resolveAssignedEscalation(
-        params.data.id,
-        memberId,
-      );
-      const assigned = await listAssignedEscalations(memberId, "all", false);
-      const result = assigned.find((item) => item.id === escalation.id);
       res.json(
-        result ?? {
-          ...escalation,
-          agentName: "",
-          isRead: true,
-          retrievedInformation: Array.isArray(escalation.retrievedInformation)
-            ? escalation.retrievedInformation
-            : [],
-          context: escalation.context ?? {},
-          createdAt: escalation.createdAt.toISOString(),
-          updatedAt: escalation.updatedAt.toISOString(),
-          resolvedAt: escalation.resolvedAt?.toISOString() ?? null,
-        },
+        await resolveAssignedEscalation(
+          params.data.id,
+          memberId,
+          req.memberRole,
+        ),
       );
     } catch (error) {
+      if (!sendEscalationError(res, error)) throw error;
+    }
+  },
+);
+
+router.post(
+  "/inbox/escalations/:id/summary",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const memberId = memberIdOrUnauthorized(req, res);
+    if (!memberId) return;
+    const params = GenerateInboxEscalationSummaryParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    try {
+      res.json(
+        await generateInboxEscalationSummary(
+          params.data.id,
+          memberId,
+          req.memberRole,
+        ),
+      );
+    } catch (error) {
+      if (error instanceof EscalationSummaryProviderError) {
+        const unconfigured = error.message.includes("not configured");
+        res.status(unconfigured ? 503 : 502).json({ error: error.message });
+        return;
+      }
       if (!sendEscalationError(res, error)) throw error;
     }
   },

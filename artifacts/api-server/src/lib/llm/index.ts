@@ -18,6 +18,11 @@ import {
   EmbeddingProviderError,
   type EmbeddingProvider,
 } from "./embedding-provider";
+import { OpenAIEscalationSummaryProvider } from "./openai-escalation-summary-provider";
+import {
+  EscalationSummaryProviderError,
+  type EscalationSummaryProvider,
+} from "./escalation-summary-provider";
 export {
   OpenAIWelcomeMessageTranslator,
   type WelcomeMessageTranslator,
@@ -27,6 +32,7 @@ export * from "./rule-authoring-provider";
 export * from "./classification-provider";
 export * from "./answer-provider";
 export * from "./embedding-provider";
+export * from "./escalation-summary-provider";
 
 export function createRuleAuthoringProvider(): RuleAuthoringProvider {
   const provider = (process.env.RULE_AUTHORING_LLM_PROVIDER ?? "openai")
@@ -79,10 +85,24 @@ export function createEmbeddingProvider(): EmbeddingProvider {
   );
 }
 
+export function createEscalationSummaryProvider(): EscalationSummaryProvider {
+  const provider = (process.env.ESCALATION_SUMMARY_LLM_PROVIDER ?? "openai")
+    .trim()
+    .toLowerCase();
+  if (provider === "openai") {
+    escalationSummaryProvider ??= new OpenAIEscalationSummaryProvider();
+    return escalationSummaryProvider;
+  }
+  throw new EscalationSummaryProviderError(
+    `Unsupported escalation-summary provider "${provider}".`,
+  );
+}
+
 let openAIProvider: RuleAuthoringProvider | undefined;
 let classificationProvider: ClassificationProvider | undefined;
 let answerProvider: AnswerProvider | undefined;
 let embeddingProvider: EmbeddingProvider | undefined;
+let escalationSummaryProvider: EscalationSummaryProvider | undefined;
 
 function getOpenAIProvider(): RuleAuthoringProvider {
   openAIProvider ??= new OpenAIRuleAuthoringProvider();

@@ -31,7 +31,12 @@ vi.mock("@workspace/db", () => {
   };
 });
 
-import { claimEscalation, inboxTeamLabel } from "./escalations";
+import {
+  claimEscalation,
+  escalationStatusPatch,
+  inboxTeamLabel,
+  matchesAssigneeFilter,
+} from "./escalations";
 
 function queryChain(result: unknown) {
   const chain: Record<string, unknown> = {};
@@ -107,5 +112,43 @@ describe("inboxTeamLabel", () => {
   it("falls back to Escalation team only when both names are empty", () => {
     expect(inboxTeamLabel("")).toBe("Escalation team");
     expect(inboxTeamLabel("  ")).toBe("Escalation team");
+  });
+});
+
+describe("escalation status workflow", () => {
+  it("resolves the conversation when the inbox status is resolved", () => {
+    const now = new Date("2026-09-10T12:00:00.000Z");
+    expect(escalationStatusPatch("resolved", now)).toEqual({
+      escalation: { status: "resolved", resolvedAt: now, updatedAt: now },
+      conversation: {
+        status: "resolved",
+        resolvedAt: now,
+        lastActivityAt: now,
+      },
+    });
+  });
+
+  it("reopens the conversation as escalated for any non-resolved status", () => {
+    const now = new Date("2026-09-10T12:00:00.000Z");
+    expect(escalationStatusPatch("in_progress", now)).toEqual({
+      escalation: { status: "in_progress", resolvedAt: null, updatedAt: now },
+      conversation: {
+        status: "escalated",
+        resolvedAt: null,
+        lastActivityAt: now,
+      },
+    });
+  });
+
+  it("filters assignee scopes for everyone, mine, and unassigned", () => {
+    expect(matchesAssigneeFilter("member-1", "member-1", "everyone")).toBe(true);
+    expect(matchesAssigneeFilter("member-2", "member-1", "everyone")).toBe(true);
+    expect(matchesAssigneeFilter(null, "member-1", "everyone")).toBe(true);
+    expect(matchesAssigneeFilter("member-1", "member-1", "mine")).toBe(true);
+    expect(matchesAssigneeFilter("member-2", "member-1", "mine")).toBe(false);
+    expect(matchesAssigneeFilter(null, "member-1", "unassigned")).toBe(true);
+    expect(matchesAssigneeFilter("member-1", "member-1", "unassigned")).toBe(
+      false,
+    );
   });
 });
