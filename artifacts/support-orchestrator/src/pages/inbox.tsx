@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   getGetInboxUnreadCountQueryKey,
+  getListInboxEscalationsQueryKey,
   getListMessagesQueryKey,
   type InboxEscalation,
   type InboxEscalationPriority,
@@ -31,6 +32,7 @@ import {
   getInboxTeamsQueryOptions,
 } from "@/lib/escalation-query-options";
 import { isActiveInboxStatus, type InboxStatusTab } from "@/lib/inbox-status";
+import { replaceInboxEscalation } from "@/lib/inbox-cache";
 import { toast } from "@/hooks/use-toast";
 import { InboxTeamRail } from "@/components/inbox/inbox-team-rail";
 import { InboxToolbar } from "@/components/inbox/inbox-toolbar";
@@ -104,10 +106,19 @@ export default function InboxPage() {
   const activeCount = teams.reduce((sum, team) => sum + team.openCount, 0);
 
   const refreshInbox = () => {
-    void queryClient.invalidateQueries({ queryKey: ["/api/inbox"] });
+    void queryClient.invalidateQueries({
+      queryKey: getListInboxEscalationsQueryKey(),
+    });
     void queryClient.invalidateQueries({
       queryKey: getGetInboxUnreadCountQueryKey(),
     });
+  };
+
+  const updateInboxCache = (updated: InboxEscalation) => {
+    queryClient.setQueriesData<InboxEscalation[]>(
+      { queryKey: getListInboxEscalationsQueryKey() },
+      (items) => replaceInboxEscalation(items, updated),
+    );
   };
 
   const openEscalation = (item: InboxEscalation) => {
@@ -130,7 +141,8 @@ export default function InboxPage() {
     updateStatus.mutate(
       { id: item.id, data: { status: nextStatus } },
       {
-        onSuccess: () => {
+        onSuccess: (updated) => {
+          updateInboxCache(updated);
           toast({
             title:
               nextStatus === "resolved"
@@ -157,7 +169,8 @@ export default function InboxPage() {
     updateStatus.mutate(
       { id: item.id, data: { priority: nextPriority } },
       {
-        onSuccess: () => {
+        onSuccess: (updated) => {
+          updateInboxCache(updated);
           toast({ title: "Priority updated" });
           refreshInbox();
         },

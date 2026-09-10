@@ -16,6 +16,7 @@ import {
 import { customerContextFields } from "./inbox-context";
 import { INBOX_PRIORITY_LABELS } from "./inbox-priority";
 import { isActiveInboxStatus } from "./inbox-status";
+import { replaceInboxEscalation } from "./inbox-cache";
 
 function escalation(
   overrides: Partial<InboxEscalation> = {},
@@ -52,6 +53,14 @@ function escalation(
 }
 
 describe("inbox list helpers", () => {
+  it("replaces an updated escalation in the cached list", () => {
+    const original = escalation();
+    const updated = escalation({ priority: "urgent", status: "in_progress" });
+
+    expect(replaceInboxEscalation([original], updated)).toEqual([updated]);
+    expect(replaceInboxEscalation(undefined, updated)).toBeUndefined();
+  });
+
   it("filters by status, category, and search", () => {
     const items = [
       escalation(),
