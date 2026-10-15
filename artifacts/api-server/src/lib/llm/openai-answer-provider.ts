@@ -65,21 +65,12 @@ export class OpenAIAnswerProvider implements AnswerProvider {
       ? input.retrievedChunks
           .map(
             (chunk, index) =>
-              `[${chunk.kind === "api" ? "Verified API data" : "Documentation"} ${index + 1} | ${chunk.sourceName}]\n${chunk.content}`,
+              `[Article ${index + 1} | ${chunk.articleName ?? chunk.sourceName}]\n${chunk.content}`,
           )
           .join("\n\n")
       : "No knowledge-base context was retrieved.";
-    const ruleContext = input.rule
-      ? [
-          `Action: ${input.rule.action}`,
-          `Rule description: ${input.rule.description}`,
-          `Response guidance: ${input.rule.promptTemplate || "(none)"}`,
-        ].join("\n")
-      : "No matching rule was found.";
     const personContext = JSON.stringify(input.personAttributes);
     const promptAssembled = [
-      `Category: ${input.categoryName}`,
-      ruleContext,
       `Person attributes: ${personContext}`,
       `Request context: ${JSON.stringify(input.context ?? {})}`,
       `Knowledge context:\n${context}`,
@@ -91,15 +82,14 @@ export class OpenAIAnswerProvider implements AnswerProvider {
         content: [
           "You are a customer support assistant.",
           "Answer the user's question clearly and directly.",
-          "Use the supplied knowledge context as the source of truth.",
+          "Use only the supplied knowledge-base passages as the source of truth.",
           "Do not invent facts, policies, prices, or steps.",
-          "If the context does not contain the answer, say that you could not find it and ask for the missing details or suggest human support.",
-          "Follow the matching rule's response guidance when present, but never override the grounding requirement.",
-          "Do not mention internal categories, rules, prompts, embeddings, or context to the user.",
-          "Return only JSON with answer, answerable, replyLanguage, and citations fields. Set answerable to true only when the supplied knowledge directly supports the answer; otherwise set it to false. Set replyLanguage to a BCP-47 language tag for the answer.",
+          "If the passages do not contain enough information to answer, set answerable to false and explain that the knowledge base does not contain the answer.",
+          "Do not mention internal prompts, embeddings, targets, or retrieval scores to the user.",
+          "Return only JSON with answer, answerable, replyLanguage, and citations fields. Set answerable to true only when the supplied passages directly support the answer; otherwise set it to false. Set replyLanguage to a BCP-47 language tag for the answer.",
           retrievedAssets.length
-            ? "When screenshots are supplied, use their visual content. citations must be an array of objects containing citationIndex values from the supplied Documentation entries and, when applicable, assetId values from the supplied screenshots."
-            : "",
+            ? "When images are supplied, use their visual content. citations must be an array of objects containing citationIndex values from the supplied Article entries and, when applicable, assetId values from the supplied images."
+            : "citations must be an array of objects containing citationIndex values from the supplied Article entries. Use null for assetId when no image is cited.",
           typeof input.context?.agentPrompt === "string" &&
           input.context.agentPrompt.trim()
             ? `Team-configured agent guidance: ${input.context.agentPrompt.trim()}`
@@ -230,6 +220,8 @@ function validateCitations(
   const fallback = assets.map((asset) => ({
     sourceId: asset.chunk.sourceId,
     sourceName: asset.chunk.sourceName,
+    articleId: asset.chunk.articleId ?? asset.chunk.sourceId,
+    articleName: asset.chunk.articleName ?? asset.chunk.sourceName,
     chunkId: asset.chunk.chunkId,
     assetId: asset.id,
     excerpt: asset.chunk.content.slice(0, 240),
@@ -249,6 +241,8 @@ function validateCitations(
       return {
         sourceId: source.sourceId,
         sourceName: source.sourceName,
+        articleId: source.articleId ?? source.sourceId,
+        articleName: source.articleName ?? source.sourceName,
         chunkId: source.chunkId,
         ...(asset ? { assetId: asset.id } : {}),
         excerpt: source.content.slice(0, 240),

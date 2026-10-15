@@ -21,7 +21,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <div className="relative z-10 max-w-md">
           <h1 className="text-4xl font-semibold tracking-tight mb-4 leading-tight">Your AI support team, always in sync</h1>
           <p className="text-sidebar-foreground/60 leading-relaxed">
-            Monitor conversations, tune intent models, and step in whenever it matters — all from one connected workspace.
+            Monitor conversations, review grounded answers, and step in whenever it matters — all from one connected workspace.
           </p>
         </div>
         <div className="relative z-10 flex items-center gap-1.5 text-xs text-sidebar-foreground/40">

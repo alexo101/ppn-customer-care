@@ -16,12 +16,8 @@ tags:
     description: Chat conversation management
   - name: messages
     description: Messages within conversations
-  - name: categories
-    description: Intent classification categories
-  - name: rules
-    description: Orchestration rules
-  - name: sources
-    description: Knowledge sources and API connectors
+  - name: articles
+    description: Knowledge base articles
   - name: targets
     description: Named audience targets for visitors, leads, and users
   - name: analytics
@@ -607,24 +603,6 @@ paths:
         "502":
           description: Summary generation failed
 
-  /agents/{agentId}/sources/{sourceId}:
-    post:
-      operationId: assignAgentSource
-      tags: [agents]
-      summary: Assign a knowledge source to an agent
-      parameters:
-        - in: path
-          name: agentId
-          required: true
-          schema: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
-        - in: path
-          name: sourceId
-          required: true
-          schema: { type: string, pattern: "^[0-9a-fA-F-]{36}$" }
-      responses:
-        "201":
-          description: Assigned
-
   # ── Conversations ─────────────────────────────────────────────────────────
   /conversations:
     get:
@@ -1086,276 +1064,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  # ── Intent Categories ─────────────────────────────────────────────────────
-  /categories:
+  # ── Knowledge Articles ────────────────────────────────────────────────────
+  /articles:
     get:
-      operationId: listCategories
-      tags: [categories]
-      summary: List intent categories
-      parameters:
-        - in: query
-          name: agentId
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Categories
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/IntentCategory"
-    post:
-      operationId: createCategory
-      tags: [categories]
-      summary: Create an intent category
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CategoryInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IntentCategory"
-
-  /categories/{id}:
-    patch:
-      operationId: updateCategory
-      tags: [categories]
-      summary: Update an intent category
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CategoryUpdate"
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IntentCategory"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    delete:
-      operationId: deleteCategory
-      tags: [categories]
-      summary: Delete an intent category
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Deleted
-
-  # ── Orchestrator Rules ────────────────────────────────────────────────────
-  /rules:
-    get:
-      operationId: listRules
-      tags: [rules]
-      summary: List orchestration rules
-      parameters:
-        - in: query
-          name: agentId
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Rules
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/OrchestratorRule"
-    post:
-      operationId: createRule
-      tags: [rules]
-      summary: Create an orchestration rule
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RuleInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OrchestratorRule"
-
-  /agents/{agentId}/rule-authoring/messages:
-    post:
-      operationId: sendRuleAuthoringMessage
-      tags: [rules]
-      summary: Continue a conversational rule-authoring session
-      parameters:
-        - in: path
-          name: agentId
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RuleAuthoringRequest"
-      responses:
-        "200":
-          description: The assistant response and current validated draft
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RuleAuthoringResponse"
-        "404":
-          description: Agent not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: Rule authoring provider unavailable
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /rules/{id}:
-    patch:
-      operationId: updateRule
-      tags: [rules]
-      summary: Update an orchestration rule
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RuleUpdate"
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OrchestratorRule"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    delete:
-      operationId: deleteRule
-      tags: [rules]
-      summary: Delete an orchestration rule
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Deleted
-
-  /rules/{id}/categories:
-    get:
-      operationId: listRuleCategories
-      tags: [rules]
-      summary: List categories linked to a rule
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Linked categories
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/IntentCategory"
-    post:
-      operationId: linkRuleCategory
-      tags: [rules]
-      summary: Link a category to a rule
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RuleCategoryLinkInput"
-      responses:
-        "201":
-          description: Linked
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
-
-  /rules/{id}/categories/{categoryId}:
-    delete:
-      operationId: unlinkRuleCategory
-      tags: [rules]
-      summary: Remove a category link from a rule
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: categoryId
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Unlinked
-
-  /rule-vocabularies:
-    get:
-      operationId: listRuleVocabularies
-      tags: [rules]
-      summary: List configurable rule operators and actions
+      operationId: listArticles
+      tags: [articles]
+      summary: List knowledge base articles
       parameters:
         - in: query
           name: agentId
@@ -1363,19 +1077,22 @@ paths:
           schema:
             type: string
         - in: query
-          name: kind
+          name: status
+          schema:
+            $ref: "#/components/schemas/ArticleStatus"
+        - in: query
+          name: targetId
           schema:
             type: string
-            enum: [operator, action]
       responses:
         "200":
-          description: Vocabularies
+          description: Articles
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/RuleVocabulary"
+                  $ref: "#/components/schemas/KnowledgeArticle"
         "404":
           description: Agent not found
           content:
@@ -1383,34 +1100,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     post:
-      operationId: createRuleVocabulary
-      tags: [rules]
-      summary: Add a custom operator or action
+      operationId: createArticle
+      tags: [articles]
+      summary: Create a draft knowledge base article
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RuleVocabularyInput"
+              $ref: "#/components/schemas/ArticleInput"
       responses:
         "201":
           description: Created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RuleVocabulary"
-        "409":
-          description: Already exists
+                $ref: "#/components/schemas/KnowledgeArticle"
+        "400":
+          description: Invalid article
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /rule-vocabularies/{id}:
+  /articles/{id}:
     patch:
-      operationId: updateRuleVocabulary
-      tags: [rules]
-      summary: Update a custom operator or action
+      operationId: updateArticle
+      tags: [articles]
+      summary: Update a knowledge base article
       parameters:
         - in: path
           name: id
@@ -1422,14 +1139,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RuleVocabularyUpdate"
+              $ref: "#/components/schemas/ArticleUpdate"
       responses:
         "200":
           description: Updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RuleVocabulary"
+                $ref: "#/components/schemas/KnowledgeArticle"
+        "400":
+          description: Invalid article
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Not found
           content:
@@ -1437,9 +1160,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     delete:
-      operationId: deleteRuleVocabulary
-      tags: [rules]
-      summary: Delete a custom operator or action
+      operationId: deleteArticle
+      tags: [articles]
+      summary: Delete a knowledge base article
       parameters:
         - in: path
           name: id
@@ -1456,87 +1179,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  # ── Knowledge Sources ─────────────────────────────────────────────────────
-  /sources:
-    get:
-      operationId: listSources
-      tags: [sources]
-      summary: List knowledge sources
-      parameters:
-        - in: query
-          name: agentId
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Sources
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/KnowledgeSource"
+  /articles/{id}/publish:
     post:
-      operationId: createSource
-      tags: [sources]
-      summary: Create a knowledge source
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SourceInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/KnowledgeSource"
-
-  /sources/{id}:
-    patch:
-      operationId: updateSource
-      tags: [sources]
-      summary: Update a knowledge source
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SourceUpdate"
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/KnowledgeSource"
-    delete:
-      operationId: deleteSource
-      tags: [sources]
-      summary: Delete a knowledge source
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Deleted
-
-  /sources/{id}/refresh:
-    post:
-      operationId: refreshSource
-      tags: [sources]
-      summary: Re-index a knowledge source
+      operationId: publishArticle
+      tags: [articles]
+      summary: Publish an article and index it for retrieval
       parameters:
         - in: path
           name: id
@@ -1545,23 +1192,23 @@ paths:
             type: string
       responses:
         "200":
-          description: Source refreshed
+          description: Published
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/KnowledgeSource"
-        "404":
-          description: Not found
+                $ref: "#/components/schemas/KnowledgeArticle"
+        "400":
+          description: Article has no content
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /sources/{id}/assets:
-    get:
-      operationId: listSourceAssets
-      tags: [sources]
-      summary: List screenshots for a knowledge source
+  /articles/{id}/archive:
+    post:
+      operationId: archiveArticle
+      tags: [articles]
+      summary: Archive an article and remove it from retrieval
       parameters:
         - in: path
           name: id
@@ -1570,7 +1217,45 @@ paths:
             type: string
       responses:
         "200":
-          description: Screenshots
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeArticle"
+
+  /articles/{id}/draft:
+    post:
+      operationId: restoreArticleDraft
+      tags: [articles]
+      summary: Return an article to draft and remove it from retrieval
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Restored to draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeArticle"
+
+  /articles/{id}/assets:
+    get:
+      operationId: listArticleAssets
+      tags: [articles]
+      summary: List inline images for an article
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Images
           content:
             application/json:
               schema:
@@ -1578,9 +1263,9 @@ paths:
                 items:
                   $ref: "#/components/schemas/KnowledgeAsset"
     post:
-      operationId: uploadSourceAsset
-      tags: [sources]
-      summary: Upload a screenshot to a knowledge source
+      operationId: uploadArticleAsset
+      tags: [articles]
+      summary: Upload an inline image for an article
       parameters:
         - in: path
           name: id
@@ -1592,20 +1277,20 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: "#/components/schemas/SourceAssetUploadInput"
+              $ref: "#/components/schemas/ArticleAssetUploadInput"
       responses:
         "201":
-          description: Screenshot uploaded
+          description: Image uploaded
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/KnowledgeAsset"
 
-  /sources/assets/{assetId}/url:
+  /articles/assets/{assetId}/url:
     get:
-      operationId: getSourceAssetUrl
-      tags: [sources]
-      summary: Get a short-lived private screenshot URL
+      operationId: getArticleAssetUrl
+      tags: [articles]
+      summary: Get a short-lived private image URL
       parameters:
         - in: path
           name: assetId
@@ -1614,17 +1299,17 @@ paths:
             type: string
       responses:
         "200":
-          description: Signed screenshot URL
+          description: Signed image URL
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/KnowledgeAssetUrl"
 
-  /sources/assets/{assetId}:
+  /articles/assets/{assetId}:
     delete:
-      operationId: deleteSourceAsset
-      tags: [sources]
-      summary: Delete a screenshot from a knowledge source
+      operationId: deleteArticleAsset
+      tags: [articles]
+      summary: Delete an inline image
       parameters:
         - in: path
           name: assetId
@@ -1634,50 +1319,6 @@ paths:
       responses:
         "204":
           description: Deleted
-
-  /sources/upload:
-    post:
-      operationId: uploadSourceDocument
-      tags: [sources]
-      summary: Upload a Word or Excel document as a knowledge source
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: "#/components/schemas/SourceUploadInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/KnowledgeSource"
-
-  /sources/from-url:
-    post:
-      operationId: createSourceFromUrl
-      tags: [sources]
-      summary: Import a public Google Doc, Google Sheet, or office file URL as a knowledge source
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SourceFromUrlInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/KnowledgeSource"
-        "400":
-          description: Invalid, private, or unreadable link
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   # ── Audience Targets ──────────────────────────────────────────────────────
   /targets:
@@ -1791,82 +1432,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  # ── API Connectors ────────────────────────────────────────────────────────
-  /connectors:
-    get:
-      operationId: listConnectors
-      tags: [sources]
-      summary: List API connectors
-      parameters:
-        - in: query
-          name: agentId
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Connectors
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/ApiConnector"
-    post:
-      operationId: createConnector
-      tags: [sources]
-      summary: Create an API connector
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ConnectorInput"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiConnector"
-
-  /connectors/{id}:
-    patch:
-      operationId: updateConnector
-      tags: [sources]
-      summary: Update an API connector
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ConnectorUpdate"
-      responses:
-        "200":
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiConnector"
-    delete:
-      operationId: deleteConnector
-      tags: [sources]
-      summary: Delete an API connector
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        "204":
-          description: Deleted
 
   # ── Analytics ─────────────────────────────────────────────────────────────
   /analytics/summary:
@@ -2627,8 +2192,12 @@ components:
 
     Citation:
       type: object
-      required: [sourceId, sourceName]
+      required: [articleId, articleName]
       properties:
+        articleId:
+          type: string
+        articleName:
+          type: string
         sourceId:
           type: string
         sourceName:
@@ -2666,7 +2235,7 @@ components:
 
     SendMessageResult:
       type: object
-      required: [message, response, stages, classification, shouldAskResolution]
+      required: [message, response, stages, shouldAskResolution, answerable]
       properties:
         message:
           $ref: "#/components/schemas/Message"
@@ -2676,10 +2245,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OrchestratorStage"
-        classification:
-          $ref: "#/components/schemas/ClassificationResult"
         shouldAskResolution:
           type: boolean
+        answerable:
+          type: boolean
+        articlesUsed:
+          type: array
+          items:
+            type: string
 
     EscalateConversationInput:
       type: object
@@ -2736,38 +2309,15 @@ components:
           type: object
           additionalProperties: true
 
-    ClassificationResult:
-      type: object
-      required:
-        [primaryCategory, confidence, secondaryCategories, entities, rule]
-      properties:
-        primaryCategory:
-          type: string
-        primaryCategoryId:
-          type: string
-        confidence:
-          type: number
-        secondaryCategories:
-          type: array
-          items:
-            type: string
-        entities:
-          type: object
-          additionalProperties: true
-        rule:
-          type: string
-        ruleId:
-          type: string
-
     OrchestratorLog:
       type: object
       required:
         [
           id,
           conversationId,
-          detectedCategory,
-          confidenceScore,
-          ruleUsed,
+          articlesUsed,
+          articleIds,
+          answerable,
           resolutionStatus,
           createdAt,
         ]
@@ -2778,23 +2328,16 @@ components:
           type: string
         messageId:
           type: ["string", "null"]
-        detectedCategory:
-          type: string
-        confidenceScore:
-          type: number
-        secondaryCategories:
+        articlesUsed:
           type: array
           items:
             type: string
-        detectedEntities:
-          type: object
-          additionalProperties: true
-        ruleUsed:
-          type: string
-        dataSourcesQueried:
+        articleIds:
           type: array
           items:
             type: string
+        answerable:
+          type: boolean
         promptAssembled:
           type: string
         tokensUsed:
@@ -2812,493 +2355,100 @@ components:
         agentName:
           type: ["string", "null"]
 
-    # ── Intent Category ───────────────────────────────────────────────────
-    IntentCategory:
+    # ── Knowledge Article ─────────────────────────────────────────────────
+    ArticleStatus:
+      type: string
+      enum: [draft, published, archived]
+
+    ArticleIndexStatus:
+      type: string
+      enum: [idle, indexing, ready, empty, error]
+
+    KnowledgeArticle:
       type: object
       required:
         [
           id,
-          name,
-          description,
-          examples,
-          confidenceThreshold,
-          keywords,
-          isEnabled,
-          sortOrder,
+          agentId,
+          title,
+          bodyHtml,
+          status,
+          targetId,
+          indexStatus,
+          chunkCount,
+          imageCount,
           createdAt,
           updatedAt,
         ]
       properties:
         id:
           type: string
-        name:
-          type: string
-        parentId:
-          type: ["string", "null"]
-        description:
-          type: string
-        examples:
-          type: array
-          items:
-            type: string
-        confidenceThreshold:
-          type: number
-        keywords:
-          type: array
-          items:
-            type: string
-        isEnabled:
-          type: boolean
-        sortOrder:
-          type: number
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
-        agentId:
-          type: ["string", "null"]
-
-    CategoryInput:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
         agentId:
           type: string
-        parentId:
-          type: ["string", "null"]
-        description:
+        title:
           type: string
-        examples:
-          type: array
-          items:
-            type: string
-        confidenceThreshold:
-          type: number
-        keywords:
-          type: array
-          items:
-            type: string
-        isEnabled:
-          type: boolean
-        sortOrder:
-          type: number
-
-    CategoryUpdate:
-      type: object
-      properties:
-        name:
+        bodyHtml:
           type: string
-        parentId:
-          type: ["string", "null"]
-        description:
-          type: string
-        examples:
-          type: array
-          items:
-            type: string
-        confidenceThreshold:
-          type: number
-        keywords:
-          type: array
-          items:
-            type: string
-        isEnabled:
-          type: boolean
-        sortOrder:
-          type: number
-
-    # ── Orchestrator Rule ─────────────────────────────────────────────────
-    OrchestratorRule:
-      type: object
-      required:
-        [
-          id,
-          name,
-          description,
-          promptTemplate,
-          priority,
-          escalationTrigger,
-          isEnabled,
-          conditionOperator,
-          action,
-          categoryIds,
-          sourceIds,
-          connectorIds,
-          audienceTargetIds,
-          httpMethod,
-          endpointUrl,
-          createdAt,
-          updatedAt,
-        ]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-        promptTemplate:
-          type: string
-        priority:
-          type: number
-        requiresClarificationPrompt:
-          type: string
-        escalationTrigger:
-          type: boolean
-        isEnabled:
-          type: boolean
-        conditionOperator:
-          type: string
-        conditionCountry:
-          type: ["string", "null"]
-          enum: [ES, FR, IT, null]
-        action:
-          type: string
-        categoryIds:
-          type: array
-          items:
-            type: string
-        sourceIds:
-          type: array
-          items:
-            type: string
-        connectorIds:
-          type: array
-          items:
-            type: string
-        audienceTargetIds:
-          type: array
-          items:
-            type: string
-        httpMethod:
-          type: string
-          enum: [GET, POST, PUT, PATCH, DELETE]
-        endpointUrl:
-          type: string
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
-
-    RuleInput:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
-        agentId:
-          type: string
-        description:
-          type: string
-        promptTemplate:
-          type: string
-        priority:
-          type: number
-        requiresClarificationPrompt:
-          type: string
-        escalationTrigger:
-          type: boolean
-        isEnabled:
-          type: boolean
-        conditionOperator:
-          type: string
-        conditionCountry:
-          type: ["string", "null"]
-          enum: [ES, FR, IT, null]
-        action:
-          type: string
-        categoryIds:
-          type: array
-          items:
-            type: string
-        sourceIds:
-          type: array
-          items:
-            type: string
-        connectorIds:
-          type: array
-          items:
-            type: string
-        audienceTargetIds:
-          type: array
-          items:
-            type: string
-        httpMethod:
-          type: string
-          enum: [GET, POST, PUT, PATCH, DELETE]
-        endpointUrl:
-          type: string
-
-    RuleUpdate:
-      type: object
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        promptTemplate:
-          type: string
-        priority:
-          type: number
-        requiresClarificationPrompt:
-          type: string
-        escalationTrigger:
-          type: boolean
-        isEnabled:
-          type: boolean
-        conditionOperator:
-          type: string
-        conditionCountry:
-          type: ["string", "null"]
-          enum: [ES, FR, IT, null]
-        action:
-          type: string
-        categoryIds:
-          type: array
-          items:
-            type: string
-        sourceIds:
-          type: array
-          items:
-            type: string
-        connectorIds:
-          type: array
-          items:
-            type: string
-        audienceTargetIds:
-          type: array
-          items:
-            type: string
-        httpMethod:
-          type: string
-          enum: [GET, POST, PUT, PATCH, DELETE]
-        endpointUrl:
-          type: string
-
-    RuleAuthoringMessage:
-      type: object
-      required: [role, content]
-      properties:
-        role:
-          type: string
-          enum: [user, assistant]
-        content:
-          type: string
-          minLength: 1
-          maxLength: 4000
-
-    RuleAuthoringDraft:
-      type: object
-      required:
-        [
-          name,
-          description,
-          promptTemplate,
-          priority,
-          requiresClarificationPrompt,
-          escalationTrigger,
-          isEnabled,
-          conditionOperator,
-          action,
-        ]
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        promptTemplate:
-          type: string
-        priority:
-          type: number
-          minimum: 0
-          maximum: 100
-        requiresClarificationPrompt:
-          type: string
-        escalationTrigger:
-          type: boolean
-        isEnabled:
-          type: boolean
-        conditionOperator:
-          type: string
-        conditionCountry:
-          type: ["string", "null"]
-          enum: [ES, FR, IT, null]
-        action:
-          type: string
-        categoryIds:
-          type: array
-          items:
-            type: string
-          default: []
-        sourceIds:
-          type: array
-          items:
-            type: string
-          default: []
-        connectorIds:
-          type: array
-          items:
-            type: string
-          default: []
-        audienceTargetIds:
-          type: array
-          items:
-            type: string
-          default: []
-        httpMethod:
-          type: string
-          enum: [GET, POST, PUT, PATCH, DELETE]
-          default: GET
-        endpointUrl:
-          type: string
-          default: ""
-
-    RuleAuthoringRequest:
-      type: object
-      required: [message]
-      properties:
-        message:
-          type: string
-          minLength: 1
-          maxLength: 4000
-        history:
-          type: array
-          maxItems: 30
-          items:
-            $ref: "#/components/schemas/RuleAuthoringMessage"
-        draft:
-          $ref: "#/components/schemas/RuleAuthoringDraft"
-        awaitingConfirmation:
-          type: boolean
-          default: false
-
-    RuleAuthoringResponse:
-      type: object
-      required: [status, assistantMessage, unresolvedFields]
-      properties:
         status:
-          type: string
-          enum: [clarifying, ready_for_confirmation, needs_changes, approved]
-        assistantMessage:
-          type: string
-        draft:
-          $ref: "#/components/schemas/RuleAuthoringDraft"
-        unresolvedFields:
-          type: array
-          items:
-            type: string
-
-    RuleVocabulary:
-      type: object
-      required:
-        [
-          id,
-          kind,
-          label,
-          slug,
-          requiresSource,
-          isBuiltin,
-          sortOrder,
-          createdAt,
-          updatedAt,
-        ]
-      properties:
-        id:
-          type: string
-        agentId:
+          $ref: "#/components/schemas/ArticleStatus"
+        targetId:
           type: string
           nullable: true
-        kind:
+        publishedAt:
           type: string
-          enum: [operator, action]
-        label:
+          nullable: true
+        indexStatus:
+          $ref: "#/components/schemas/ArticleIndexStatus"
+        indexError:
           type: string
-        slug:
-          type: string
-        requiresSource:
-          type: boolean
-        isBuiltin:
-          type: boolean
-        sortOrder:
+          nullable: true
+        chunkCount:
           type: number
+        imageCount:
+          type: number
+        imageFailedCount:
+          type: number
+        lastIndexedAt:
+          type: string
+          nullable: true
         createdAt:
           type: string
         updatedAt:
           type: string
 
-    RuleVocabularyInput:
+    ArticleInput:
       type: object
-      required: [agentId, kind, label]
+      required: [agentId, title, bodyHtml]
       properties:
         agentId:
           type: string
-        kind:
+        title:
           type: string
-          enum: [operator, action]
-        label:
+          maxLength: 200
+        bodyHtml:
           type: string
-          maxLength: 80
-        requiresSource:
-          type: boolean
-        sortOrder:
-          type: number
+        targetId:
+          type: string
+          nullable: true
 
-    RuleVocabularyUpdate:
+    ArticleUpdate:
       type: object
       properties:
-        label:
+        title:
           type: string
-          maxLength: 80
-        requiresSource:
-          type: boolean
-        sortOrder:
-          type: number
-
-    RuleCategoryLinkInput:
-      type: object
-      required: [categoryId]
-      properties:
-        categoryId:
+          maxLength: 200
+        bodyHtml:
           type: string
-
-    # ── Knowledge Source ──────────────────────────────────────────────────
-    KnowledgeSource:
-      type: object
-      required:
-        [
-          id,
-          name,
-          sourceType,
-          connectionConfig,
-          isEnabled,
-          createdAt,
-          updatedAt,
-        ]
-      properties:
-        id:
+        targetId:
           type: string
-        name:
-          type: string
-        sourceType:
-          type: string
-        connectionConfig:
-          type: object
-          additionalProperties: true
-        isEnabled:
-          type: boolean
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
+          nullable: true
 
     KnowledgeAsset:
       type: object
       required:
         [
           id,
-          sourceId,
+          articleId,
           mimeType,
           originalName,
           byteSize,
@@ -3309,7 +2459,7 @@ components:
       properties:
         id:
           type: string
-        sourceId:
+        articleId:
           type: string
         mimeType:
           type: string
@@ -3340,7 +2490,7 @@ components:
             url:
               type: string
 
-    SourceAssetUploadInput:
+    ArticleAssetUploadInput:
       type: object
       required: [file]
       properties:
@@ -3350,58 +2500,6 @@ components:
         altText:
           type: string
           maxLength: 500
-
-    SourceInput:
-      type: object
-      required: [name, sourceType]
-      properties:
-        name:
-          type: string
-        agentId:
-          type: string
-        sourceType:
-          type: string
-        connectionConfig:
-          type: object
-          additionalProperties: true
-        isEnabled:
-          type: boolean
-
-    SourceUpdate:
-      type: object
-      properties:
-        name:
-          type: string
-        sourceType:
-          type: string
-        connectionConfig:
-          type: object
-          additionalProperties: true
-        isEnabled:
-          type: boolean
-
-    SourceUploadInput:
-      type: object
-      required: [file, agentId]
-      properties:
-        agentId:
-          type: string
-        name:
-          type: string
-        file:
-          type: string
-          format: binary
-
-    SourceFromUrlInput:
-      type: object
-      required: [agentId, url]
-      properties:
-        agentId:
-          type: string
-        url:
-          type: string
-        name:
-          type: string
 
     # ── Audience Target ───────────────────────────────────────────────────
     TargetPersonType:
@@ -3531,72 +2629,6 @@ components:
           items:
             $ref: "#/components/schemas/TargetConditionInput"
 
-    # ── API Connector ─────────────────────────────────────────────────────
-    ApiConnector:
-      type: object
-      required:
-        [
-          id,
-          name,
-          endpointPattern,
-          authType,
-          authConfig,
-          isEnabled,
-          createdAt,
-          updatedAt,
-        ]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        endpointPattern:
-          type: string
-        authType:
-          type: string
-        authConfig:
-          type: object
-          additionalProperties: true
-        isEnabled:
-          type: boolean
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
-
-    ConnectorInput:
-      type: object
-      required: [name, endpointPattern, authType]
-      properties:
-        name:
-          type: string
-        agentId:
-          type: string
-        endpointPattern:
-          type: string
-        authType:
-          type: string
-        authConfig:
-          type: object
-          additionalProperties: true
-        isEnabled:
-          type: boolean
-
-    ConnectorUpdate:
-      type: object
-      properties:
-        name:
-          type: string
-        endpointPattern:
-          type: string
-        authType:
-          type: string
-        authConfig:
-          type: object
-          additionalProperties: true
-        isEnabled:
-          type: boolean
-
     # ── Analytics ─────────────────────────────────────────────────────────
     AnalyticsSummary:
       type: object
@@ -3606,7 +2638,7 @@ components:
           activeConversations,
           resolvedConversations,
           escalatedConversations,
-          avgConfidenceScore,
+          groundedAnswerRate,
           totalMessages,
           positiveRatings,
           negativeRatings,
@@ -3623,7 +2655,7 @@ components:
           type: number
         escalatedConversations:
           type: number
-        avgConfidenceScore:
+        groundedAnswerRate:
           type: number
         totalMessages:
           type: number

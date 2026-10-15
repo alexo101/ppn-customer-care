@@ -1,12 +1,10 @@
 import {
   Activity,
   AlertTriangle,
-  Database,
+  BookOpen,
   MessageSquare,
   Palette,
   Rocket,
-  Shield,
-  Tag,
   Target,
   Timer,
 } from "lucide-react";
@@ -18,10 +16,13 @@ export const AGENT_CONFIG_STEPS = [
     icon: Palette,
     group: "configuration",
   },
-  { id: "categories", label: "Categories", icon: Tag, group: "configuration" },
-  { id: "sources", label: "Sources", icon: Database, group: "configuration" },
+  {
+    id: "knowledge-base",
+    label: "Knowledge Base",
+    icon: BookOpen,
+    group: "configuration",
+  },
   { id: "targets", label: "Target", icon: Target, group: "configuration" },
-  { id: "rules", label: "Rules", icon: Shield, group: "configuration" },
   {
     id: "escalations",
     label: "Escalations",
@@ -67,6 +68,9 @@ export function parseAgentConfigLocation(
 
   const section = match[2] === "conversations" ? "training" : match[2];
   if (section === "chat") return null;
+  if (section === "sources") {
+    return { agentId, step: "knowledge-base" };
+  }
 
   const step =
     AGENT_CONFIG_STEPS.find((item) => item.id === section)?.id ?? "appearance";

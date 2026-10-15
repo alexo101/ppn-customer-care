@@ -723,21 +723,6 @@ export const GenerateInboxEscalationSummaryResponse = zod.object({
 
 
 /**
- * @summary Assign a knowledge source to an agent
- */
-export const assignAgentSourcePathAgentIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-export const assignAgentSourcePathSourceIdRegExp = new RegExp('^[0-9a-fA-F-]{36}$');
-
-
-export const AssignAgentSourceParams = zod.object({
-  "agentId": zod.coerce.string().regex(assignAgentSourcePathAgentIdRegExp),
-  "sourceId": zod.coerce.string().regex(assignAgentSourcePathSourceIdRegExp)
-})
-
-export const AssignAgentSourceResponse = zod.void()
-
-
-/**
  * @summary List conversations
  */
 export const listConversationsQueryLimitDefault = 50;
@@ -895,16 +880,9 @@ export const SendMessageResponse = zod.object({
   "status": zod.string(),
   "details": zod.record(zod.string(), zod.unknown()).optional()
 })),
-  "classification": zod.object({
-  "primaryCategory": zod.string(),
-  "primaryCategoryId": zod.string().optional(),
-  "confidence": zod.number(),
-  "secondaryCategories": zod.array(zod.string()),
-  "entities": zod.record(zod.string(), zod.unknown()),
-  "rule": zod.string(),
-  "ruleId": zod.string().optional()
-}),
-  "shouldAskResolution": zod.boolean()
+  "shouldAskResolution": zod.boolean(),
+  "answerable": zod.boolean(),
+  "articlesUsed": zod.array(zod.string()).optional()
 })
 
 
@@ -986,12 +964,9 @@ export const ListConversationLogsResponseItem = zod.object({
   "id": zod.string(),
   "conversationId": zod.string(),
   "messageId": zod.string().nullish(),
-  "detectedCategory": zod.string(),
-  "confidenceScore": zod.number(),
-  "secondaryCategories": zod.array(zod.string()).optional(),
-  "detectedEntities": zod.record(zod.string(), zod.unknown()).optional(),
-  "ruleUsed": zod.string(),
-  "dataSourcesQueried": zod.array(zod.string()).optional(),
+  "articlesUsed": zod.array(zod.string()),
+  "articleIds": zod.array(zod.string()),
+  "answerable": zod.boolean(),
   "promptAssembled": zod.string().optional(),
   "tokensUsed": zod.number().optional(),
   "latencyMs": zod.number().optional(),
@@ -1128,574 +1103,201 @@ export const DeleteTrainingQuestionResponse = zod.void()
 
 
 /**
- * @summary List intent categories
+ * @summary List knowledge base articles
  */
-export const ListCategoriesQueryParams = zod.object({
-  "agentId": zod.coerce.string().optional()
-})
-
-export const ListCategoriesResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "parentId": zod.string().nullish(),
-  "description": zod.string(),
-  "examples": zod.array(zod.string()),
-  "confidenceThreshold": zod.number(),
-  "keywords": zod.array(zod.string()),
-  "isEnabled": zod.boolean(),
-  "sortOrder": zod.number(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string(),
-  "agentId": zod.string().nullish()
-})
-export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
-
-
-/**
- * @summary Create an intent category
- */
-export const CreateCategoryBody = zod.object({
-  "name": zod.string(),
-  "agentId": zod.string().optional(),
-  "parentId": zod.string().nullish(),
-  "description": zod.string().optional(),
-  "examples": zod.array(zod.string()).optional(),
-  "confidenceThreshold": zod.number().optional(),
-  "keywords": zod.array(zod.string()).optional(),
-  "isEnabled": zod.boolean().optional(),
-  "sortOrder": zod.number().optional()
-})
-
-export const CreateCategoryResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "parentId": zod.string().nullish(),
-  "description": zod.string(),
-  "examples": zod.array(zod.string()),
-  "confidenceThreshold": zod.number(),
-  "keywords": zod.array(zod.string()),
-  "isEnabled": zod.boolean(),
-  "sortOrder": zod.number(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string(),
-  "agentId": zod.string().nullish()
-})
-
-
-/**
- * @summary Update an intent category
- */
-export const UpdateCategoryParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const UpdateCategoryBody = zod.object({
-  "name": zod.string().optional(),
-  "parentId": zod.string().nullish(),
-  "description": zod.string().optional(),
-  "examples": zod.array(zod.string()).optional(),
-  "confidenceThreshold": zod.number().optional(),
-  "keywords": zod.array(zod.string()).optional(),
-  "isEnabled": zod.boolean().optional(),
-  "sortOrder": zod.number().optional()
-})
-
-export const UpdateCategoryResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "parentId": zod.string().nullish(),
-  "description": zod.string(),
-  "examples": zod.array(zod.string()),
-  "confidenceThreshold": zod.number(),
-  "keywords": zod.array(zod.string()),
-  "isEnabled": zod.boolean(),
-  "sortOrder": zod.number(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string(),
-  "agentId": zod.string().nullish()
-})
-
-
-/**
- * @summary Delete an intent category
- */
-export const DeleteCategoryParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const DeleteCategoryResponse = zod.void()
-
-
-/**
- * @summary List orchestration rules
- */
-export const ListRulesQueryParams = zod.object({
-  "agentId": zod.coerce.string().optional()
-})
-
-export const ListRulesResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "promptTemplate": zod.string(),
-  "priority": zod.number(),
-  "requiresClarificationPrompt": zod.string().optional(),
-  "escalationTrigger": zod.boolean(),
-  "isEnabled": zod.boolean(),
-  "conditionOperator": zod.string(),
-  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
-  "action": zod.string(),
-  "categoryIds": zod.array(zod.string()),
-  "sourceIds": zod.array(zod.string()),
-  "connectorIds": zod.array(zod.string()),
-  "audienceTargetIds": zod.array(zod.string()),
-  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
-  "endpointUrl": zod.string(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-export const ListRulesResponse = zod.array(ListRulesResponseItem)
-
-
-/**
- * @summary Create an orchestration rule
- */
-export const CreateRuleBody = zod.object({
-  "name": zod.string(),
-  "agentId": zod.string().optional(),
-  "description": zod.string().optional(),
-  "promptTemplate": zod.string().optional(),
-  "priority": zod.number().optional(),
-  "requiresClarificationPrompt": zod.string().optional(),
-  "escalationTrigger": zod.boolean().optional(),
-  "isEnabled": zod.boolean().optional(),
-  "conditionOperator": zod.string().optional(),
-  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
-  "action": zod.string().optional(),
-  "categoryIds": zod.array(zod.string()).optional(),
-  "sourceIds": zod.array(zod.string()).optional(),
-  "connectorIds": zod.array(zod.string()).optional(),
-  "audienceTargetIds": zod.array(zod.string()).optional(),
-  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
-  "endpointUrl": zod.string().optional()
-})
-
-export const CreateRuleResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "promptTemplate": zod.string(),
-  "priority": zod.number(),
-  "requiresClarificationPrompt": zod.string().optional(),
-  "escalationTrigger": zod.boolean(),
-  "isEnabled": zod.boolean(),
-  "conditionOperator": zod.string(),
-  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
-  "action": zod.string(),
-  "categoryIds": zod.array(zod.string()),
-  "sourceIds": zod.array(zod.string()),
-  "connectorIds": zod.array(zod.string()),
-  "audienceTargetIds": zod.array(zod.string()),
-  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
-  "endpointUrl": zod.string(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-
-
-/**
- * @summary Continue a conversational rule-authoring session
- */
-export const SendRuleAuthoringMessageParams = zod.object({
-  "agentId": zod.coerce.string()
-})
-
-export const sendRuleAuthoringMessageBodyMessageMax = 4000;
-
-export const sendRuleAuthoringMessageBodyHistoryItemContentMax = 4000;
-
-export const sendRuleAuthoringMessageBodyHistoryMax = 30;
-
-export const sendRuleAuthoringMessageBodyDraftPriorityMin = 0;
-export const sendRuleAuthoringMessageBodyDraftPriorityMax = 100;
-
-export const sendRuleAuthoringMessageBodyDraftCategoryIdsDefault = [];
-export const sendRuleAuthoringMessageBodyDraftSourceIdsDefault = [];
-export const sendRuleAuthoringMessageBodyDraftConnectorIdsDefault = [];
-export const sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault = [];
-export const sendRuleAuthoringMessageBodyDraftHttpMethodDefault = `GET`;
-export const sendRuleAuthoringMessageBodyDraftEndpointUrlDefault = ``;
-export const sendRuleAuthoringMessageBodyAwaitingConfirmationDefault = false;
-
-export const SendRuleAuthoringMessageBody = zod.object({
-  "message": zod.string().min(1).max(sendRuleAuthoringMessageBodyMessageMax),
-  "history": zod.array(zod.object({
-  "role": zod.enum(['user', 'assistant']),
-  "content": zod.string().min(1).max(sendRuleAuthoringMessageBodyHistoryItemContentMax)
-})).max(sendRuleAuthoringMessageBodyHistoryMax).optional(),
-  "draft": zod.object({
-  "name": zod.string(),
-  "description": zod.string(),
-  "promptTemplate": zod.string(),
-  "priority": zod.number().min(sendRuleAuthoringMessageBodyDraftPriorityMin).max(sendRuleAuthoringMessageBodyDraftPriorityMax),
-  "requiresClarificationPrompt": zod.string(),
-  "escalationTrigger": zod.boolean(),
-  "isEnabled": zod.boolean(),
-  "conditionOperator": zod.string(),
-  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
-  "action": zod.string(),
-  "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftCategoryIdsDefault),
-  "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftSourceIdsDefault),
-  "connectorIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftConnectorIdsDefault),
-  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageBodyDraftAudienceTargetIdsDefault),
-  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default(sendRuleAuthoringMessageBodyDraftHttpMethodDefault),
-  "endpointUrl": zod.string().default(sendRuleAuthoringMessageBodyDraftEndpointUrlDefault)
-}).optional(),
-  "awaitingConfirmation": zod.boolean().default(sendRuleAuthoringMessageBodyAwaitingConfirmationDefault)
-})
-
-export const sendRuleAuthoringMessageResponseDraftPriorityMin = 0;
-export const sendRuleAuthoringMessageResponseDraftPriorityMax = 100;
-
-export const sendRuleAuthoringMessageResponseDraftCategoryIdsDefault = [];
-export const sendRuleAuthoringMessageResponseDraftSourceIdsDefault = [];
-export const sendRuleAuthoringMessageResponseDraftConnectorIdsDefault = [];
-export const sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault = [];
-export const sendRuleAuthoringMessageResponseDraftHttpMethodDefault = `GET`;
-export const sendRuleAuthoringMessageResponseDraftEndpointUrlDefault = ``;
-
-export const SendRuleAuthoringMessageResponse = zod.object({
-  "status": zod.enum(['clarifying', 'ready_for_confirmation', 'needs_changes', 'approved']),
-  "assistantMessage": zod.string(),
-  "draft": zod.object({
-  "name": zod.string(),
-  "description": zod.string(),
-  "promptTemplate": zod.string(),
-  "priority": zod.number().min(sendRuleAuthoringMessageResponseDraftPriorityMin).max(sendRuleAuthoringMessageResponseDraftPriorityMax),
-  "requiresClarificationPrompt": zod.string(),
-  "escalationTrigger": zod.boolean(),
-  "isEnabled": zod.boolean(),
-  "conditionOperator": zod.string(),
-  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
-  "action": zod.string(),
-  "categoryIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftCategoryIdsDefault),
-  "sourceIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftSourceIdsDefault),
-  "connectorIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftConnectorIdsDefault),
-  "audienceTargetIds": zod.array(zod.string()).default(sendRuleAuthoringMessageResponseDraftAudienceTargetIdsDefault),
-  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default(sendRuleAuthoringMessageResponseDraftHttpMethodDefault),
-  "endpointUrl": zod.string().default(sendRuleAuthoringMessageResponseDraftEndpointUrlDefault)
-}).optional(),
-  "unresolvedFields": zod.array(zod.string())
-})
-
-
-/**
- * @summary Update an orchestration rule
- */
-export const UpdateRuleParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const UpdateRuleBody = zod.object({
-  "name": zod.string().optional(),
-  "description": zod.string().optional(),
-  "promptTemplate": zod.string().optional(),
-  "priority": zod.number().optional(),
-  "requiresClarificationPrompt": zod.string().optional(),
-  "escalationTrigger": zod.boolean().optional(),
-  "isEnabled": zod.boolean().optional(),
-  "conditionOperator": zod.string().optional(),
-  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
-  "action": zod.string().optional(),
-  "categoryIds": zod.array(zod.string()).optional(),
-  "sourceIds": zod.array(zod.string()).optional(),
-  "connectorIds": zod.array(zod.string()).optional(),
-  "audienceTargetIds": zod.array(zod.string()).optional(),
-  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
-  "endpointUrl": zod.string().optional()
-})
-
-export const UpdateRuleResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "description": zod.string(),
-  "promptTemplate": zod.string(),
-  "priority": zod.number(),
-  "requiresClarificationPrompt": zod.string().optional(),
-  "escalationTrigger": zod.boolean(),
-  "isEnabled": zod.boolean(),
-  "conditionOperator": zod.string(),
-  "conditionCountry": zod.union([zod.literal('ES'),zod.literal('FR'),zod.literal('IT'),zod.literal(null)]).nullish(),
-  "action": zod.string(),
-  "categoryIds": zod.array(zod.string()),
-  "sourceIds": zod.array(zod.string()),
-  "connectorIds": zod.array(zod.string()),
-  "audienceTargetIds": zod.array(zod.string()),
-  "httpMethod": zod.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
-  "endpointUrl": zod.string(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-
-
-/**
- * @summary Delete an orchestration rule
- */
-export const DeleteRuleParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const DeleteRuleResponse = zod.void()
-
-
-/**
- * @summary List categories linked to a rule
- */
-export const ListRuleCategoriesParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const ListRuleCategoriesResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "parentId": zod.string().nullish(),
-  "description": zod.string(),
-  "examples": zod.array(zod.string()),
-  "confidenceThreshold": zod.number(),
-  "keywords": zod.array(zod.string()),
-  "isEnabled": zod.boolean(),
-  "sortOrder": zod.number(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string(),
-  "agentId": zod.string().nullish()
-})
-export const ListRuleCategoriesResponse = zod.array(ListRuleCategoriesResponseItem)
-
-
-/**
- * @summary Link a category to a rule
- */
-export const LinkRuleCategoryParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const LinkRuleCategoryBody = zod.object({
-  "categoryId": zod.string()
-})
-
-export const LinkRuleCategoryResponse = zod.object({
-  "success": zod.boolean()
-})
-
-
-/**
- * @summary Remove a category link from a rule
- */
-export const UnlinkRuleCategoryParams = zod.object({
-  "id": zod.coerce.string(),
-  "categoryId": zod.coerce.string()
-})
-
-export const UnlinkRuleCategoryResponse = zod.void()
-
-
-/**
- * @summary List configurable rule operators and actions
- */
-export const ListRuleVocabulariesQueryParams = zod.object({
+export const ListArticlesQueryParams = zod.object({
   "agentId": zod.coerce.string(),
-  "kind": zod.enum(['operator', 'action']).optional()
+  "status": zod.enum(['draft', 'published', 'archived']).optional(),
+  "targetId": zod.coerce.string().optional()
 })
 
-export const ListRuleVocabulariesResponseItem = zod.object({
+export const ListArticlesResponseItem = zod.object({
   "id": zod.string(),
-  "agentId": zod.string().nullish(),
-  "kind": zod.enum(['operator', 'action']),
-  "label": zod.string(),
-  "slug": zod.string(),
-  "requiresSource": zod.boolean(),
-  "isBuiltin": zod.boolean(),
-  "sortOrder": zod.number(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-export const ListRuleVocabulariesResponse = zod.array(ListRuleVocabulariesResponseItem)
-
-
-/**
- * @summary Add a custom operator or action
- */
-export const createRuleVocabularyBodyLabelMax = 80;
-
-
-
-export const CreateRuleVocabularyBody = zod.object({
   "agentId": zod.string(),
-  "kind": zod.enum(['operator', 'action']),
-  "label": zod.string().max(createRuleVocabularyBodyLabelMax),
-  "requiresSource": zod.boolean().optional(),
-  "sortOrder": zod.number().optional()
+  "title": zod.string(),
+  "bodyHtml": zod.string(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "targetId": zod.string().nullable(),
+  "publishedAt": zod.string().nullish(),
+  "indexStatus": zod.enum(['idle', 'indexing', 'ready', 'empty', 'error']),
+  "indexError": zod.string().nullish(),
+  "chunkCount": zod.number(),
+  "imageCount": zod.number(),
+  "imageFailedCount": zod.number().optional(),
+  "lastIndexedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListArticlesResponse = zod.array(ListArticlesResponseItem)
+
+
+/**
+ * @summary Create a draft knowledge base article
+ */
+export const createArticleBodyTitleMax = 200;
+
+
+
+export const CreateArticleBody = zod.object({
+  "agentId": zod.string(),
+  "title": zod.string().max(createArticleBodyTitleMax),
+  "bodyHtml": zod.string(),
+  "targetId": zod.string().nullish()
 })
 
-export const CreateRuleVocabularyResponse = zod.object({
+export const CreateArticleResponse = zod.object({
   "id": zod.string(),
-  "agentId": zod.string().nullish(),
-  "kind": zod.enum(['operator', 'action']),
-  "label": zod.string(),
-  "slug": zod.string(),
-  "requiresSource": zod.boolean(),
-  "isBuiltin": zod.boolean(),
-  "sortOrder": zod.number(),
+  "agentId": zod.string(),
+  "title": zod.string(),
+  "bodyHtml": zod.string(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "targetId": zod.string().nullable(),
+  "publishedAt": zod.string().nullish(),
+  "indexStatus": zod.enum(['idle', 'indexing', 'ready', 'empty', 'error']),
+  "indexError": zod.string().nullish(),
+  "chunkCount": zod.number(),
+  "imageCount": zod.number(),
+  "imageFailedCount": zod.number().optional(),
+  "lastIndexedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
 
 
 /**
- * @summary Update a custom operator or action
+ * @summary Update a knowledge base article
  */
-export const UpdateRuleVocabularyParams = zod.object({
+export const UpdateArticleParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const updateRuleVocabularyBodyLabelMax = 80;
+export const updateArticleBodyTitleMax = 200;
 
 
 
-export const UpdateRuleVocabularyBody = zod.object({
-  "label": zod.string().max(updateRuleVocabularyBodyLabelMax).optional(),
-  "requiresSource": zod.boolean().optional(),
-  "sortOrder": zod.number().optional()
+export const UpdateArticleBody = zod.object({
+  "title": zod.string().max(updateArticleBodyTitleMax).optional(),
+  "bodyHtml": zod.string().optional(),
+  "targetId": zod.string().nullish()
 })
 
-export const UpdateRuleVocabularyResponse = zod.object({
+export const UpdateArticleResponse = zod.object({
   "id": zod.string(),
-  "agentId": zod.string().nullish(),
-  "kind": zod.enum(['operator', 'action']),
-  "label": zod.string(),
-  "slug": zod.string(),
-  "requiresSource": zod.boolean(),
-  "isBuiltin": zod.boolean(),
-  "sortOrder": zod.number(),
+  "agentId": zod.string(),
+  "title": zod.string(),
+  "bodyHtml": zod.string(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "targetId": zod.string().nullable(),
+  "publishedAt": zod.string().nullish(),
+  "indexStatus": zod.enum(['idle', 'indexing', 'ready', 'empty', 'error']),
+  "indexError": zod.string().nullish(),
+  "chunkCount": zod.number(),
+  "imageCount": zod.number(),
+  "imageFailedCount": zod.number().optional(),
+  "lastIndexedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
 
 
 /**
- * @summary Delete a custom operator or action
+ * @summary Delete a knowledge base article
  */
-export const DeleteRuleVocabularyParams = zod.object({
+export const DeleteArticleParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const DeleteRuleVocabularyResponse = zod.void()
+export const DeleteArticleResponse = zod.void()
 
 
 /**
- * @summary List knowledge sources
+ * @summary Publish an article and index it for retrieval
  */
-export const ListSourcesQueryParams = zod.object({
-  "agentId": zod.coerce.string().optional()
+export const PublishArticleParams = zod.object({
+  "id": zod.coerce.string()
 })
 
-export const ListSourcesResponseItem = zod.object({
+export const PublishArticleResponse = zod.object({
   "id": zod.string(),
-  "name": zod.string(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-export const ListSourcesResponse = zod.array(ListSourcesResponseItem)
-
-
-/**
- * @summary Create a knowledge source
- */
-export const CreateSourceBody = zod.object({
-  "name": zod.string(),
-  "agentId": zod.string().optional(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()).optional(),
-  "isEnabled": zod.boolean().optional()
-})
-
-export const CreateSourceResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
+  "agentId": zod.string(),
+  "title": zod.string(),
+  "bodyHtml": zod.string(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "targetId": zod.string().nullable(),
+  "publishedAt": zod.string().nullish(),
+  "indexStatus": zod.enum(['idle', 'indexing', 'ready', 'empty', 'error']),
+  "indexError": zod.string().nullish(),
+  "chunkCount": zod.number(),
+  "imageCount": zod.number(),
+  "imageFailedCount": zod.number().optional(),
+  "lastIndexedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
 
 
 /**
- * @summary Update a knowledge source
+ * @summary Archive an article and remove it from retrieval
  */
-export const UpdateSourceParams = zod.object({
+export const ArchiveArticleParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const UpdateSourceBody = zod.object({
-  "name": zod.string().optional(),
-  "sourceType": zod.string().optional(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()).optional(),
-  "isEnabled": zod.boolean().optional()
-})
-
-export const UpdateSourceResponse = zod.object({
+export const ArchiveArticleResponse = zod.object({
   "id": zod.string(),
-  "name": zod.string(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
+  "agentId": zod.string(),
+  "title": zod.string(),
+  "bodyHtml": zod.string(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "targetId": zod.string().nullable(),
+  "publishedAt": zod.string().nullish(),
+  "indexStatus": zod.enum(['idle', 'indexing', 'ready', 'empty', 'error']),
+  "indexError": zod.string().nullish(),
+  "chunkCount": zod.number(),
+  "imageCount": zod.number(),
+  "imageFailedCount": zod.number().optional(),
+  "lastIndexedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
 
 
 /**
- * @summary Delete a knowledge source
+ * @summary Return an article to draft and remove it from retrieval
  */
-export const DeleteSourceParams = zod.object({
+export const RestoreArticleDraftParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const DeleteSourceResponse = zod.void()
-
-
-/**
- * @summary Re-index a knowledge source
- */
-export const RefreshSourceParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const RefreshSourceResponse = zod.object({
+export const RestoreArticleDraftResponse = zod.object({
   "id": zod.string(),
-  "name": zod.string(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
+  "agentId": zod.string(),
+  "title": zod.string(),
+  "bodyHtml": zod.string(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "targetId": zod.string().nullable(),
+  "publishedAt": zod.string().nullish(),
+  "indexStatus": zod.enum(['idle', 'indexing', 'ready', 'empty', 'error']),
+  "indexError": zod.string().nullish(),
+  "chunkCount": zod.number(),
+  "imageCount": zod.number(),
+  "imageFailedCount": zod.number().optional(),
+  "lastIndexedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
 
 
 /**
- * @summary List screenshots for a knowledge source
+ * @summary List inline images for an article
  */
-export const ListSourceAssetsParams = zod.object({
+export const ListArticleAssetsParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const ListSourceAssetsResponseItem = zod.object({
+export const ListArticleAssetsResponseItem = zod.object({
   "id": zod.string(),
-  "sourceId": zod.string(),
+  "articleId": zod.string(),
   "mimeType": zod.enum(['image/png', 'image/jpeg', 'image/webp']),
   "originalName": zod.string(),
   "byteSize": zod.number(),
@@ -1705,28 +1307,28 @@ export const ListSourceAssetsResponseItem = zod.object({
   "altText": zod.string(),
   "processingStatus": zod.string()
 })
-export const ListSourceAssetsResponse = zod.array(ListSourceAssetsResponseItem)
+export const ListArticleAssetsResponse = zod.array(ListArticleAssetsResponseItem)
 
 
 /**
- * @summary Upload a screenshot to a knowledge source
+ * @summary Upload an inline image for an article
  */
-export const UploadSourceAssetParams = zod.object({
+export const UploadArticleAssetParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const uploadSourceAssetBodyAltTextMax = 500;
+export const uploadArticleAssetBodyAltTextMax = 500;
 
 
 
-export const UploadSourceAssetBody = zod.object({
+export const UploadArticleAssetBody = zod.object({
   "file": zod.instanceof(File),
-  "altText": zod.string().max(uploadSourceAssetBodyAltTextMax).optional()
+  "altText": zod.string().max(uploadArticleAssetBodyAltTextMax).optional()
 })
 
-export const UploadSourceAssetResponse = zod.object({
+export const UploadArticleAssetResponse = zod.object({
   "id": zod.string(),
-  "sourceId": zod.string(),
+  "articleId": zod.string(),
   "mimeType": zod.enum(['image/png', 'image/jpeg', 'image/webp']),
   "originalName": zod.string(),
   "byteSize": zod.number(),
@@ -1739,15 +1341,15 @@ export const UploadSourceAssetResponse = zod.object({
 
 
 /**
- * @summary Get a short-lived private screenshot URL
+ * @summary Get a short-lived private image URL
  */
-export const GetSourceAssetUrlParams = zod.object({
+export const GetArticleAssetUrlParams = zod.object({
   "assetId": zod.coerce.string()
 })
 
-export const GetSourceAssetUrlResponse = zod.object({
+export const GetArticleAssetUrlResponse = zod.object({
   "id": zod.string(),
-  "sourceId": zod.string(),
+  "articleId": zod.string(),
   "mimeType": zod.enum(['image/png', 'image/jpeg', 'image/webp']),
   "originalName": zod.string(),
   "byteSize": zod.number(),
@@ -1762,53 +1364,13 @@ export const GetSourceAssetUrlResponse = zod.object({
 
 
 /**
- * @summary Delete a screenshot from a knowledge source
+ * @summary Delete an inline image
  */
-export const DeleteSourceAssetParams = zod.object({
+export const DeleteArticleAssetParams = zod.object({
   "assetId": zod.coerce.string()
 })
 
-export const DeleteSourceAssetResponse = zod.void()
-
-
-/**
- * @summary Upload a Word or Excel document as a knowledge source
- */
-export const UploadSourceDocumentBody = zod.object({
-  "agentId": zod.string(),
-  "name": zod.string().optional(),
-  "file": zod.instanceof(File)
-})
-
-export const UploadSourceDocumentResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-
-
-/**
- * @summary Import a public Google Doc, Google Sheet, or office file URL as a knowledge source
- */
-export const CreateSourceFromUrlBody = zod.object({
-  "agentId": zod.string(),
-  "url": zod.string(),
-  "name": zod.string().optional()
-})
-
-export const CreateSourceFromUrlResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "sourceType": zod.string(),
-  "connectionConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
+export const DeleteArticleAssetResponse = zod.void()
 
 
 /**
@@ -1938,87 +1500,6 @@ export const DeleteTargetResponse = zod.void()
 
 
 /**
- * @summary List API connectors
- */
-export const ListConnectorsQueryParams = zod.object({
-  "agentId": zod.coerce.string().optional()
-})
-
-export const ListConnectorsResponseItem = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "endpointPattern": zod.string(),
-  "authType": zod.string(),
-  "authConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-export const ListConnectorsResponse = zod.array(ListConnectorsResponseItem)
-
-
-/**
- * @summary Create an API connector
- */
-export const CreateConnectorBody = zod.object({
-  "name": zod.string(),
-  "agentId": zod.string().optional(),
-  "endpointPattern": zod.string(),
-  "authType": zod.string(),
-  "authConfig": zod.record(zod.string(), zod.unknown()).optional(),
-  "isEnabled": zod.boolean().optional()
-})
-
-export const CreateConnectorResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "endpointPattern": zod.string(),
-  "authType": zod.string(),
-  "authConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-
-
-/**
- * @summary Update an API connector
- */
-export const UpdateConnectorParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const UpdateConnectorBody = zod.object({
-  "name": zod.string().optional(),
-  "endpointPattern": zod.string().optional(),
-  "authType": zod.string().optional(),
-  "authConfig": zod.record(zod.string(), zod.unknown()).optional(),
-  "isEnabled": zod.boolean().optional()
-})
-
-export const UpdateConnectorResponse = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "endpointPattern": zod.string(),
-  "authType": zod.string(),
-  "authConfig": zod.record(zod.string(), zod.unknown()),
-  "isEnabled": zod.boolean(),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
-
-
-/**
- * @summary Delete an API connector
- */
-export const DeleteConnectorParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const DeleteConnectorResponse = zod.void()
-
-
-/**
  * @summary Get dashboard summary stats
  */
 export const GetAnalyticsSummaryResponse = zod.object({
@@ -2026,7 +1507,7 @@ export const GetAnalyticsSummaryResponse = zod.object({
   "activeConversations": zod.number(),
   "resolvedConversations": zod.number(),
   "escalatedConversations": zod.number(),
-  "avgConfidenceScore": zod.number(),
+  "groundedAnswerRate": zod.number(),
   "totalMessages": zod.number(),
   "positiveRatings": zod.number(),
   "negativeRatings": zod.number(),
@@ -2049,12 +1530,9 @@ export const ListAnalyticsLogsResponseItem = zod.object({
   "id": zod.string(),
   "conversationId": zod.string(),
   "messageId": zod.string().nullish(),
-  "detectedCategory": zod.string(),
-  "confidenceScore": zod.number(),
-  "secondaryCategories": zod.array(zod.string()).optional(),
-  "detectedEntities": zod.record(zod.string(), zod.unknown()).optional(),
-  "ruleUsed": zod.string(),
-  "dataSourcesQueried": zod.array(zod.string()).optional(),
+  "articlesUsed": zod.array(zod.string()),
+  "articleIds": zod.array(zod.string()),
+  "answerable": zod.boolean(),
   "promptAssembled": zod.string().optional(),
   "tokensUsed": zod.number().optional(),
   "latencyMs": zod.number().optional(),

@@ -5,7 +5,7 @@ import { Network, ArrowRight, ShieldCheck, Zap, Activity } from 'lucide-react';
 
 export default function Home() {
   const { isLoaded, isSignedIn } = useAuth();
-  if (isLoaded && isSignedIn) return <Redirect to="/dashboard" />;
+  if (isLoaded && isSignedIn) return <Redirect to="/agents" />;
 
   return (
     <div className="min-h-screen bg-background flex flex-col text-foreground font-sans">
@@ -20,8 +20,8 @@ export default function Home() {
           <Link href="/login">
             <Button variant="ghost">Log in</Button>
           </Link>
-          <Link href="/dashboard">
-            <Button>Go to dashboard</Button>
+          <Link href="/agents">
+            <Button>Go to agents</Button>
           </Link>
         </nav>
       </header>
@@ -42,11 +42,10 @@ export default function Home() {
               Customer support AI, <br className="hidden sm:block" /><span className="text-primary">orchestrated end to end</span>
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Design the conversations your AI agents have with customers. Route intents, apply rules, and monitor
-              every resolution in one clear, connected workspace.
+              Design the conversations your AI agents have with customers. Publish knowledge once, and let the assistant answer from it.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <Link href="/dashboard">
+              <Link href="/agents">
                 <Button size="lg" className="px-8 w-full sm:w-auto">
                   Get started <ArrowRight className="w-4 h-4 ml-1.5" />
                 </Button>
@@ -68,16 +67,16 @@ export default function Home() {
               </span>
               <h3 className="font-semibold text-base">Real-time visibility</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Watch your agent classify intents, score confidence, and resolve support queries as they happen.
+                Watch answers, escalations, and article usage as conversations happen.
               </p>
             </div>
             <div className="space-y-3 p-6 rounded-xl border border-border bg-background">
               <span className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary">
                 <Zap className="w-5 h-5" />
               </span>
-              <h3 className="font-semibold text-base">Flexible rule engine</h3>
+              <h3 className="font-semibold text-base">Grounded answers</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Define precise escalation triggers and clarification prompts based on fine-grained intent categories.
+                The assistant answers from published articles and says when the knowledge base is not enough.
               </p>
             </div>
             <div className="space-y-3 p-6 rounded-xl border border-border bg-background">
@@ -86,7 +85,7 @@ export default function Home() {
               </span>
               <h3 className="font-semibold text-base">Trusted knowledge</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Connect your APIs and knowledge sources to give agents verified, authoritative context.
+                Write articles once and assign them to a target so the assistant can answer with that knowledge.
               </p>
             </div>
           </div>

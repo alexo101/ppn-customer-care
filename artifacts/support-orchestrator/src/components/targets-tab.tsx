@@ -95,18 +95,36 @@ export function TargetsTab({ agentId }: { agentId: string }) {
     return queryClient.invalidateQueries({ queryKey: targetsQueryKey });
   };
 
+  const asUserCondition = (condition: TargetConditionInput): TargetConditionInput => {
+    const personType: TargetPersonType = "user";
+    const attribute = coerceAttribute(personType, condition.attribute);
+    const operator =
+      attribute === "phone_number_prefix" && condition.attribute !== "phone_number_prefix"
+        ? "starts_with"
+        : condition.operator;
+    return {
+      ...condition,
+      personType,
+      attribute,
+      operator,
+      value: VALUELESS_OPERATORS.has(operator) ? "" : condition.value,
+    };
+  };
+
   const resetForm = (target?: Target | null) => {
     const next = target
       ? {
           name: target.name,
           description: target.description,
           matchMode: target.matchMode,
-          conditions: target.conditions.map((condition) => ({
-            personType: condition.personType,
-            attribute: condition.attribute,
-            operator: condition.operator,
-            value: condition.value,
-          })),
+          conditions: target.conditions.map((condition) =>
+            asUserCondition({
+              personType: "user",
+              attribute: condition.attribute,
+              operator: condition.operator,
+              value: condition.value,
+            }),
+          ),
         }
       : emptyForm();
     setEditing(target ?? null);
@@ -132,7 +150,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
     setConditions((current) =>
       current.map((condition, i) => {
         if (i !== index) return condition;
-        const personType = (patch.personType ?? condition.personType) as TargetPersonType;
+        const personType: TargetPersonType = "user";
         const attribute = coerceAttribute(personType, patch.attribute ?? condition.attribute);
         const operator = patch.operator
           ?? (attribute === "phone_number_prefix" && condition.attribute !== "phone_number_prefix"
@@ -164,6 +182,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
       matchMode,
       conditions: conditions.map((condition) => ({
         ...condition,
+        personType: "user" as const,
         value: VALUELESS_OPERATORS.has(condition.operator) ? "" : (condition.value ?? "").trim(),
       })),
     };
@@ -215,7 +234,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
   };
 
   const exampleHint = useMemo(
-    () => ["User email contains mydomain.com", "Lead phone number prefix starts with +34"],
+    () => ["User email contains mydomain.com", "User phone number prefix starts with +34"],
     [],
   );
 
@@ -227,7 +246,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
           <p className="text-xs text-muted-foreground mt-1">
             Name an audience, then describe it with operators such as{" "}
             <span className="font-medium text-foreground">user email contains mydomain.com</span> or{" "}
-            <span className="font-medium text-foreground">lead phone number prefix starts with +34</span>.
+            <span className="font-medium text-foreground">user phone number prefix starts with +34</span>.
             Every agent starts with an <span className="font-medium text-foreground">Everyone</span> target that does not filter by any criteria.
           </p>
         </div>
@@ -259,7 +278,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
 
         {targets.length === 0 ? (
           <p className="text-xs text-muted-foreground py-6 text-center">
-            No targets yet. Create one to match visitors, leads, or users.
+            No targets yet. Create one to match users.
           </p>
         ) : (
           <div className="space-y-2.5">
@@ -375,7 +394,7 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   variant="outline"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => setConditions((current) => [...current, defaultCondition(current.at(-1)?.personType ?? "user")])}
+                  onClick={() => setConditions((current) => [...current, defaultCondition("user")])}
                   disabled={conditions.length >= 20}
                 >
                   <Plus className="w-3 h-3 mr-1" />
@@ -394,19 +413,12 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   return (
                     <div key={`${condition.personType}-${index}`} className="rounded-md border border-border p-2.5 space-y-2">
                       <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_minmax(0,9.5rem)_auto] gap-2 items-center">
-                        <Select
-                          value={condition.personType}
-                          onValueChange={(value) => updateCondition(index, { personType: value as TargetPersonType })}
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
+                        <Select value="user" disabled>
+                          <SelectTrigger className="h-8 text-xs" aria-label="Person type">
+                            <SelectValue>{PERSON_TYPE_LABELS.user}</SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            {(Object.keys(PERSON_TYPE_LABELS) as TargetPersonType[]).map((personType) => (
-                              <SelectItem key={personType} value={personType}>
-                                {PERSON_TYPE_LABELS[personType]}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="user">{PERSON_TYPE_LABELS.user}</SelectItem>
                           </SelectContent>
                         </Select>
                         <Select

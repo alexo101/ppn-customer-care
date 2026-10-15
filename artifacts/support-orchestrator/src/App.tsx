@@ -25,7 +25,6 @@ import Signup from "@/pages/signup";
 import SSOCallback from "@/pages/sso-callback";
 import Chat from "@/pages/chat";
 import Admin from "@/pages/admin";
-import Dashboard from "@/pages/dashboard";
 import Appearance from "@/pages/appearance";
 import AgentsBoard from "@/pages/agents";
 import CreateAgentPage from "@/pages/agent-new";
@@ -98,13 +97,6 @@ function Router() {
         <Route path="/sso-callback/*?" component={SSOCallback} />
         <Route path="/widget" component={Widget} />
         <Route path="/invite/:token" component={Invite} />
-        <Route path="/dashboard">
-          <ProtectedRoute>
-            <AppShell activeTab="dashboard">
-              <Dashboard />
-            </AppShell>
-          </ProtectedRoute>
-        </Route>
         <Route path="/agents/new">
           <ProtectedRoute>
             <AppShell activeTab="agents">

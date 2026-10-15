@@ -12,16 +12,6 @@ export const PERSON_TYPE_DEFINITIONS: {
   description: string;
 }[] = [
   {
-    id: "visitor",
-    label: "Visitors",
-    description: "Anyone who visits your site but is not logged in and has no conversation history.",
-  },
-  {
-    id: "lead",
-    label: "Leads",
-    description: "Anyone who starts a conversation with you or replies to an outbound message.",
-  },
-  {
     id: "user",
     label: "Users",
     description: "Anyone who has signed up to your product or logged in to an existing account.",

@@ -98,8 +98,8 @@ export default function AgentsBoard() {
                 </EmptyMedia>
                 <EmptyTitle>Create your first agent</EmptyTitle>
                 <EmptyDescription>
-                  An agent brings together conversations, categories, sources,
-                  targets, rules, and appearance in one place.
+                  An agent brings together conversations, knowledge articles,
+                  targets, and appearance in one place.
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -173,8 +173,8 @@ export default function AgentsBoard() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete agent</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete "{toDelete?.name}"? Conversations, categories, rules,
-              sources, targets, and appearance for this agent will be removed.
+              Delete "{toDelete?.name}"? Conversations, articles,
+              targets, and appearance for this agent will be removed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

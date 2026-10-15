@@ -101,7 +101,7 @@ function RedeemInvite({ token }: { token: string }) {
     void redeemRef
       .current({ data: { token } })
       .then(() => {
-        setLocation("/dashboard");
+        setLocation("/agents");
       })
       .catch((err: unknown) => {
         redeemInFlight.delete(token);

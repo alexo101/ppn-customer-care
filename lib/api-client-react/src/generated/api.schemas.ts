@@ -386,8 +386,10 @@ export interface Message {
 }
 
 export interface Citation {
-  sourceId: string;
-  sourceName: string;
+  articleId: string;
+  articleName: string;
+  sourceId?: string;
+  sourceName?: string;
   chunkId?: string;
   assetId?: string;
   excerpt?: string;
@@ -415,24 +417,13 @@ export interface OrchestratorStage {
   details?: OrchestratorStageDetails;
 }
 
-export type ClassificationResultEntities = { [key: string]: unknown };
-
-export interface ClassificationResult {
-  primaryCategory: string;
-  primaryCategoryId?: string;
-  confidence: number;
-  secondaryCategories: string[];
-  entities: ClassificationResultEntities;
-  rule: string;
-  ruleId?: string;
-}
-
 export interface SendMessageResult {
   message: Message;
   response: string;
   stages: OrchestratorStage[];
-  classification: ClassificationResult;
   shouldAskResolution: boolean;
+  answerable: boolean;
+  articlesUsed?: string[];
 }
 
 export interface EscalateConversationInput {
@@ -476,19 +467,14 @@ export interface NpsInput {
   score: number;
 }
 
-export type OrchestratorLogDetectedEntities = { [key: string]: unknown };
-
 export interface OrchestratorLog {
   id: string;
   conversationId: string;
   /** @nullable */
   messageId?: string | null;
-  detectedCategory: string;
-  confidenceScore: number;
-  secondaryCategories?: string[];
-  detectedEntities?: OrchestratorLogDetectedEntities;
-  ruleUsed: string;
-  dataSourcesQueried?: string[];
+  articlesUsed: string[];
+  articleIds: string[];
+  answerable: boolean;
   promptAssembled?: string;
   tokensUsed?: number;
   latencyMs?: number;
@@ -501,333 +487,57 @@ export interface OrchestratorLog {
   agentName?: string | null;
 }
 
-export interface IntentCategory {
+export type ArticleStatus = typeof ArticleStatus[keyof typeof ArticleStatus];
+
+
+export const ArticleStatus = {
+  draft: 'draft',
+  published: 'published',
+  archived: 'archived',
+} as const;
+
+export type ArticleIndexStatus = typeof ArticleIndexStatus[keyof typeof ArticleIndexStatus];
+
+
+export const ArticleIndexStatus = {
+  idle: 'idle',
+  indexing: 'indexing',
+  ready: 'ready',
+  empty: 'empty',
+  error: 'error',
+} as const;
+
+export interface KnowledgeArticle {
   id: string;
-  name: string;
-  /** @nullable */
-  parentId?: string | null;
-  description: string;
-  examples: string[];
-  confidenceThreshold: number;
-  keywords: string[];
-  isEnabled: boolean;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-  /** @nullable */
-  agentId?: string | null;
-}
-
-export interface CategoryInput {
-  name: string;
-  agentId?: string;
-  /** @nullable */
-  parentId?: string | null;
-  description?: string;
-  examples?: string[];
-  confidenceThreshold?: number;
-  keywords?: string[];
-  isEnabled?: boolean;
-  sortOrder?: number;
-}
-
-export interface CategoryUpdate {
-  name?: string;
-  /** @nullable */
-  parentId?: string | null;
-  description?: string;
-  examples?: string[];
-  confidenceThreshold?: number;
-  keywords?: string[];
-  isEnabled?: boolean;
-  sortOrder?: number;
-}
-
-/**
- * @nullable
- */
-export type OrchestratorRuleConditionCountry = typeof OrchestratorRuleConditionCountry[keyof typeof OrchestratorRuleConditionCountry] | null;
-
-
-export const OrchestratorRuleConditionCountry = {
-  ES: 'ES',
-  FR: 'FR',
-  IT: 'IT',
-} as const;
-
-export type OrchestratorRuleHttpMethod = typeof OrchestratorRuleHttpMethod[keyof typeof OrchestratorRuleHttpMethod];
-
-
-export const OrchestratorRuleHttpMethod = {
-  GET: 'GET',
-  POST: 'POST',
-  PUT: 'PUT',
-  PATCH: 'PATCH',
-  DELETE: 'DELETE',
-} as const;
-
-export interface OrchestratorRule {
-  id: string;
-  name: string;
-  description: string;
-  promptTemplate: string;
-  priority: number;
-  requiresClarificationPrompt?: string;
-  escalationTrigger: boolean;
-  isEnabled: boolean;
-  conditionOperator: string;
-  /** @nullable */
-  conditionCountry?: OrchestratorRuleConditionCountry;
-  action: string;
-  categoryIds: string[];
-  sourceIds: string[];
-  connectorIds: string[];
-  audienceTargetIds: string[];
-  httpMethod: OrchestratorRuleHttpMethod;
-  endpointUrl: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * @nullable
- */
-export type RuleInputConditionCountry = typeof RuleInputConditionCountry[keyof typeof RuleInputConditionCountry] | null;
-
-
-export const RuleInputConditionCountry = {
-  ES: 'ES',
-  FR: 'FR',
-  IT: 'IT',
-} as const;
-
-export type RuleInputHttpMethod = typeof RuleInputHttpMethod[keyof typeof RuleInputHttpMethod];
-
-
-export const RuleInputHttpMethod = {
-  GET: 'GET',
-  POST: 'POST',
-  PUT: 'PUT',
-  PATCH: 'PATCH',
-  DELETE: 'DELETE',
-} as const;
-
-export interface RuleInput {
-  name: string;
-  agentId?: string;
-  description?: string;
-  promptTemplate?: string;
-  priority?: number;
-  requiresClarificationPrompt?: string;
-  escalationTrigger?: boolean;
-  isEnabled?: boolean;
-  conditionOperator?: string;
-  /** @nullable */
-  conditionCountry?: RuleInputConditionCountry;
-  action?: string;
-  categoryIds?: string[];
-  sourceIds?: string[];
-  connectorIds?: string[];
-  audienceTargetIds?: string[];
-  httpMethod?: RuleInputHttpMethod;
-  endpointUrl?: string;
-}
-
-/**
- * @nullable
- */
-export type RuleUpdateConditionCountry = typeof RuleUpdateConditionCountry[keyof typeof RuleUpdateConditionCountry] | null;
-
-
-export const RuleUpdateConditionCountry = {
-  ES: 'ES',
-  FR: 'FR',
-  IT: 'IT',
-} as const;
-
-export type RuleUpdateHttpMethod = typeof RuleUpdateHttpMethod[keyof typeof RuleUpdateHttpMethod];
-
-
-export const RuleUpdateHttpMethod = {
-  GET: 'GET',
-  POST: 'POST',
-  PUT: 'PUT',
-  PATCH: 'PATCH',
-  DELETE: 'DELETE',
-} as const;
-
-export interface RuleUpdate {
-  name?: string;
-  description?: string;
-  promptTemplate?: string;
-  priority?: number;
-  requiresClarificationPrompt?: string;
-  escalationTrigger?: boolean;
-  isEnabled?: boolean;
-  conditionOperator?: string;
-  /** @nullable */
-  conditionCountry?: RuleUpdateConditionCountry;
-  action?: string;
-  categoryIds?: string[];
-  sourceIds?: string[];
-  connectorIds?: string[];
-  audienceTargetIds?: string[];
-  httpMethod?: RuleUpdateHttpMethod;
-  endpointUrl?: string;
-}
-
-export type RuleAuthoringMessageRole = typeof RuleAuthoringMessageRole[keyof typeof RuleAuthoringMessageRole];
-
-
-export const RuleAuthoringMessageRole = {
-  user: 'user',
-  assistant: 'assistant',
-} as const;
-
-export interface RuleAuthoringMessage {
-  role: RuleAuthoringMessageRole;
-  /**
-     * @minLength 1
-     * @maxLength 4000
-     */
-  content: string;
-}
-
-/**
- * @nullable
- */
-export type RuleAuthoringDraftConditionCountry = typeof RuleAuthoringDraftConditionCountry[keyof typeof RuleAuthoringDraftConditionCountry] | null;
-
-
-export const RuleAuthoringDraftConditionCountry = {
-  ES: 'ES',
-  FR: 'FR',
-  IT: 'IT',
-} as const;
-
-export type RuleAuthoringDraftHttpMethod = typeof RuleAuthoringDraftHttpMethod[keyof typeof RuleAuthoringDraftHttpMethod];
-
-
-export const RuleAuthoringDraftHttpMethod = {
-  GET: 'GET',
-  POST: 'POST',
-  PUT: 'PUT',
-  PATCH: 'PATCH',
-  DELETE: 'DELETE',
-} as const;
-
-export interface RuleAuthoringDraft {
-  name: string;
-  description: string;
-  promptTemplate: string;
-  /**
-     * @minimum 0
-     * @maximum 100
-     */
-  priority: number;
-  requiresClarificationPrompt: string;
-  escalationTrigger: boolean;
-  isEnabled: boolean;
-  conditionOperator: string;
-  /** @nullable */
-  conditionCountry?: RuleAuthoringDraftConditionCountry;
-  action: string;
-  categoryIds?: string[];
-  sourceIds?: string[];
-  connectorIds?: string[];
-  audienceTargetIds?: string[];
-  httpMethod?: RuleAuthoringDraftHttpMethod;
-  endpointUrl?: string;
-}
-
-export interface RuleAuthoringRequest {
-  /**
-     * @minLength 1
-     * @maxLength 4000
-     */
-  message: string;
-  /** @maxItems 30 */
-  history?: RuleAuthoringMessage[];
-  draft?: RuleAuthoringDraft;
-  awaitingConfirmation?: boolean;
-}
-
-export type RuleAuthoringResponseStatus = typeof RuleAuthoringResponseStatus[keyof typeof RuleAuthoringResponseStatus];
-
-
-export const RuleAuthoringResponseStatus = {
-  clarifying: 'clarifying',
-  ready_for_confirmation: 'ready_for_confirmation',
-  needs_changes: 'needs_changes',
-  approved: 'approved',
-} as const;
-
-export interface RuleAuthoringResponse {
-  status: RuleAuthoringResponseStatus;
-  assistantMessage: string;
-  draft?: RuleAuthoringDraft;
-  unresolvedFields: string[];
-}
-
-export type RuleVocabularyKind = typeof RuleVocabularyKind[keyof typeof RuleVocabularyKind];
-
-
-export const RuleVocabularyKind = {
-  operator: 'operator',
-  action: 'action',
-} as const;
-
-export interface RuleVocabulary {
-  id: string;
-  agentId?: string | null;
-  kind: RuleVocabularyKind;
-  label: string;
-  slug: string;
-  requiresSource: boolean;
-  isBuiltin: boolean;
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type RuleVocabularyInputKind = typeof RuleVocabularyInputKind[keyof typeof RuleVocabularyInputKind];
-
-
-export const RuleVocabularyInputKind = {
-  operator: 'operator',
-  action: 'action',
-} as const;
-
-export interface RuleVocabularyInput {
   agentId: string;
-  kind: RuleVocabularyInputKind;
-  /** @maxLength 80 */
-  label: string;
-  requiresSource?: boolean;
-  sortOrder?: number;
-}
-
-export interface RuleVocabularyUpdate {
-  /** @maxLength 80 */
-  label?: string;
-  requiresSource?: boolean;
-  sortOrder?: number;
-}
-
-export interface RuleCategoryLinkInput {
-  categoryId: string;
-}
-
-export type KnowledgeSourceConnectionConfig = { [key: string]: unknown };
-
-export interface KnowledgeSource {
-  id: string;
-  name: string;
-  sourceType: string;
-  connectionConfig: KnowledgeSourceConnectionConfig;
-  isEnabled: boolean;
+  title: string;
+  bodyHtml: string;
+  status: ArticleStatus;
+  targetId: string | null;
+  publishedAt?: string | null;
+  indexStatus: ArticleIndexStatus;
+  indexError?: string | null;
+  chunkCount: number;
+  imageCount: number;
+  imageFailedCount?: number;
+  lastIndexedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ArticleInput {
+  agentId: string;
+  /** @maxLength 200 */
+  title: string;
+  bodyHtml: string;
+  targetId?: string | null;
+}
+
+export interface ArticleUpdate {
+  /** @maxLength 200 */
+  title?: string;
+  bodyHtml?: string;
+  targetId?: string | null;
 }
 
 export type KnowledgeAssetMimeType = typeof KnowledgeAssetMimeType[keyof typeof KnowledgeAssetMimeType];
@@ -841,7 +551,7 @@ export const KnowledgeAssetMimeType = {
 
 export interface KnowledgeAsset {
   id: string;
-  sourceId: string;
+  articleId: string;
   mimeType: KnowledgeAssetMimeType;
   originalName: string;
   byteSize: number;
@@ -856,41 +566,10 @@ export type KnowledgeAssetUrl = KnowledgeAsset & {
   url: string;
 };
 
-export interface SourceAssetUploadInput {
+export interface ArticleAssetUploadInput {
   file: Blob;
   /** @maxLength 500 */
   altText?: string;
-}
-
-export type SourceInputConnectionConfig = { [key: string]: unknown };
-
-export interface SourceInput {
-  name: string;
-  agentId?: string;
-  sourceType: string;
-  connectionConfig?: SourceInputConnectionConfig;
-  isEnabled?: boolean;
-}
-
-export type SourceUpdateConnectionConfig = { [key: string]: unknown };
-
-export interface SourceUpdate {
-  name?: string;
-  sourceType?: string;
-  connectionConfig?: SourceUpdateConnectionConfig;
-  isEnabled?: boolean;
-}
-
-export interface SourceUploadInput {
-  agentId: string;
-  name?: string;
-  file: Blob;
-}
-
-export interface SourceFromUrlInput {
-  agentId: string;
-  url: string;
-  name?: string;
 }
 
 export type TargetPersonType = typeof TargetPersonType[keyof typeof TargetPersonType];
@@ -996,46 +675,12 @@ export interface TargetUpdate {
   conditions?: TargetConditionInput[];
 }
 
-export type ApiConnectorAuthConfig = { [key: string]: unknown };
-
-export interface ApiConnector {
-  id: string;
-  name: string;
-  endpointPattern: string;
-  authType: string;
-  authConfig: ApiConnectorAuthConfig;
-  isEnabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type ConnectorInputAuthConfig = { [key: string]: unknown };
-
-export interface ConnectorInput {
-  name: string;
-  agentId?: string;
-  endpointPattern: string;
-  authType: string;
-  authConfig?: ConnectorInputAuthConfig;
-  isEnabled?: boolean;
-}
-
-export type ConnectorUpdateAuthConfig = { [key: string]: unknown };
-
-export interface ConnectorUpdate {
-  name?: string;
-  endpointPattern?: string;
-  authType?: string;
-  authConfig?: ConnectorUpdateAuthConfig;
-  isEnabled?: boolean;
-}
-
 export interface AnalyticsSummary {
   totalConversations: number;
   activeConversations: number;
   resolvedConversations: number;
   escalatedConversations: number;
-  avgConfidenceScore: number;
+  groundedAnswerRate: number;
   totalMessages: number;
   positiveRatings: number;
   negativeRatings: number;
@@ -1258,37 +903,14 @@ export type ListTrainingQuestionsParams = {
 agentId: string;
 };
 
-export type ListCategoriesParams = {
-agentId?: string;
-};
-
-export type ListRulesParams = {
-agentId?: string;
-};
-
-export type ListRuleVocabulariesParams = {
+export type ListArticlesParams = {
 agentId: string;
-kind?: ListRuleVocabulariesKind;
-};
-
-export type ListRuleVocabulariesKind = typeof ListRuleVocabulariesKind[keyof typeof ListRuleVocabulariesKind];
-
-
-export const ListRuleVocabulariesKind = {
-  operator: 'operator',
-  action: 'action',
-} as const;
-
-export type ListSourcesParams = {
-agentId?: string;
+status?: ArticleStatus;
+targetId?: string;
 };
 
 export type ListTargetsParams = {
 agentId: string;
-};
-
-export type ListConnectorsParams = {
-agentId?: string;
 };
 
 export type ListAnalyticsLogsParams = {

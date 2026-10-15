@@ -1,7 +1,7 @@
 kind = "web"
 previewPath = "/"
 title = "Customer Support AI Orchestrator"
-description = "A configurable AI-powered customer support platform that classifies user intent, applies orchestration rules, and manages support conversations end-to-end. Designed for support teams who want intelligent routing, response generation, and analytics — all managed from an admin panel."
+description = "A configurable AI support assistant that answers from a published article knowledge base, respects audience targets, and offers a human when the knowledge is not enough."
 version = "1.0.0"
 id = "artifacts/support-orchestrator"
 router = "path"

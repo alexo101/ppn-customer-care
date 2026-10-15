@@ -11,7 +11,7 @@ export interface AnalyticsSummary {
   activeConversations: number;
   resolvedConversations: number;
   escalatedConversations: number;
-  avgConfidenceScore: number;
+  groundedAnswerRate: number;
   totalMessages: number;
   positiveRatings: number;
   negativeRatings: number;

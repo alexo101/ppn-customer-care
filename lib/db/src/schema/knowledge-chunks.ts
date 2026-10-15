@@ -1,14 +1,14 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgTable, text, timestamp, uuid, vector } from "drizzle-orm/pg-core";
-import { knowledgeSourcesTable } from "./sources";
+import { knowledgeArticlesTable } from "./articles";
 
 export const knowledgeChunksTable = pgTable(
   "knowledge_chunks",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    sourceId: uuid("source_id")
+    articleId: uuid("article_id")
       .notNull()
-      .references(() => knowledgeSourcesTable.id, { onDelete: "cascade" }),
+      .references(() => knowledgeArticlesTable.id, { onDelete: "cascade" }),
     chunkIndex: integer("chunk_index").notNull(),
     content: text("content").notNull(),
     embedding: vector("embedding", { dimensions: 1536 }).notNull(),

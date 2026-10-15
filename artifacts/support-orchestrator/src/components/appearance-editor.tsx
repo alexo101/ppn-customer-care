@@ -9,7 +9,6 @@ import {
   getGetAgentEscalationQueryKey,
   getListAgentsQueryKey,
   getListInboxTeamsQueryKey,
-  type AppearanceTagStyle,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,13 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChatAppearancePreview } from "@/components/chat/chat-appearance-preview";
-import {
-  AppearanceTag,
-  DEFAULT_TAG_STYLE,
-  MAX_TAG_CHARS,
-  TAG_STYLE_OPTIONS,
-  isTagStyle,
-} from "@/components/chat/appearance-tag";
 import { toast } from "@/hooks/use-toast";
 import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 import {
@@ -36,7 +28,6 @@ import {
   isHexColor,
   normalizeHexColor,
 } from "@/lib/appearance-theme";
-import { cn } from "@/lib/utils";
 
 const MAX_LOGO_BYTES = 400_000;
 
@@ -44,8 +35,6 @@ type Draft = {
   ctaColor: string;
   backgroundColor: string;
   logoUrl: string;
-  tagText: string;
-  tagStyle: AppearanceTagStyle;
 };
 
 function FieldBlock({
@@ -76,8 +65,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
     ctaColor: DEFAULT_CTA_COLOR,
     backgroundColor: DEFAULT_BACKGROUND_COLOR,
     logoUrl: "",
-    tagText: "",
-    tagStyle: DEFAULT_TAG_STYLE,
   });
   const [ctaHexInput, setCtaHexInput] = useState(DEFAULT_CTA_COLOR);
   const [bgHexInput, setBgHexInput] = useState(DEFAULT_BACKGROUND_COLOR);
@@ -97,8 +84,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       ctaColor: data.ctaColor,
       backgroundColor: data.backgroundColor,
       logoUrl: data.logoUrl ?? "",
-      tagText: data.tagText ?? "",
-      tagStyle: isTagStyle(data.tagStyle) ? data.tagStyle : DEFAULT_TAG_STYLE,
     });
     setCtaHexInput(data.ctaColor);
     setBgHexInput(data.backgroundColor);
@@ -111,8 +96,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
         ctaColor: data?.ctaColor ?? DEFAULT_CTA_COLOR,
         backgroundColor: data?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR,
         logoUrl: data?.logoUrl ?? "",
-        tagText: data?.tagText ?? "",
-        tagStyle: data && isTagStyle(data.tagStyle) ? data.tagStyle : DEFAULT_TAG_STYLE,
       }),
     [agent, data],
   );
@@ -122,8 +105,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
     ctaColor: draft.ctaColor,
     backgroundColor: draft.backgroundColor,
     logoUrl: draft.logoUrl,
-    tagText: draft.tagText,
-    tagStyle: draft.tagStyle,
   });
   const isDirty = currentSnapshot !== savedSnapshot;
   const saving = updateAppearance.isPending || updateAgent.isPending;
@@ -156,8 +137,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
           ctaColor,
           backgroundColor,
           logoUrl: draft.logoUrl.trim() || null,
-          tagText: draft.tagText.trim() || null,
-          tagStyle: draft.tagStyle,
         },
       });
       queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });
@@ -168,7 +147,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       queryClient.invalidateQueries({ queryKey: ["/api/inbox"] });
       toast({
         title: "Appearance saved",
-        description: "Name, colors, logo, and tag are up to date.",
+        description: "Name, colors, and logo are up to date.",
       });
     } catch (error) {
       toast({
@@ -303,57 +282,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             </div>
           </FieldBlock>
 
-          <FieldBlock title="Tag">
-            <p className="text-xs text-muted-foreground">
-              Optional label to catch visitors&apos; attention. Leave empty to hide it.
-            </p>
-            <div className="space-y-1.5">
-              <Label htmlFor={`agent-tag-${agentId}`}>Tag text</Label>
-              <Input
-                id={`agent-tag-${agentId}`}
-                value={draft.tagText}
-                onChange={(e) =>
-                  setDraft((prev) => ({ ...prev, tagText: e.target.value.slice(0, MAX_TAG_CHARS) }))
-                }
-                readOnly={!canEdit}
-                maxLength={MAX_TAG_CHARS}
-                placeholder="e.g. Need help?"
-                className="h-9"
-              />
-              <p className="text-[11px] text-muted-foreground text-right tabular-nums">
-                {draft.tagText.length}/{MAX_TAG_CHARS}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-medium">Style</p>
-              <div className="grid grid-cols-3 gap-2">
-                {TAG_STYLE_OPTIONS.map((option) => {
-                  const selected = draft.tagStyle === option.id;
-                  const previewColor = isHexColor(draft.ctaColor) ? draft.ctaColor : DEFAULT_CTA_COLOR;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      disabled={!canEdit}
-                      onClick={() => setDraft((prev) => ({ ...prev, tagStyle: option.id }))}
-                      className={cn(
-                        "rounded-lg border bg-white p-3 flex flex-col items-center gap-2 transition-colors disabled:opacity-60",
-                        selected ? "border-foreground ring-1 ring-foreground" : "border-border hover:border-foreground/40",
-                      )}
-                      aria-pressed={selected}
-                    >
-                      <AppearanceTag
-                        text={draft.tagText.trim() || option.label}
-                        style={option.id}
-                        ctaColor={previewColor}
-                      />
-                      <span className="text-[11px] text-muted-foreground">{option.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </FieldBlock>
         </div>
 
         <div className="space-y-3">
@@ -362,8 +290,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             ctaColor={isHexColor(draft.ctaColor) ? draft.ctaColor : DEFAULT_CTA_COLOR}
             backgroundColor={isHexColor(draft.backgroundColor) ? draft.backgroundColor : DEFAULT_BACKGROUND_COLOR}
             logoUrl={draft.logoUrl || null}
-            tagText={draft.tagText}
-            tagStyle={draft.tagStyle}
             className="rounded-xl border border-border shadow-sm overflow-hidden"
           />
           <div className="flex items-center justify-end">

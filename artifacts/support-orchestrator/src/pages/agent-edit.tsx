@@ -1,13 +1,14 @@
-import { Link, useLocation, useParams } from "wouter";
+import { Link, Redirect, useLocation, useParams } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { useGetAgent } from "@workspace/api-client-react";
-import { CategoriesTab, RulesTab, SourcesTab, TargetsTab } from "@/pages/admin";
+import { TargetsTab } from "@/pages/admin";
 import { AppearanceEditor } from "@/components/appearance-editor";
 import { DeploymentEditor } from "@/components/deployment-editor";
 import { MonitoringEditor } from "@/components/monitoring-editor";
 import { TrainingEditor } from "@/components/training-editor";
 import { EscalationEditor } from "@/components/escalation-editor";
 import { ConversationSettingsEditor } from "@/components/conversation-settings-editor";
+import { KnowledgeBaseTab } from "@/components/knowledge-base-tab";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -30,10 +31,13 @@ export default function EditAgentPage() {
     params.section === "conversations" ? "training" : params.section;
   const stepId = isAgentConfigStep(section) ? section : "appearance";
   const step = AGENT_CONFIG_STEPS.find((item) => item.id === stepId)!;
-  const { isLoading } = useGetAgent(agentId);
+  const { isLoading } = useGetAgent(agentId ?? "");
   const fillViewport = stepId === "training";
 
   if (!agentId) return null;
+  if (section === "sources") {
+    return <Redirect to={agentConfigHref(agentId, "knowledge-base")} />;
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
@@ -86,13 +90,11 @@ export default function EditAgentPage() {
         ) : (
           <div className="max-w-7xl mx-auto">
             {stepId === "appearance" && <AppearanceEditor agentId={agentId} />}
-            {stepId === "categories" && <CategoriesTab agentId={agentId} />}
-            {stepId === "rules" && <RulesTab agentId={agentId} />}
+            {stepId === "knowledge-base" && <KnowledgeBaseTab agentId={agentId} />}
             {stepId === "escalations" && <EscalationEditor agentId={agentId} />}
             {stepId === "conversation-settings" && (
               <ConversationSettingsEditor agentId={agentId} />
             )}
-            {stepId === "sources" && <SourcesTab agentId={agentId} />}
             {stepId === "targets" && <TargetsTab agentId={agentId} />}
             {stepId === "deployment" && <DeploymentEditor agentId={agentId} />}
             {stepId === "monitoring" && <MonitoringEditor agentId={agentId} />}

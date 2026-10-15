@@ -7,8 +7,10 @@
  */
 
 export interface Citation {
-  sourceId: string;
-  sourceName: string;
+  articleId: string;
+  articleName: string;
+  sourceId?: string;
+  sourceName?: string;
   chunkId?: string;
   assetId?: string;
   excerpt?: string;

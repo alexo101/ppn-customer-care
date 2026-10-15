@@ -7,14 +7,14 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import { knowledgeArticlesTable } from "./articles";
 import { knowledgeChunksTable } from "./knowledge-chunks";
-import { knowledgeSourcesTable } from "./sources";
 
 export const knowledgeAssetsTable = pgTable("knowledge_assets", {
   id: uuid("id").primaryKey().defaultRandom(),
-  sourceId: uuid("source_id")
+  articleId: uuid("article_id")
     .notNull()
-    .references(() => knowledgeSourcesTable.id, { onDelete: "cascade" }),
+    .references(() => knowledgeArticlesTable.id, { onDelete: "cascade" }),
   storageKey: text("storage_key").notNull().unique(),
   mimeType: text("mime_type").notNull(),
   originalName: text("original_name").notNull().default("image"),

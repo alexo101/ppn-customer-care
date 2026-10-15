@@ -1,16 +1,22 @@
 import { ExternalLink, Image as ImageIcon, Loader2 } from "lucide-react";
 import {
-  getGetSourceAssetUrlQueryKey,
-  useGetSourceAssetUrl,
+  getGetArticleAssetUrlQueryKey,
+  useGetArticleAssetUrl,
 } from "@workspace/api-client-react";
 
 type Citation = {
+  articleId?: string;
+  articleName?: string;
   sourceId?: string;
   sourceName?: string;
   chunkId?: string;
   assetId?: string;
   excerpt?: string;
 };
+
+function citationName(citation: Citation) {
+  return citation.articleName || citation.sourceName || "Article";
+}
 
 function readCitations(metadata: unknown): Citation[] {
   if (!metadata || typeof metadata !== "object") return [];
@@ -20,7 +26,8 @@ function readCitations(metadata: unknown): Citation[] {
     (citation): citation is Citation =>
       Boolean(citation) &&
       typeof citation === "object" &&
-      typeof (citation as Citation).sourceName === "string",
+      (typeof (citation as Citation).articleName === "string" ||
+        typeof (citation as Citation).sourceName === "string"),
   );
 }
 
@@ -31,11 +38,11 @@ export function SourceCitations({ metadata }: { metadata: unknown }) {
   return (
     <div className="mt-2 space-y-2 border-t border-border/60 pt-2">
       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        Sources
+        Articles
       </p>
       <div className="flex flex-wrap gap-2">
         {citations.map((citation, index) => (
-          <CitationCard key={`${citation.assetId ?? citation.chunkId ?? citation.sourceId}-${index}`} citation={citation} />
+          <CitationCard key={`${citation.assetId ?? citation.chunkId ?? citation.articleId}-${index}`} citation={citation} />
         ))}
       </div>
     </div>
@@ -43,17 +50,18 @@ export function SourceCitations({ metadata }: { metadata: unknown }) {
 }
 
 function CitationCard({ citation }: { citation: Citation }) {
-  const { data, isLoading } = useGetSourceAssetUrl(citation.assetId ?? "", {
+  const name = citationName(citation);
+  const { data, isLoading } = useGetArticleAssetUrl(citation.assetId ?? "", {
     query: {
       enabled: Boolean(citation.assetId),
-      queryKey: getGetSourceAssetUrlQueryKey(citation.assetId ?? ""),
+      queryKey: getGetArticleAssetUrlQueryKey(citation.assetId ?? ""),
     },
   });
 
   if (!citation.assetId) {
     return (
       <span className="rounded border border-border bg-muted/30 px-2 py-1 text-[11px]" title={citation.excerpt}>
-        {citation.sourceName}
+        {citationName(citation)}
       </span>
     );
   }
@@ -64,11 +72,11 @@ function CitationCard({ citation }: { citation: Citation }) {
       target="_blank"
       rel="noreferrer"
       className="group flex max-w-56 items-center gap-2 rounded border border-border bg-muted/30 p-1.5 text-left hover:bg-muted"
-      aria-label={`Open screenshot from ${citation.sourceName}`}
+      aria-label={`Open image from ${name}`}
     >
       <div className="flex h-10 w-12 shrink-0 items-center justify-center overflow-hidden rounded bg-background">
         {data?.url ? (
-          <img src={data.url} alt={citation.sourceName} className="h-full w-full object-cover" />
+          <img src={data.url} alt={name} className="h-full w-full object-cover" />
         ) : isLoading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         ) : (
@@ -76,7 +84,7 @@ function CitationCard({ citation }: { citation: Citation }) {
         )}
       </div>
       <span className="min-w-0 text-[11px]">
-        <span className="block truncate font-medium">{citation.sourceName}</span>
+        <span className="block truncate font-medium">{name}</span>
         <span className="flex items-center gap-1 text-muted-foreground">
           Screenshot <ExternalLink className="h-2.5 w-2.5" />
         </span>

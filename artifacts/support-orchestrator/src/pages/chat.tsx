@@ -405,31 +405,22 @@ function ActiveChat({
                         <div className="p-3 text-sm space-y-3">
                           <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <div className="text-xs text-sidebar-foreground/50 mb-1">Intent</div>
-                              <div className="font-medium text-sidebar-primary truncate">{log.detectedCategory}</div>
+                              <div className="text-xs text-sidebar-foreground/50 mb-1">Grounded</div>
+                              <div className="font-medium text-sidebar-primary truncate">{log.answerable ? "Yes" : "No"}</div>
                             </div>
                             <div>
-                              <div className="text-xs text-sidebar-foreground/50 mb-1">Confidence</div>
-                              <div>{Math.round(log.confidenceScore * 100)}%</div>
+                              <div className="text-xs text-sidebar-foreground/50 mb-1">Articles</div>
+                              <div>{log.articlesUsed.length}</div>
                             </div>
                           </div>
                           
-                          {log.ruleUsed && (
+                          {log.articlesUsed.length > 0 && (
                             <div>
-                              <div className="text-xs text-sidebar-foreground/50 mb-1">Rule applied</div>
-                              <div className="font-mono text-xs bg-sidebar-accent/40 p-1.5 rounded-md border border-sidebar-border truncate">
-                                {log.ruleUsed}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {log.dataSourcesQueried && log.dataSourcesQueried.length > 0 && (
-                            <div>
-                              <div className="text-xs text-sidebar-foreground/50 mb-1">Sources</div>
+                              <div className="text-xs text-sidebar-foreground/50 mb-1">Articles used</div>
                               <div className="flex flex-wrap gap-1">
-                                {log.dataSourcesQueried.map(src => (
-                                  <span key={src} className="px-1.5 py-0.5 rounded-full bg-sidebar-accent/60 border border-sidebar-border text-[10px]">
-                                    {src}
+                                {log.articlesUsed.map(article => (
+                                  <span key={article} className="px-1.5 py-0.5 rounded-full bg-sidebar-accent/60 border border-sidebar-border text-[10px]">
+                                    {article}
                                   </span>
                                 ))}
                               </div>

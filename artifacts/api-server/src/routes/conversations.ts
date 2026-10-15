@@ -7,15 +7,6 @@ import {
   messagesTable,
   orchestratorLogsTable,
   conversationFeedbackTable,
-  intentCategoriesTable,
-  orchestratorRulesTable,
-  ruleCategoryLinksTable,
-  ruleSourceLinksTable,
-  ruleAudienceTargetLinksTable,
-  audienceTargetsTable,
-  targetConditionsTable,
-  knowledgeSourcesTable,
-  agentSettingsTable,
   agentConversationSettingsTable,
 } from "@workspace/db";
 import {
@@ -35,46 +26,14 @@ import {
   SubmitConversationNpsParams,
   EscalateConversationBody,
 } from "@workspace/api-zod";
-import type { ClassificationResult } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
-import {
-  actionUsesSources,
-  categoryMatchesOperator,
-  countryMatchesDomain,
-  normalizeAction,
-} from "../lib/rule-engine";
 import { resolveUserDisplayName, resolveUserEmail } from "../lib/identity";
 import { sendWelcomeMessageIfNeeded } from "../lib/welcome-message";
-import { fallbackClarificationPrompt } from "../lib/reply-locale";
 import { DEFAULT_CONVERSATION_SETTINGS } from "../lib/conversation-auto-close";
-import {
-  buildUnableToAnswerResponse,
-  isUnableToAnswerMessageMetadata,
-  translateEscalationTemplate,
-} from "../lib/unanswered-message";
-import {
-  AnswerProviderError,
-  ClassificationProviderError,
-  EmbeddingProviderError,
-  createAnswerProvider,
-  createClassificationProvider,
-  createEmbeddingProvider,
-} from "../lib/llm";
-import {
-  classifyIntentWithMetadata,
-  isIntentShortcut,
-} from "../lib/classify-intent";
-import { generateAnswer, requiresAnswerProvider } from "../lib/generate-answer";
-import { retrieveRelevantChunks } from "../lib/retrieval";
-import { callLiveDataEndpoint } from "../lib/api-connector";
-import { applyGuardrails } from "../lib/guardrails";
+import { isUnableToAnswerMessageMetadata } from "../lib/unanswered-message";
+import { answerFromKnowledge, workflowProviderErrorMessage } from "../lib/answer-question";
 import { updateConversationAnalytics } from "../lib/conversation-analytics";
-import { logger } from "../lib/logger";
-import {
-  matchesAudienceTarget,
-  type AudienceTargetForMatching,
-  type PersonAttributes,
-} from "../lib/targets";
+import type { PersonAttributes } from "../lib/targets";
 import {
   getAssignedConversation,
   markConversationEscalationUnread,
@@ -402,9 +361,9 @@ router.post(
       conversationId: conversation.id,
       agentId: conversation.agentId,
       reason: "The visitor requested escalation after an unanswered question.",
-      category: latestLog?.detectedCategory ?? "General",
+      category: "",
       subcategory: "",
-      retrievedInformation: [],
+      retrievedInformation: (latestLog?.articlesUsed ?? []).map((name) => ({ sourceName: name })),
       previousAnswer: latestOffer.content,
       context: {
         userQuestion: userQuestion.content,
@@ -412,7 +371,7 @@ router.post(
         ...(latestLog
           ? {
               resolutionStatus: latestLog.resolutionStatus,
-              ruleUsed: latestLog.ruleUsed,
+              articlesUsed: latestLog.articlesUsed,
             }
           : {}),
       },
@@ -491,37 +450,21 @@ router.post(
         message: toMessage(userMsg),
         response: "",
         stages: [],
-        classification: {
-          primaryCategory: "Human support",
-          primaryCategoryId: "",
-          confidence: 1,
-          secondaryCategories: [],
-          entities: {},
-          rule: "Human support handoff",
-          ruleId: "",
-        },
         shouldAskResolution: false,
+        answerable: false,
+        articlesUsed: [],
       });
       return;
     }
 
-    // Run orchestrator logic
     const startTs = Date.now();
-    const stages = buildStages();
-
-    // Stage 1: capture authenticated user identity
-    stages[0].status = "running";
     const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
-    const storedContext = isPlainObject(existingMeta.context)
-      ? existingMeta.context
-      : {};
+    const storedContext = isPlainObject(existingMeta.context) ? existingMeta.context : {};
     const requestContext: Record<string, unknown> = {
       ...storedContext,
       ...(isPlainObject(parsed.data.context) ? parsed.data.context : {}),
     };
-    const existingPerson = isPlainObject(existingMeta.person)
-      ? existingMeta.person
-      : {};
+    const existingPerson = isPlainObject(existingMeta.person) ? existingMeta.person : {};
     const email =
       (await resolveUserEmail(req.userId, req.userEmail)) ??
       (typeof existingPerson.email === "string" ? existingPerson.email : null);
@@ -533,377 +476,55 @@ router.post(
         ...requestContext,
       },
     };
-    stages[0].status = "completed";
-    stages[0].details = {
-      person_type: person.personType,
-      email_known: Boolean(email),
-      context_fields: Object.keys(requestContext).filter(
-        (key) => requestContext[key] != null,
-      ),
-    };
-
-    // Stage 2: load categories
-    stages[1].status = "running";
-    const categories = await db
-      .select()
-      .from(intentCategoriesTable)
-      .where(
-        and(
-          eq(intentCategoriesTable.isEnabled, true),
-          conv.agentId
-            ? eq(intentCategoriesTable.agentId, conv.agentId)
-            : undefined,
-        ),
-      );
-    stages[1].status = "completed";
-    stages[1].details = { categories_loaded: categories.length };
-
-    let classification: ClassificationResult = {
-      primaryCategory: "General",
-      primaryCategoryId: "",
-      confidence: 0,
-      secondaryCategories: [],
-      entities: {},
-      rule: "None",
-      ruleId: "",
-    };
-    let classificationModel = "none";
-    let classificationTokens = 0;
-    let rule: Rule | null = null;
-    let retrievedChunks: import("../lib/llm").RetrievedChunk[] = [];
-    let retrievalModel = "none";
-    let retrievalTokens = 0;
-    let responseText = "";
-    let resolutionStatus = "active";
-    let shouldAskResolution = false;
-    let answerModel = "none";
-    let answerTokens = 0;
-    let promptAssembled = "";
-    let citations: Array<Record<string, unknown>> = [];
-    let assistantMetadata: Record<string, unknown> = { citations };
-    let dataSourcesQueried: string[] = [];
-    let retrievalNeedsClarification = false;
-    let retrievalAccessDenied = false;
-
+    const [conversationSettings] = conv.agentId
+      ? await db
+          .select()
+          .from(agentConversationSettingsTable)
+          .where(eq(agentConversationSettingsTable.agentId, conv.agentId))
+          .limit(1)
+      : [];
+    const userName =
+      typeof person.attributes.name === "string"
+        ? person.attributes.name
+        : typeof person.attributes.user_name === "string"
+          ? person.attributes.user_name
+          : await resolveUserDisplayName(req.userId, req.userEmail);
+    let answered;
     try {
-      // Stage 3: classify intent with the configured LLM.
-      stages[2].status = "running";
-      const prevMessages = await db
-        .select()
-        .from(messagesTable)
-        .where(eq(messagesTable.conversationId, conv.id))
-        .orderBy(messagesTable.createdAt);
-      const classificationResult = await classifyIntentWithMetadata(
-        parsed.data.content,
-        prevMessages,
-        categories,
-        isIntentShortcut(parsed.data.content)
-          ? undefined
-          : createClassificationProvider(),
-        requestContext,
-      );
-      classification = classificationResult.classification;
-      if (email) classification.entities.email = email;
-      classificationModel = classificationResult.model;
-      classificationTokens = classificationResult.totalTokens;
-      stages[2].status = "completed";
-      stages[2].details = {
-        category: classification.primaryCategory,
-        confidence: classification.confidence,
-        probabilities: classificationResult.probabilities,
-        model: classificationModel,
-      };
-
-      // Stage 4: identify the highest-priority matching rule.
-      stages[3].status = "running";
-      const classifiedCategory = classification.primaryCategoryId
-        ? (categories.find(
-            (category) => category.id === classification.primaryCategoryId,
-          ) ?? {
-            id: classification.primaryCategoryId,
-            name: classification.primaryCategory,
-          })
-        : classification.primaryCategory
-          ? { id: "", name: classification.primaryCategory }
-          : null;
-      rule = await matchRuleForAgent(
-        conv.agentId,
-        classifiedCategory,
+      answered = await answerFromKnowledge({
+        message: parsed.data.content,
+        history: await db
+          .select()
+          .from(messagesTable)
+          .where(eq(messagesTable.conversationId, conv.id))
+          .orderBy(messagesTable.createdAt),
+        agentId: conv.agentId,
         person,
-        typeof requestContext.pageDomain === "string"
-          ? requestContext.pageDomain
-          : undefined,
-      );
-      stages[3].status = "completed";
-      stages[3].details = {
-        rule_used: rule?.name ?? "None",
-        operator: rule?.conditionOperator ?? null,
-        action: rule?.action ?? null,
-        email_known: Boolean(email),
-      };
-
-      // Stage 5: retrieve relevant content from sources linked to the rule.
-      stages[4].status = "running";
-      if (rule && actionUsesSources(rule.action)) {
-        const sourceLinks = await db
-          .select({
-            id: knowledgeSourcesTable.id,
-            name: knowledgeSourcesTable.name,
-          })
-          .from(ruleSourceLinksTable)
-          .innerJoin(
-            knowledgeSourcesTable,
-            eq(ruleSourceLinksTable.sourceId, knowledgeSourcesTable.id),
-          )
-          .where(eq(ruleSourceLinksTable.ruleId, rule.id));
-        if (sourceLinks.length > 0) {
-          const retrieval = await retrieveRelevantChunks(
-            sourceLinks.map((source) => source.id),
-            parsed.data.content,
-            createEmbeddingProvider(),
-            5,
-            { agentId: conv.agentId ?? undefined },
-          );
-          retrievedChunks = retrieval.chunks;
-          retrievalModel = retrieval.model;
-          retrievalTokens = retrieval.totalTokens;
-          dataSourcesQueried = [
-            ...new Set(retrievedChunks.map((chunk) => chunk.sourceName)),
-          ];
-        }
-        if (normalizeAction(rule.action) === "query_live_data") {
-          const endpointUrl = rule.endpointUrl?.trim() ?? "";
-          if (endpointUrl) {
-            dataSourcesQueried.push(endpointUrl);
-            try {
-              const result = await callLiveDataEndpoint({
-                method: rule.httpMethod,
-                url: endpointUrl,
-              });
-              if (
-                !result.ok &&
-                (result.status === 401 || result.status === 403)
-              ) {
-                retrievalAccessDenied = true;
-              }
-              if (result.ok && hasUsableConnectorBody(result.body)) {
-                retrievedChunks.push({
-                  sourceId: result.sourceName,
-                  sourceName: result.sourceName,
-                  content: JSON.stringify(result.body),
-                  distance: 0,
-                  kind: "api",
-                });
-              }
-            } catch (error) {
-              logger.warn(
-                { error, endpointUrl },
-                "Live data endpoint call failed",
-              );
-            }
-          }
-          dataSourcesQueried = [...new Set(dataSourcesQueried)];
-          retrievalNeedsClarification = !retrievedChunks.some(
-            (chunk) => chunk.kind === "api",
-          );
-        }
-        if (
-          normalizeAction(rule.action) === "search_answer" &&
-          sourceLinks.length > 0 &&
-          retrievedChunks.length === 0
-        ) {
-          retrievalNeedsClarification = true;
-        }
-      }
-      stages[4].status = "completed";
-      stages[4].details = {
-        chunks_retrieved: retrievedChunks.length,
-        sources: dataSourcesQueried,
-        model: retrievalModel,
-        access_denied: retrievalAccessDenied,
-      };
-
-      // Stage 6: generate a grounded answer with the configured LLM.
-      stages[5].status = "running";
-      const replyLocaleCandidates = [
-        existingMeta.browser_language,
-        requestContext.browser_language,
-      ];
-      const answerRule = !rule
-        ? {
-            action: "ask clarification",
-            description: "",
-            promptTemplate: "",
-            requiresClarificationPrompt: fallbackClarificationPrompt(
-              "noMatchingRule",
-              ...replyLocaleCandidates,
-            ),
-            escalationTrigger: false,
-          }
-        : retrievalAccessDenied || retrievalNeedsClarification
-          ? {
-              ...rule,
-              action: "ask clarification",
-              ...(retrievalAccessDenied
-                ? {
-                    requiresClarificationPrompt: fallbackClarificationPrompt(
-                      "accessDenied",
-                      ...replyLocaleCandidates,
-                    ),
-                  }
-                : {}),
-            }
-          : rule;
-      const [agentSettings] = conv.agentId
-        ? await db
-            .select()
-            .from(agentSettingsTable)
-            .where(eq(agentSettingsTable.agentId, conv.agentId))
-            .limit(1)
-        : [];
-      const [conversationSettings] = conv.agentId
-        ? await db
-            .select()
-            .from(agentConversationSettingsTable)
-            .where(eq(agentConversationSettingsTable.agentId, conv.agentId))
-            .limit(1)
-        : [];
-      const definitiveUnableToAnswer =
-        !rule || (!retrievalAccessDenied && retrievalNeedsClarification);
-
-      if (definitiveUnableToAnswer) {
-        const userName =
-          typeof person.attributes.name === "string"
-            ? person.attributes.name
-            : typeof person.attributes.user_name === "string"
-              ? person.attributes.user_name
-              : await resolveUserDisplayName(req.userId, req.userEmail);
-        const template =
+        context: {
+          ...requestContext,
+          ...(existingMeta.browser_language != null
+            ? { browser_language: existingMeta.browser_language }
+            : {}),
+        },
+        replyLocaleCandidates: [existingMeta.browser_language, requestContext.browser_language],
+        userName,
+        escalationTemplate:
           conversationSettings?.escalationMessage ??
-          DEFAULT_CONVERSATION_SETTINGS.escalationMessage;
-        const localizedTemplate = await translateEscalationTemplate(
-          template,
-          replyLocaleCandidates,
-        );
-        const unableToAnswer = buildUnableToAnswerResponse(
-          localizedTemplate,
-          userName,
-        );
-        responseText = unableToAnswer.responseText;
-        resolutionStatus = unableToAnswer.resolutionStatus;
-        shouldAskResolution = unableToAnswer.shouldAskResolution;
-        answerModel = "deterministic-unable-to-answer";
-        assistantMetadata = unableToAnswer.metadata;
-        stages[5].details = {
-          resolution_status: resolutionStatus,
-          model: answerModel,
-          chunks_used: retrievedChunks.length,
-          guardrails: [],
-        };
-      } else {
-        const answerResult = await generateAnswer(
-          parsed.data.content,
-          classification,
-          answerRule,
-          prevMessages,
-          person.attributes,
-          retrievedChunks,
-          requiresAnswerProvider(parsed.data.content, rule)
-            ? createAnswerProvider()
-            : undefined,
-          {
-            ...requestContext,
-            ...(existingMeta.browser_language != null
-              ? { browser_language: existingMeta.browser_language }
-              : {}),
-            ...(agentSettings?.prompt
-              ? { agentPrompt: agentSettings.prompt }
-              : {}),
-            ...(agentSettings?.targetAudience
-              ? { targetAudience: agentSettings.targetAudience }
-              : {}),
-          },
-        );
-        responseText = answerResult.responseText;
-        resolutionStatus = answerResult.resolutionStatus;
-        shouldAskResolution = answerResult.shouldAskResolution;
-        answerModel = answerResult.model;
-        answerTokens = answerResult.totalTokens;
-        promptAssembled = answerResult.promptAssembled;
-        citations = answerResult.citations;
-        let guardrailActions: string[] = [];
-        if (!answerResult.answerable) {
-          const userName =
-            typeof person.attributes.name === "string"
-              ? person.attributes.name
-              : typeof person.attributes.user_name === "string"
-                ? person.attributes.user_name
-                : await resolveUserDisplayName(req.userId, req.userEmail);
-          const localizedTemplate = await translateEscalationTemplate(
-            conversationSettings?.escalationMessage ??
-              DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
-            [answerResult.replyLanguage, ...replyLocaleCandidates],
-          );
-          const unableToAnswer = buildUnableToAnswerResponse(
-            localizedTemplate,
-            userName,
-          );
-          responseText = unableToAnswer.responseText;
-          resolutionStatus = unableToAnswer.resolutionStatus;
-          shouldAskResolution = unableToAnswer.shouldAskResolution;
-          answerModel = "deterministic-unable-to-answer";
-          assistantMetadata = unableToAnswer.metadata;
-        } else {
-          const guardrailResult = applyGuardrails(responseText, {
-            retrievedChunks,
-            rule: answerRule,
-            personAttributes: person.attributes,
-          });
-          guardrailActions = guardrailResult.actions;
-          responseText = guardrailResult.responseText;
-          if (guardrailResult.blocked) {
-            const userName =
-              typeof person.attributes.name === "string"
-                ? person.attributes.name
-                : typeof person.attributes.user_name === "string"
-                  ? person.attributes.user_name
-                  : await resolveUserDisplayName(req.userId, req.userEmail);
-            const localizedTemplate = await translateEscalationTemplate(
-              conversationSettings?.escalationMessage ??
-                DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
-              [answerResult.replyLanguage, ...replyLocaleCandidates],
-            );
-            const unableToAnswer = buildUnableToAnswerResponse(
-              localizedTemplate,
-              userName,
-            );
-            responseText = unableToAnswer.responseText;
-            resolutionStatus = unableToAnswer.resolutionStatus;
-            shouldAskResolution = unableToAnswer.shouldAskResolution;
-            answerModel = "deterministic-unable-to-answer";
-            assistantMetadata = unableToAnswer.metadata;
-          } else {
-            assistantMetadata = { citations };
-          }
-        }
-        stages[5].details = {
-          resolution_status: resolutionStatus,
-          model: answerModel,
-          chunks_used: retrievedChunks.length,
-          guardrails: guardrailActions,
-        };
-      }
-      stages[5].status = "completed";
+          DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
+      });
     } catch (error) {
       const message = workflowProviderErrorMessage(error);
-      res.status(503).json({ error: message });
+      res.status(503).json({ error: message ?? "The assistant is temporarily unavailable. Please try again." });
       return;
     }
 
     const latencyMs = Date.now() - startTs;
-    stages[6].status = "running";
+    const responseText = answered.responseText;
+    const resolutionStatus = answered.resolutionStatus;
+    const shouldAskResolution = answered.shouldAskResolution;
+    const assistantMetadata = answered.assistantMetadata;
+    const stages = answered.stages;
 
-    // Save assistant message
     const [assistantMsg] = await db
       .insert(messagesTable)
       .values({
@@ -914,16 +535,7 @@ router.post(
       })
       .returning();
 
-    // Update conversation (and capture a subject from the first user message)
-    const isEscalated = Boolean(
-      rule &&
-      (rule.escalationTrigger || normalizeAction(rule.action) === "escalate"),
-    );
-    const nextStatus = nextConversationStatus(
-      resolutionStatus,
-      isEscalated,
-      conv.status,
-    );
+    const nextStatus = nextConversationStatus(resolutionStatus, conv.status);
     const conversationPatch: Record<string, unknown> = {
       lastActivityAt: new Date(),
       status: nextStatus,
@@ -938,10 +550,7 @@ router.post(
       },
     };
     if (nextStatus === "resolved") conversationPatch.resolvedAt = new Date();
-    if (
-      typeof existingMeta.subject !== "string" ||
-      !existingMeta.subject.trim()
-    ) {
+    if (typeof existingMeta.subject !== "string" || !existingMeta.subject.trim()) {
       conversationPatch.metadata = {
         ...(conversationPatch.metadata as Record<string, unknown>),
         subject: parsed.data.content.slice(0, 120),
@@ -953,90 +562,32 @@ router.post(
       .set(conversationPatch)
       .where(eq(conversationsTable.id, conv.id));
 
-    // Save orchestrator log
     const [log] = await db
       .insert(orchestratorLogsTable)
       .values({
         conversationId: conv.id,
         messageId: assistantMsg.id,
-        detectedCategory: classification.primaryCategory,
-        confidenceScore: String(classification.confidence),
-        secondaryCategories: classification.secondaryCategories,
-        detectedEntities: classification.entities,
-        ruleUsed: rule
-          ? `${rule.name} (${rule.conditionOperator} / ${rule.action})`
-          : "None",
-        dataSourcesQueried,
-        promptAssembled,
-        tokensUsed: String(
-          classificationTokens + retrievalTokens + answerTokens,
-        ),
+        articlesUsed: answered.articlesUsed,
+        articleIds: answered.articleIds,
+        answerable: answered.answerable,
+        promptAssembled: answered.promptAssembled,
+        tokensUsed: String(answered.totalTokens),
         latencyMs: String(latencyMs),
-        llmModel: [classificationModel, retrievalModel, answerModel]
-          .filter((model) => model !== "none")
-          .join(", "),
+        llmModel: answered.model,
         resolutionStatus,
       })
       .returning();
     if (nextStatus === "resolved") {
       await updateConversationAnalytics(conv.id);
     }
-    if (isEscalated && nextStatus === "escalated") {
-      const classifiedRow = classification.primaryCategoryId
-        ? categories.find(
-            (category) => category.id === classification.primaryCategoryId,
-          )
-        : undefined;
-      const parentRow = classifiedRow?.parentId
-        ? categories.find((category) => category.id === classifiedRow.parentId)
-        : undefined;
-      await upsertEscalationForConversation({
-        conversationId: conv.id,
-        agentId: conv.agentId,
-        reason:
-          rule?.description?.trim() ||
-          (rule
-            ? `Escalated by rule "${rule.name}".`
-            : "Escalated by the agent."),
-        category:
-          parentRow?.name ??
-          classifiedRow?.name ??
-          classification.primaryCategory,
-        subcategory: parentRow ? (classifiedRow?.name ?? "") : "",
-        retrievedInformation: retrievedChunks.map((chunk) => ({
-          sourceId: chunk.sourceId,
-          sourceName: chunk.sourceName,
-          kind: chunk.kind,
-          excerpt: chunk.content.slice(0, 2000),
-        })),
-        previousAnswer: responseText,
-        context: {
-          ...requestContext,
-          userQuestion: parsed.data.content,
-          userId: req.userId,
-          ...(email ? { email } : {}),
-          ...(rule
-            ? {
-                ruleName: rule.name,
-                ruleDescription: rule.description,
-              }
-            : {}),
-        },
-      });
-    }
-    stages[6].status = "completed";
-    stages[6].details = {
-      status: nextStatus,
-      confirmation_required: shouldAskResolution,
-      feedback_available: nextStatus === "resolved",
-    };
 
     res.json({
       message: toMessage(assistantMsg),
       response: responseText,
       stages,
-      classification,
       shouldAskResolution,
+      answerable: answered.answerable,
+      articlesUsed: answered.articlesUsed,
       log: toLog(log),
     });
   },
@@ -1280,14 +831,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function hasUsableConnectorBody(value: unknown): boolean {
-  if (value == null) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object") return Object.keys(value).length > 0;
-  return true;
-}
-
 function parseDayStart(value?: string): Date | null {
   if (!value) return null;
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -1339,122 +882,7 @@ function conversationDateFilters(fromDate?: string, toDate?: string) {
   return filters;
 }
 
-type Rule = typeof orchestratorRulesTable.$inferSelect;
 type QuestionType = "question" | "unanswered" | "escalated";
-
-async function matchRuleForAgent(
-  agentId: string | null,
-  classified: { id: string; name: string } | null,
-  person: PersonAttributes,
-  requestDomain?: string,
-): Promise<Rule | null> {
-  const rules = await db
-    .select()
-    .from(orchestratorRulesTable)
-    .where(
-      and(
-        eq(orchestratorRulesTable.isEnabled, true),
-        agentId ? eq(orchestratorRulesTable.agentId, agentId) : undefined,
-      ),
-    )
-    .orderBy(desc(orchestratorRulesTable.priority));
-
-  if (rules.length === 0) return null;
-
-  const ruleIds = rules.map((rule) => rule.id);
-  const [
-    categoryLinks,
-    categoryRows,
-    audienceLinks,
-    audienceRows,
-    conditionRows,
-  ] = await Promise.all([
-    db
-      .select()
-      .from(ruleCategoryLinksTable)
-      .where(inArray(ruleCategoryLinksTable.ruleId, ruleIds)),
-    db
-      .select({
-        id: intentCategoriesTable.id,
-        name: intentCategoriesTable.name,
-      })
-      .from(intentCategoriesTable)
-      .where(agentId ? eq(intentCategoriesTable.agentId, agentId) : undefined),
-    db
-      .select()
-      .from(ruleAudienceTargetLinksTable)
-      .where(inArray(ruleAudienceTargetLinksTable.ruleId, ruleIds)),
-    db
-      .select()
-      .from(audienceTargetsTable)
-      .where(agentId ? eq(audienceTargetsTable.agentId, agentId) : undefined),
-    db.select().from(targetConditionsTable),
-  ]);
-
-  const categoriesById = new Map(
-    categoryRows.map((category) => [category.id, category]),
-  );
-  const targetsByRule = new Map<string, { id: string; name: string }[]>();
-  for (const link of categoryLinks) {
-    const category = categoriesById.get(link.categoryId);
-    if (!category) continue;
-    const list = targetsByRule.get(link.ruleId) ?? [];
-    list.push(category);
-    targetsByRule.set(link.ruleId, list);
-  }
-
-  const targetRowsById = new Map(
-    audienceRows.map((target) => [target.id, target]),
-  );
-  const conditionsByTarget = new Map<string, typeof conditionRows>();
-  for (const condition of conditionRows) {
-    const list = conditionsByTarget.get(condition.targetId) ?? [];
-    list.push(condition);
-    conditionsByTarget.set(condition.targetId, list);
-  }
-
-  const audienceTargetsByRule = new Map<string, AudienceTargetForMatching[]>();
-  for (const link of audienceLinks) {
-    const target = targetRowsById.get(link.targetId);
-    if (!target) continue;
-    const list = audienceTargetsByRule.get(link.ruleId) ?? [];
-    list.push({
-      matchMode: target.matchMode === "any" ? "any" : "all",
-      conditions: (conditionsByTarget.get(target.id) ?? []).map(
-        (condition) => ({
-          personType: condition.personType,
-          attribute: condition.attribute,
-          operator: condition.operator,
-          value: condition.value,
-        }),
-      ),
-    });
-    audienceTargetsByRule.set(link.ruleId, list);
-  }
-
-  return (
-    rules.find((rule) => {
-      if (!countryMatchesDomain(rule.conditionCountry, requestDomain)) {
-        return false;
-      }
-      if (
-        !categoryMatchesOperator(
-          rule.conditionOperator,
-          classified,
-          targetsByRule.get(rule.id) ?? [],
-        )
-      ) {
-        return false;
-      }
-
-      const audienceTargets = audienceTargetsByRule.get(rule.id) ?? [];
-      return (
-        audienceTargets.length === 0 ||
-        audienceTargets.some((target) => matchesAudienceTarget(target, person))
-      );
-    }) ?? null
-  );
-}
 
 function classifyQuestionType(
   conversationStatus: string,
@@ -1475,10 +903,9 @@ function classifyQuestionType(
 
 function nextConversationStatus(
   resolutionStatus: string,
-  escalated: boolean,
   previousStatus: string,
 ): string {
-  if (escalated || resolutionStatus === "escalated") return "escalated";
+  if (resolutionStatus === "escalated") return "escalated";
   if (resolutionStatus === "resolved") return "resolved";
   if (
     resolutionStatus === "pending_clarification" ||
@@ -1506,64 +933,6 @@ function toQuestion(row: {
     conversationStatus: row.conversationStatus,
     createdAt: row.createdAt.toISOString(),
   };
-}
-
-function buildStages() {
-  return [
-    {
-      stage: 1,
-      name: "Capture User Identity",
-      status: "pending" as string,
-      details: {} as Record<string, unknown>,
-    },
-    {
-      stage: 2,
-      name: "Load Categories",
-      status: "pending" as string,
-      details: {} as Record<string, unknown>,
-    },
-    {
-      stage: 3,
-      name: "Classify Intent",
-      status: "pending" as string,
-      details: {} as Record<string, unknown>,
-    },
-    {
-      stage: 4,
-      name: "Match Rules",
-      status: "pending" as string,
-      details: {} as Record<string, unknown>,
-    },
-    {
-      stage: 5,
-      name: "Retrieve Knowledge",
-      status: "pending" as string,
-      details: {} as Record<string, unknown>,
-    },
-    {
-      stage: 6,
-      name: "Generate Response",
-      status: "pending" as string,
-      details: {} as Record<string, unknown>,
-    },
-    {
-      stage: 7,
-      name: "Request Closing",
-      status: "pending" as string,
-      details: {} as Record<string, unknown>,
-    },
-  ];
-}
-
-function workflowProviderErrorMessage(error: unknown): string {
-  if (
-    error instanceof ClassificationProviderError ||
-    error instanceof EmbeddingProviderError ||
-    error instanceof AnswerProviderError
-  ) {
-    return error.message;
-  }
-  return "The orchestrator is temporarily unavailable. Please try again.";
 }
 
 function toConversation(row: typeof conversationsTable.$inferSelect) {
@@ -1596,12 +965,9 @@ function toLog(row: typeof orchestratorLogsTable.$inferSelect) {
     id: row.id,
     conversationId: row.conversationId,
     messageId: row.messageId ?? null,
-    detectedCategory: row.detectedCategory,
-    confidenceScore: Number(row.confidenceScore),
-    secondaryCategories: (row.secondaryCategories as string[]) ?? [],
-    detectedEntities: (row.detectedEntities as Record<string, unknown>) ?? {},
-    ruleUsed: row.ruleUsed,
-    dataSourcesQueried: (row.dataSourcesQueried as string[]) ?? [],
+    articlesUsed: row.articlesUsed ?? [],
+    articleIds: row.articleIds ?? [],
+    answerable: row.answerable,
     promptAssembled: row.promptAssembled,
     tokensUsed: Number(row.tokensUsed),
     latencyMs: Number(row.latencyMs),

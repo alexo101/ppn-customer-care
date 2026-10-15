@@ -1,6 +1,4 @@
 import { Bot, Send } from "lucide-react";
-import type { AppearanceTagStyle } from "@workspace/api-client-react";
-import { AppearanceTag, DEFAULT_TAG_STYLE } from "@/components/chat/appearance-tag";
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
 
 type ChatAppearancePreviewProps = {
@@ -8,8 +6,6 @@ type ChatAppearancePreviewProps = {
   ctaColor?: string;
   backgroundColor?: string;
   logoUrl?: string | null;
-  tagText?: string | null;
-  tagStyle?: AppearanceTagStyle;
   className?: string;
 };
 
@@ -18,8 +14,6 @@ export function ChatAppearancePreview({
   ctaColor = DEFAULT_CTA_COLOR,
   backgroundColor = DEFAULT_BACKGROUND_COLOR,
   logoUrl,
-  tagText,
-  tagStyle = DEFAULT_TAG_STYLE,
   className,
 }: ChatAppearancePreviewProps) {
   const onCta = contrastHex(ctaColor);
@@ -42,15 +36,10 @@ export function ChatAppearancePreview({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="font-medium text-sm leading-tight truncate">{name?.trim() || DEFAULT_CHAT_NAME}</div>
-            <AppearanceTag
-              text={tagText}
-              style={tagStyle}
-              ctaColor={ctaColor}
-              tone="onCta"
-              className="shrink-0"
-            />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium leading-tight">
+              {name?.trim() || DEFAULT_CHAT_NAME}
+            </div>
           </div>
           <div className="text-[10px] opacity-80">Looks like your website</div>
         </div>

@@ -35,7 +35,9 @@ router.get("/analytics/summary", requireAuth, async (req, res): Promise<void> =>
   `);
 
   const { rows: logRows } = await db.execute(sql`
-    SELECT AVG(ol.confidence_score::numeric)::float AS avg_confidence
+    SELECT
+      COUNT(*) FILTER (WHERE ol.answerable)::float AS grounded_answers,
+      COUNT(*)::float AS total_answers
     FROM orchestrator_logs ol
     JOIN conversations c ON c.id = ol.conversation_id
     WHERE c.user_id = ${userId}
@@ -61,7 +63,9 @@ router.get("/analytics/summary", requireAuth, async (req, res): Promise<void> =>
     activeConversations: Number(r.active_conversations ?? 0),
     resolvedConversations: Number(r.resolved_conversations ?? 0),
     escalatedConversations: Number(r.escalated_conversations ?? 0),
-    avgConfidenceScore: l.avg_confidence != null ? Math.round(Number(l.avg_confidence) * 100) / 100 : 0,
+    groundedAnswerRate: Number(l.total_answers ?? 0) > 0
+      ? Math.round((Number(l.grounded_answers ?? 0) / Number(l.total_answers)) * 100) / 100
+      : 0,
     totalMessages: Number(m.total_messages ?? 0),
     positiveRatings: Number(f.positive_ratings ?? 0),
     negativeRatings: Number(f.negative_ratings ?? 0),
@@ -100,12 +104,9 @@ router.get("/analytics/logs", requireAuth, async (req, res): Promise<void> => {
       id: row.id,
       conversationId: row.conversationId,
       messageId: row.messageId ?? null,
-      detectedCategory: row.detectedCategory,
-      confidenceScore: Number(row.confidenceScore),
-      secondaryCategories: (row.secondaryCategories as string[]) ?? [],
-      detectedEntities: (row.detectedEntities as Record<string, unknown>) ?? {},
-      ruleUsed: row.ruleUsed,
-      dataSourcesQueried: (row.dataSourcesQueried as string[]) ?? [],
+      articlesUsed: row.articlesUsed ?? [],
+      articleIds: row.articleIds ?? [],
+      answerable: row.answerable,
       promptAssembled: row.promptAssembled,
       tokensUsed: Number(row.tokensUsed),
       latencyMs: Number(row.latencyMs),

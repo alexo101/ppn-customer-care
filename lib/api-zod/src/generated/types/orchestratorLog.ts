@@ -5,19 +5,15 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
-import type { OrchestratorLogDetectedEntities } from './orchestratorLogDetectedEntities';
 
 export interface OrchestratorLog {
   id: string;
   conversationId: string;
   /** @nullable */
   messageId?: string | null;
-  detectedCategory: string;
-  confidenceScore: number;
-  secondaryCategories?: string[];
-  detectedEntities?: OrchestratorLogDetectedEntities;
-  ruleUsed: string;
-  dataSourcesQueried?: string[];
+  articlesUsed: string[];
+  articleIds: string[];
+  answerable: boolean;
   promptAssembled?: string;
   tokensUsed?: number;
   latencyMs?: number;

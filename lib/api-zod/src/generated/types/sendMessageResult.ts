@@ -5,7 +5,6 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
-import type { ClassificationResult } from './classificationResult';
 import type { Message } from './message';
 import type { OrchestratorStage } from './orchestratorStage';
 
@@ -13,6 +12,7 @@ export interface SendMessageResult {
   message: Message;
   response: string;
   stages: OrchestratorStage[];
-  classification: ClassificationResult;
   shouldAskResolution: boolean;
+  answerable: boolean;
+  articlesUsed?: string[];
 }

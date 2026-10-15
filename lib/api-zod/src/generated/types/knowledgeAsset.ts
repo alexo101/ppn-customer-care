@@ -9,7 +9,7 @@ import type { KnowledgeAssetMimeType } from './knowledgeAssetMimeType';
 
 export interface KnowledgeAsset {
   id: string;
-  sourceId: string;
+  articleId: string;
   mimeType: KnowledgeAssetMimeType;
   originalName: string;
   byteSize: number;

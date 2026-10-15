@@ -8,18 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { CategoriesTab, RulesTab, SourcesTab, TargetsTab } from "@/pages/admin";
 import { AppearanceEditor } from "@/components/appearance-editor";
+import { KnowledgeBaseTab } from "@/components/knowledge-base-tab";
+import { TargetsTab } from "@/pages/admin";
 import { cn } from "@/lib/utils";
 import { useWorkspaceAccess } from "@/components/workspace-access";
 import { getUserAgentsQueryKey } from "@/lib/agents-query";
 
 const STEPS = [
   { id: "appearance", label: "Appearance" },
-  { id: "categories", label: "Categories" },
-  { id: "sources", label: "Sources" },
+  { id: "knowledge-base", label: "Knowledge Base" },
   { id: "targets", label: "Target" },
-  { id: "rules", label: "Rules" },
 ] as const;
 
 export default function CreateAgentPage() {
@@ -133,10 +132,8 @@ export default function CreateAgentPage() {
           )}
 
           {step === 0 && agentId && <AppearanceEditor agentId={agentId} />}
-          {step === 1 && agentId && <CategoriesTab agentId={agentId} />}
-          {step === 2 && agentId && <SourcesTab agentId={agentId} />}
-          {step === 3 && agentId && <TargetsTab agentId={agentId} />}
-          {step === 4 && agentId && <RulesTab agentId={agentId} />}
+          {step === 1 && agentId && <KnowledgeBaseTab agentId={agentId} />}
+          {step === 2 && agentId && <TargetsTab agentId={agentId} />}
         </div>
       </div>
     </div>

@@ -3,9 +3,11 @@ export type RetrievedChunk = {
   chunkIndex?: number;
   sourceId: string;
   sourceName: string;
+  articleId?: string;
+  articleName?: string;
   content: string;
   distance: number;
-  kind?: "document" | "api";
+  kind?: "document";
   assets?: Array<{
     id: string;
     mimeType: string;
@@ -17,15 +19,19 @@ export type RetrievedChunk = {
 export type AnswerProviderInput = {
   message: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
-  categoryName: string;
-  rule: {
-    action: string;
-    description: string;
-    promptTemplate: string;
-  } | null;
   retrievedChunks: RetrievedChunk[];
   personAttributes: Record<string, unknown>;
   context?: Record<string, unknown>;
+};
+
+export type AnswerCitation = {
+  articleId: string;
+  articleName: string;
+  sourceId: string;
+  sourceName: string;
+  chunkId?: string;
+  assetId?: string;
+  excerpt?: string;
 };
 
 export type AnswerProviderResult = {
@@ -35,13 +41,7 @@ export type AnswerProviderResult = {
   model: string;
   totalTokens: number;
   promptAssembled: string;
-  citations?: Array<{
-    sourceId: string;
-    sourceName: string;
-    chunkId?: string;
-    assetId?: string;
-    excerpt?: string;
-  }>;
+  citations?: AnswerCitation[];
 };
 
 export interface AnswerProvider {

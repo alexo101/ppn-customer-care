@@ -1,14 +1,10 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   db,
   agentsTable,
   appearanceSettingsTable,
-  apiConnectorsTable,
   audienceTargetsTable,
   conversationsTable,
-  intentCategoriesTable,
-  knowledgeSourcesTable,
-  orchestratorRulesTable,
 } from "@workspace/db";
 import { ensureAgentEscalationInbox } from "./escalations";
 import { ensureAgentConversationSettings } from "./conversation-settings";
@@ -29,35 +25,6 @@ export async function getOwnedAgent(_userId: string, agentId: string, _teamId?: 
 }
 
 async function hasUnscopedRows(userId: string) {
-  const ownerOrSystem = or(eq(intentCategoriesTable.userId, userId), isNull(intentCategoriesTable.userId));
-  const [cat] = await db
-    .select({ id: intentCategoriesTable.id })
-    .from(intentCategoriesTable)
-    .where(and(ownerOrSystem, isNull(intentCategoriesTable.agentId)))
-    .limit(1);
-  if (cat) return true;
-
-  const [rule] = await db
-    .select({ id: orchestratorRulesTable.id })
-    .from(orchestratorRulesTable)
-    .where(and(or(eq(orchestratorRulesTable.userId, userId), isNull(orchestratorRulesTable.userId)), isNull(orchestratorRulesTable.agentId)))
-    .limit(1);
-  if (rule) return true;
-
-  const [source] = await db
-    .select({ id: knowledgeSourcesTable.id })
-    .from(knowledgeSourcesTable)
-    .where(and(or(eq(knowledgeSourcesTable.userId, userId), isNull(knowledgeSourcesTable.userId)), isNull(knowledgeSourcesTable.agentId)))
-    .limit(1);
-  if (source) return true;
-
-  const [connector] = await db
-    .select({ id: apiConnectorsTable.id })
-    .from(apiConnectorsTable)
-    .where(and(or(eq(apiConnectorsTable.userId, userId), isNull(apiConnectorsTable.userId)), isNull(apiConnectorsTable.agentId)))
-    .limit(1);
-  if (connector) return true;
-
   const [convo] = await db
     .select({ id: conversationsTable.id })
     .from(conversationsTable)
@@ -74,22 +41,6 @@ async function hasUnscopedRows(userId: string) {
 }
 
 async function attachUnscopedRows(userId: string, agentId: string) {
-  await db
-    .update(intentCategoriesTable)
-    .set({ agentId })
-    .where(and(or(eq(intentCategoriesTable.userId, userId), isNull(intentCategoriesTable.userId)), isNull(intentCategoriesTable.agentId)));
-  await db
-    .update(orchestratorRulesTable)
-    .set({ agentId })
-    .where(and(or(eq(orchestratorRulesTable.userId, userId), isNull(orchestratorRulesTable.userId)), isNull(orchestratorRulesTable.agentId)));
-  await db
-    .update(knowledgeSourcesTable)
-    .set({ agentId })
-    .where(and(or(eq(knowledgeSourcesTable.userId, userId), isNull(knowledgeSourcesTable.userId)), isNull(knowledgeSourcesTable.agentId)));
-  await db
-    .update(apiConnectorsTable)
-    .set({ agentId })
-    .where(and(or(eq(apiConnectorsTable.userId, userId), isNull(apiConnectorsTable.userId)), isNull(apiConnectorsTable.agentId)));
   await db
     .update(conversationsTable)
     .set({ agentId })

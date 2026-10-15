@@ -11,7 +11,7 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 function SignedInRedirect() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return null;
-  if (isSignedIn) return <Redirect to="/dashboard" />;
+  if (isSignedIn) return <Redirect to="/agents" />;
   return null;
 }
 
@@ -45,7 +45,7 @@ function LoginForm() {
       await signIn.authenticateWithRedirect({
         strategy: "oauth_google",
         redirectUrl: `${window.location.origin}${basePath}/sso-callback`,
-        redirectUrlComplete: `${window.location.origin}${basePath}/dashboard`,
+        redirectUrlComplete: `${window.location.origin}${basePath}/agents`,
         oidcPrompt: "select_account",
       });
     } catch (err) {

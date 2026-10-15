@@ -1,8 +1,9 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import {
   db,
+  agentsTable,
+  knowledgeArticlesTable,
   knowledgeAssetsTable,
-  knowledgeSourcesTable,
 } from "@workspace/db";
 import {
   deleteKnowledgeAsset,
@@ -19,7 +20,7 @@ import {
 
 export type KnowledgeAssetView = {
   id: string;
-  sourceId: string;
+  articleId: string;
   mimeType: string;
   originalName: string;
   byteSize: number;
@@ -33,7 +34,7 @@ export type KnowledgeAssetView = {
 };
 
 export async function createKnowledgeAsset(input: {
-  sourceId: string;
+  articleId: string;
   agentId: string;
   buffer: Buffer;
   mimeType?: string;
@@ -51,7 +52,7 @@ export async function createKnowledgeAsset(input: {
     .from(knowledgeAssetsTable)
     .where(
       and(
-        eq(knowledgeAssetsTable.sourceId, input.sourceId),
+        eq(knowledgeAssetsTable.articleId, input.articleId),
         eq(knowledgeAssetsTable.checksum, info.checksum),
       ),
     )
@@ -69,13 +70,13 @@ export async function createKnowledgeAsset(input: {
     return toAsset(updated ?? existing);
   }
 
-  const storageKey = `knowledge/${input.agentId}/${input.sourceId}/${info.checksum}.${extensionFor(info)}`;
+  const storageKey = `knowledge/${input.agentId}/${input.articleId}/${info.checksum}.${extensionFor(info)}`;
   await putKnowledgeAsset(storageKey, normalized.buffer, info.mimeType);
   try {
     const [asset] = await db
       .insert(knowledgeAssetsTable)
       .values({
-        sourceId: input.sourceId,
+        articleId: input.articleId,
         storageKey,
         mimeType: info.mimeType,
         originalName: input.originalName || "image",
@@ -99,18 +100,25 @@ export async function createKnowledgeAsset(input: {
 export async function getAuthorizedKnowledgeAsset(
   assetId: string,
   userId: string,
+  options: { workspace?: boolean } = {},
 ): Promise<{ asset: KnowledgeAssetView; url: string } | null> {
   const [row] = await db
-    .select({ asset: knowledgeAssetsTable, source: knowledgeSourcesTable })
+    .select({ asset: knowledgeAssetsTable, article: knowledgeArticlesTable, agent: agentsTable })
     .from(knowledgeAssetsTable)
     .innerJoin(
-      knowledgeSourcesTable,
-      eq(knowledgeAssetsTable.sourceId, knowledgeSourcesTable.id),
+      knowledgeArticlesTable,
+      eq(knowledgeAssetsTable.articleId, knowledgeArticlesTable.id),
     )
+    .innerJoin(agentsTable, eq(knowledgeArticlesTable.agentId, agentsTable.id))
     .where(
       and(
         eq(knowledgeAssetsTable.id, assetId),
-        eq(knowledgeSourcesTable.userId, userId),
+        options.workspace
+          ? undefined
+          : or(
+              eq(knowledgeArticlesTable.userId, userId),
+              eq(agentsTable.userId, userId),
+            ),
       ),
     )
     .limit(1);
@@ -158,20 +166,20 @@ export async function getKnowledgeAssetContext(assetIds: string[]) {
   ).filter((asset): asset is NonNullable<typeof asset> => Boolean(asset));
 }
 
-export async function listKnowledgeAssets(sourceId: string): Promise<KnowledgeAssetView[]> {
+export async function listKnowledgeAssets(articleId: string): Promise<KnowledgeAssetView[]> {
   const rows = await db
     .select()
     .from(knowledgeAssetsTable)
-    .where(eq(knowledgeAssetsTable.sourceId, sourceId))
+    .where(eq(knowledgeAssetsTable.articleId, articleId))
     .orderBy(knowledgeAssetsTable.position, knowledgeAssetsTable.createdAt);
   return rows.map(toAsset);
 }
 
-export async function deleteKnowledgeAssetsForSource(sourceId: string): Promise<void> {
+export async function deleteKnowledgeAssetsForArticle(articleId: string): Promise<void> {
   const rows = await db
     .select({ id: knowledgeAssetsTable.id, storageKey: knowledgeAssetsTable.storageKey })
     .from(knowledgeAssetsTable)
-    .where(eq(knowledgeAssetsTable.sourceId, sourceId));
+    .where(eq(knowledgeAssetsTable.articleId, articleId));
   await Promise.all(rows.map((row) => deleteKnowledgeAsset(row.storageKey).catch(() => undefined)));
 }
 
@@ -189,7 +197,7 @@ export async function deleteKnowledgeAssetById(assetId: string): Promise<void> {
 export function toAsset(row: typeof knowledgeAssetsTable.$inferSelect): KnowledgeAssetView {
   return {
     id: row.id,
-    sourceId: row.sourceId,
+    articleId: row.articleId,
     mimeType: row.mimeType,
     originalName: row.originalName,
     byteSize: row.byteSize,
