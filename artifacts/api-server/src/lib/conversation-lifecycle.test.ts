@@ -1,4 +1,39 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { dbMock, analyticsMock } = vi.hoisted(() => ({
+  dbMock: {
+    rows: [] as unknown[],
+    select: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+  },
+  analyticsMock: vi.fn(),
+}));
+
+vi.mock("drizzle-orm", () => ({
+  and: vi.fn(() => ({})),
+  eq: vi.fn(() => ({})),
+  ne: vi.fn(() => ({})),
+}));
+vi.mock("@workspace/db", () => ({
+  db: dbMock,
+  conversationsTable: {
+    id: "conversation.id",
+    agentId: "conversation.agentId",
+    status: "conversation.status",
+    lastActivityAt: "conversation.lastActivityAt",
+    metadata: "conversation.metadata",
+  },
+  agentConversationSettingsTable: { agentId: "settings.agentId" },
+  appearanceSettingsTable: {
+    agentId: "appearance.agentId",
+    communicationLanguage: "appearance.communicationLanguage",
+  },
+  messagesTable: { conversationId: "message.conversationId" },
+}));
+vi.mock("./conversation-analytics", () => ({
+  updateConversationAnalytics: analyticsMock,
+}));
 import {
   autoCloseDurationMs,
   isAutoClosed,
@@ -6,6 +41,7 @@ import {
   npsSubmitError,
   withAutoClosed,
 } from "./conversation-auto-close";
+import { closeInactiveConversations } from "./conversation-lifecycle";
 
 const hourAgo = new Date("2026-09-02T15:00:00.000Z");
 const now = new Date("2026-09-02T16:00:00.000Z");
@@ -157,5 +193,55 @@ describe("npsSubmitError", () => {
         metadata: { autoClosed: true },
       }),
     ).toBeNull();
+  });
+});
+
+describe("closeInactiveConversations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbMock.rows = [
+      {
+        conversation: {
+          id: "conversation-1",
+          agentId: "agent-1",
+          status: "active",
+          lastActivityAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+          metadata: {},
+        },
+        settings: {
+          autoCloseDays: 0,
+          autoCloseHours: 1,
+          autoCloseMinutes: 0,
+          closingMessage: "",
+          welcomeMessage: "",
+          escalationMessage: "",
+        },
+        communicationLanguage: "es",
+      },
+    ];
+    dbMock.select.mockImplementation(() => {
+      const builder = {
+        from: vi.fn(() => builder),
+        leftJoin: vi.fn(() => builder),
+        where: vi.fn().mockResolvedValue(dbMock.rows),
+      };
+      return builder;
+    });
+    dbMock.update.mockImplementation(() => {
+      const builder = {
+        set: vi.fn(() => builder),
+        where: vi.fn().mockResolvedValue(undefined),
+      };
+      return builder;
+    });
+  });
+
+  it("silently closes when the configured closing message is blank", async () => {
+    await expect(closeInactiveConversations(now)).resolves.toEqual({
+      closed: 1,
+    });
+    expect(dbMock.insert).not.toHaveBeenCalled();
+    expect(dbMock.update).toHaveBeenCalledOnce();
+    expect(analyticsMock).toHaveBeenCalledWith("conversation-1");
   });
 });

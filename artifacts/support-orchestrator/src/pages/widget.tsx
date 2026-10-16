@@ -43,6 +43,7 @@ import {
 import { NpsSurvey } from "@/components/chat/nps-survey";
 import { isAutoClosedConversation } from "@/lib/conversation-settings";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
+import { agentLanguageCopy, normalizeAgentLanguage } from "@/lib/agent-language";
 
 export default function Widget() {
   const search = useSearch();
@@ -67,6 +68,7 @@ export default function Widget() {
     },
   });
   const appearance = agentAppearance ?? sessionAppearance;
+  const language = normalizeAgentLanguage(appearance?.communicationLanguage);
 
   const ctaColor = appearance?.ctaColor ?? DEFAULT_CTA_COLOR;
   const backgroundColor =
@@ -197,9 +199,7 @@ export default function Widget() {
         onError: (error) => {
           setDismissedEscalationMessageId(null);
           setEscalationError(
-            error instanceof Error
-              ? error.message
-              : "Could not escalate this conversation.",
+            agentLanguageCopy(language, "escalateFailed"),
           );
         },
       },
@@ -321,7 +321,7 @@ export default function Widget() {
           <ScrollArea className="flex-1 p-4" ref={scrollRef}>
             <div className="space-y-4">
               <div className="text-center text-xs text-muted-foreground my-4">
-                Chat started
+                {agentLanguageCopy(language, "chatStarted")}
               </div>
 
               {!convoId && createConvo.isPending && (
@@ -364,8 +364,8 @@ export default function Widget() {
                             disabled={escalateConversation.isPending}
                           >
                             {escalateConversation.isPending
-                              ? "Escalating..."
-                              : "Escalate"}
+                              ? agentLanguageCopy(language, "escalating")
+                              : agentLanguageCopy(language, "escalate")}
                           </Button>
                           {escalationError && (
                             <p
@@ -386,7 +386,7 @@ export default function Widget() {
                 <div className="flex justify-start">
                   <div className="bg-card border border-border text-card-foreground rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Typing...
+                    {agentLanguageCopy(language, "typing")}
                   </div>
                 </div>
               )}
@@ -399,6 +399,7 @@ export default function Widget() {
                 disabled={submitNps.isPending}
                 submitted={npsSent || convo?.npsScore != null}
                 onSubmit={sendNps}
+                language={language}
               />
             </div>
           )}
@@ -406,13 +407,13 @@ export default function Widget() {
           {convo?.status === "resolved" && latestAssistant && !feedbackSent && (
             <div className="border-t border-border bg-background px-3 py-2">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span>Was this helpful?</span>
+                <span>{agentLanguageCopy(language, "feedbackQuestion")}</span>
                 <Button
                   variant="outline"
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => sendFeedback("positive")}
-                  aria-label="Helpful"
+                  aria-label={agentLanguageCopy(language, "helpful")}
                 >
                   <ThumbsUp className="h-3.5 w-3.5" />
                 </Button>
@@ -421,7 +422,7 @@ export default function Widget() {
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => sendFeedback("negative")}
-                  aria-label="Not helpful"
+                  aria-label={agentLanguageCopy(language, "notHelpful")}
                 >
                   <ThumbsDown className="h-3.5 w-3.5" />
                 </Button>
@@ -429,7 +430,7 @@ export default function Widget() {
                   <Input
                     value={feedbackComment}
                     onChange={(event) => setFeedbackComment(event.target.value)}
-                    placeholder="What could be improved?"
+                    placeholder={agentLanguageCopy(language, "improvePlaceholder")}
                     className="h-7 min-w-32 flex-1 text-xs"
                   />
                 )}
@@ -453,7 +454,7 @@ export default function Widget() {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your message..."
+                placeholder={agentLanguageCopy(language, "messagePlaceholder")}
                 disabled={
                   sendMessage.isPending ||
                   !convoId ||

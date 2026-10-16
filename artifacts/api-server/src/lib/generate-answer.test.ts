@@ -23,6 +23,37 @@ describe("generateAnswer", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it("uses the agent language for deterministic replies even when the visitor writes in English", async () => {
+    const spanishGreeting = await generateAnswer(
+      "Hello",
+      [],
+      {},
+      [],
+      undefined,
+      { agent_language: "es", browser_language: "en-US" },
+    );
+    const frenchGreeting = await generateAnswer(
+      "Bonjour",
+      [],
+      {},
+      [],
+      undefined,
+      { agent_language: "fr", browser_language: "es-ES" },
+    );
+    const italianGreeting = await generateAnswer(
+      "Ciao",
+      [],
+      {},
+      [],
+      undefined,
+      { agent_language: "it", browser_language: "en-US" },
+    );
+
+    expect(spanishGreeting.responseText).toContain("asistente de soporte");
+    expect(frenchGreeting.responseText).toContain("assistant d’assistance");
+    expect(italianGreeting.responseText).toContain("assistente di supporto");
+  });
+
   it("passes retrieved passages to the answer provider", async () => {
     const generate = vi.fn().mockResolvedValue({
       responseText: "Your invoice is ready.",
@@ -67,7 +98,7 @@ describe("generateAnswer", () => {
       {},
       [chunk],
       { generate } as AnswerProvider,
-      { browser_language: "es-ES" },
+      { agent_language: "es", browser_language: "en-US" },
     );
 
     expect(result.shouldAskResolution).toBe(true);

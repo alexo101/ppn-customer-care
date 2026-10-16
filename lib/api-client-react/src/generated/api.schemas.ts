@@ -702,6 +702,16 @@ export const AppearanceTagStyle = {
   soft: 'soft',
 } as const;
 
+export type CommunicationLanguage = typeof CommunicationLanguage[keyof typeof CommunicationLanguage];
+
+
+export const CommunicationLanguage = {
+  en: 'en',
+  es: 'es',
+  fr: 'fr',
+  it: 'it',
+} as const;
+
 export interface Appearance {
   id: string;
   /** @nullable */
@@ -710,6 +720,7 @@ export interface Appearance {
   backgroundColor: string;
   /** @nullable */
   logoUrl?: string | null;
+  communicationLanguage: CommunicationLanguage;
   /**
      * @maxLength 20
      * @nullable
@@ -729,6 +740,7 @@ export interface AppearanceUpdate {
   backgroundColor?: string;
   /** @nullable */
   logoUrl?: string | null;
+  communicationLanguage?: CommunicationLanguage;
   /**
      * @maxLength 20
      * @nullable

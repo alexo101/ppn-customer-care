@@ -123,6 +123,7 @@ export const GetAgentAppearanceResponse = zod.object({
   "ctaColor": zod.string(),
   "backgroundColor": zod.string(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']),
   "tagText": zod.string().max(getAgentAppearanceResponseTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']),
   "importedAt": zod.string().nullish(),
@@ -147,6 +148,7 @@ export const UpdateAgentAppearanceBody = zod.object({
   "ctaColor": zod.string().optional(),
   "backgroundColor": zod.string().optional(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']).optional(),
   "tagText": zod.string().max(updateAgentAppearanceBodyTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']).optional()
 })
@@ -161,6 +163,7 @@ export const UpdateAgentAppearanceResponse = zod.object({
   "ctaColor": zod.string(),
   "backgroundColor": zod.string(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']),
   "tagText": zod.string().max(updateAgentAppearanceResponseTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']),
   "importedAt": zod.string().nullish(),
@@ -191,6 +194,7 @@ export const ImportAgentAppearanceResponse = zod.object({
   "ctaColor": zod.string(),
   "backgroundColor": zod.string(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']),
   "tagText": zod.string().max(importAgentAppearanceResponseAppearanceTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']),
   "importedAt": zod.string().nullish(),
@@ -1567,6 +1571,7 @@ export const GetAppearanceResponse = zod.object({
   "ctaColor": zod.string(),
   "backgroundColor": zod.string(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']),
   "tagText": zod.string().max(getAppearanceResponseTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']),
   "importedAt": zod.string().nullish(),
@@ -1587,6 +1592,7 @@ export const UpdateAppearanceBody = zod.object({
   "ctaColor": zod.string().optional(),
   "backgroundColor": zod.string().optional(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']).optional(),
   "tagText": zod.string().max(updateAppearanceBodyTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']).optional()
 })
@@ -1601,6 +1607,7 @@ export const UpdateAppearanceResponse = zod.object({
   "ctaColor": zod.string(),
   "backgroundColor": zod.string(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']),
   "tagText": zod.string().max(updateAppearanceResponseTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']),
   "importedAt": zod.string().nullish(),
@@ -1628,6 +1635,7 @@ export const ImportAppearanceResponse = zod.object({
   "ctaColor": zod.string(),
   "backgroundColor": zod.string(),
   "logoUrl": zod.string().nullish(),
+  "communicationLanguage": zod.enum(['en', 'es', 'fr', 'it']),
   "tagText": zod.string().max(importAppearanceResponseAppearanceTagTextMax).nullish(),
   "tagStyle": zod.enum(['solid', 'outline', 'soft']),
   "importedAt": zod.string().nullish(),

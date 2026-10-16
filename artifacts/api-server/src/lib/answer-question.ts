@@ -12,6 +12,7 @@ import {
 } from "./llm";
 import { listEligiblePublishedArticles, retrieveRelevantChunks } from "./retrieval";
 import type { PersonAttributes } from "./targets";
+import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
 import {
   buildUnableToAnswerResponse,
   translateEscalationTemplate,
@@ -47,6 +48,7 @@ export async function answerFromKnowledge(input: {
   userName: string;
   escalationTemplate: string;
 }): Promise<AnswerWorkflowResult> {
+  const agentLanguage = resolveReplyLocale(input.context.agent_language);
   const stages = buildStages();
   stages[0].status = "completed";
   stages[0].details = {
@@ -93,7 +95,7 @@ export async function answerFromKnowledge(input: {
     const insufficient = await insufficientAnswer(
       input.escalationTemplate,
       input.userName,
-      input.replyLocaleCandidates,
+      [agentLanguage],
     );
     stages[3].status = "completed";
     stages[3].details = { answerable: false, model: "deterministic-unable-to-answer" };
@@ -148,7 +150,7 @@ export async function answerFromKnowledge(input: {
     const insufficient = await insufficientAnswer(
       input.escalationTemplate,
       input.userName,
-      input.replyLocaleCandidates,
+      [agentLanguage],
     );
     stages[3].status = "completed";
     stages[3].details = {
@@ -182,6 +184,7 @@ export async function answerFromKnowledge(input: {
     requiresAnswerProvider(input.message) ? createAnswerProvider() : undefined,
     {
       ...input.context,
+      agent_language: agentLanguage,
       ...(agentSettings?.prompt ? { agentPrompt: agentSettings.prompt } : {}),
       ...(agentSettings?.targetAudience ? { targetAudience: agentSettings.targetAudience } : {}),
     },
@@ -191,7 +194,7 @@ export async function answerFromKnowledge(input: {
     const insufficient = await insufficientAnswer(
       input.escalationTemplate,
       input.userName,
-      [answer.replyLanguage, ...input.replyLocaleCandidates],
+      [agentLanguage],
     );
     stages[3].status = "completed";
     stages[3].details = {
@@ -221,7 +224,7 @@ export async function answerFromKnowledge(input: {
     const insufficient = await insufficientAnswer(
       input.escalationTemplate,
       input.userName,
-      [answer.replyLanguage, ...input.replyLocaleCandidates],
+      [agentLanguage],
     );
     stages[3].status = "completed";
     stages[3].details = {
@@ -280,9 +283,8 @@ async function insufficientAnswer(
   replyLocaleCandidates: unknown[],
 ) {
   const [insufficientTemplate, offerTemplate] = await Promise.all([
-    translateEscalationTemplate(
-      "{user_name}, I couldn't find enough information in the knowledge base to answer that.",
-      replyLocaleCandidates,
+    Promise.resolve(
+      localizedCommunicationMessage("unableToAnswer", ...replyLocaleCandidates),
     ),
     translateEscalationTemplate(template, replyLocaleCandidates),
   ]);

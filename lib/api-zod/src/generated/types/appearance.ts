@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AppearanceTagStyle } from './appearanceTagStyle';
+import type { CommunicationLanguage } from './communicationLanguage';
 
 export interface Appearance {
   id: string;
@@ -15,6 +16,7 @@ export interface Appearance {
   backgroundColor: string;
   /** @nullable */
   logoUrl?: string | null;
+  communicationLanguage: CommunicationLanguage;
   /**
      * @maxLength 20
      * @nullable

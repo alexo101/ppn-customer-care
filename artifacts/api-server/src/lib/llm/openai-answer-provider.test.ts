@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { parseStructuredResponse } from "./openai-answer-provider";
+import { parseStructuredResponse, replyLanguageInstruction } from "./openai-answer-provider";
+
+describe("replyLanguageInstruction", () => {
+  it("pins the response and reported language to the configured agent language", () => {
+    expect(replyLanguageInstruction("es")).toContain("Respond entirely in this language");
+    expect(replyLanguageInstruction("es")).toContain('Set replyLanguage to "es"');
+    expect(replyLanguageInstruction("es")).toContain("regardless of the user's message language");
+    expect(replyLanguageInstruction("es")).toContain("team-configured guidance");
+    expect(replyLanguageInstruction("fr")).toContain("setting: fr");
+  });
+});
 
 describe("parseStructuredResponse", () => {
   it("reads structured answerability and language", () => {

@@ -1,6 +1,10 @@
 import type { AnswerProvider, RetrievedChunk } from "./llm";
 import { AnswerProviderError } from "./llm";
-import { resolutionFollowUp } from "./reply-locale";
+import {
+  localizedCommunicationMessage,
+  resolutionFollowUp,
+  resolveReplyLocale,
+} from "./reply-locale";
 
 type HistoryMessage = { sender: string; content: string };
 
@@ -16,12 +20,6 @@ export type GeneratedAnswer = {
   citations: NonNullable<import("./llm").AnswerProviderResult["citations"]>;
 };
 
-const GREETINGS_RESPONSES = [
-  "Hello! I'm your AI support assistant. How can I help you today?",
-  "Hi there! What can I assist you with?",
-  "Welcome! I'm here to help. What do you need?",
-];
-
 const RESOLUTION_PHRASES = [
   "thanks",
   "thank you",
@@ -34,6 +32,7 @@ const RESOLUTION_PHRASES = [
 ];
 
 const GREETING_PHRASES = ["hello", "hi", "hey", "good morning", "good afternoon"];
+const LOCALIZED_GREETING_PHRASES = ["hola", "ciao", "bonjour", "bonsoir"];
 
 export function isDeterministicReply(message: string): boolean {
   const lower = message.toLowerCase().trim();
@@ -53,15 +52,16 @@ export async function generateAnswer(
   context: Record<string, unknown> = {},
 ): Promise<GeneratedAnswer> {
   const lower = message.toLowerCase().trim();
+  const language = resolveReplyLocale(context.agent_language);
   if (isResolution(lower)) {
     return localAnswer(
-      "Great to hear! If you need anything else, don't hesitate to reach out. Have a great day!\n\nWas this helpful? You can rate this answer below.",
+      localizedCommunicationMessage("resolved", language),
       "resolved",
     );
   }
   if (isGreeting(lower)) {
     return localAnswer(
-      GREETINGS_RESPONSES[Math.floor(Math.random() * GREETINGS_RESPONSES.length)],
+      localizedCommunicationMessage("greeting", language),
       "active",
     );
   }
@@ -86,7 +86,7 @@ export async function generateAnswer(
   const shouldAskResolution = answerable && userMessageCount >= 2;
   const responseText =
     answerable && shouldAskResolution
-      ? `${result.responseText}\n\n${resolutionFollowUp(result.replyLanguage, context.browser_language)}`
+      ? `${result.responseText}\n\n${resolutionFollowUp(language)}`
       : result.responseText;
   return {
     responseText,
@@ -119,9 +119,11 @@ function localAnswer(responseText: string, resolutionStatus: string): GeneratedA
 }
 
 function isResolution(message: string): boolean {
-  return RESOLUTION_PHRASES.some((keyword) => message.includes(keyword));
+  return RESOLUTION_PHRASES.some((keyword) => message.includes(keyword)) ||
+    ["gracias", "ya está", "risolto", "grazie", "résolu", "merci"].some((keyword) => message.includes(keyword));
 }
 
 function isGreeting(message: string): boolean {
-  return GREETING_PHRASES.some((keyword) => message.startsWith(keyword));
+  return GREETING_PHRASES.some((keyword) => message.startsWith(keyword)) ||
+    LOCALIZED_GREETING_PHRASES.some((keyword) => message.startsWith(keyword));
 }

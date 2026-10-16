@@ -1,6 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import {
   agentConversationSettingsTable,
+  appearanceSettingsTable,
   conversationsTable,
   db,
   messagesTable,
@@ -15,6 +16,8 @@ import {
   npsSubmitError,
   withAutoClosed,
 } from "./conversation-auto-close";
+import { translateCustomerTemplate } from "./welcome-message";
+import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
 
 export { nextAutoCloseAction, npsSubmitError } from "./conversation-auto-close";
 
@@ -81,11 +84,16 @@ export async function closeInactiveConversations(
     .select({
       conversation: conversationsTable,
       settings: agentConversationSettingsTable,
+      communicationLanguage: appearanceSettingsTable.communicationLanguage,
     })
     .from(conversationsTable)
     .leftJoin(
       agentConversationSettingsTable,
       eq(conversationsTable.agentId, agentConversationSettingsTable.agentId),
+    )
+    .leftJoin(
+      appearanceSettingsTable,
+      eq(conversationsTable.agentId, appearanceSettingsTable.agentId),
     )
     .where(
       and(
@@ -113,11 +121,29 @@ export async function closeInactiveConversations(
       now,
     });
     if (action === "close") {
-      await closeConversation(row.conversation, settings.closingMessage, now);
+      const language = resolveReplyLocale(row.communicationLanguage);
+      const closingMessage = await translateClosingMessage(
+        settings.closingMessage,
+        language,
+      );
+      await closeConversation(row.conversation, closingMessage, now);
       closed += 1;
     }
   }
   return { closed };
+}
+
+export async function translateClosingMessage(
+  template: string,
+  language: unknown,
+): Promise<string> {
+  if (!template.trim()) return "";
+  const locale = resolveReplyLocale(language);
+  return translateCustomerTemplate(
+    template,
+    locale,
+    localizedCommunicationMessage("closing", locale),
+  );
 }
 
 export async function submitConversationNps(

@@ -119,6 +119,7 @@ async function applyAppearanceUpdate(
     ctaColor?: string;
     backgroundColor?: string;
     logoUrl?: string | null;
+    communicationLanguage?: string;
     tagText?: string | null;
     tagStyle?: string;
   },
@@ -164,6 +165,10 @@ async function applyAppearanceUpdate(
       return null;
     }
     updates.logoUrl = data.logoUrl === "" ? null : data.logoUrl;
+  }
+
+  if (data.communicationLanguage !== undefined) {
+    updates.communicationLanguage = data.communicationLanguage;
   }
 
   if (data.tagText !== undefined) {
@@ -268,28 +273,39 @@ async function upsertAppearance(userId: string, agentId: string | null, updates:
 
   const [created] = await db
     .insert(appearanceSettingsTable)
-    .values({
-      userId,
-      agentId,
-      websiteUrl: (updates.websiteUrl as string | null | undefined) ?? null,
-      ctaColor: (updates.ctaColor as string | undefined) ?? DEFAULT_CTA_COLOR,
-      backgroundColor: (updates.backgroundColor as string | undefined) ?? DEFAULT_BACKGROUND_COLOR,
-      logoUrl: (updates.logoUrl as string | null | undefined) ?? null,
-      tagText: (updates.tagText as string | null | undefined) ?? null,
-      tagStyle: (updates.tagStyle as string | undefined) ?? DEFAULT_TAG_STYLE,
-      importedAt: (updates.importedAt as Date | undefined) ?? null,
-    })
+    .values(buildAppearanceInsertValues(userId, agentId, updates))
     .returning();
   return created;
 }
 
-function toAppearance(row: typeof appearanceSettingsTable.$inferSelect) {
+export function buildAppearanceInsertValues(
+  userId: string,
+  agentId: string | null,
+  updates: Record<string, unknown>,
+) {
+  return {
+    userId,
+    agentId,
+    websiteUrl: (updates.websiteUrl as string | null | undefined) ?? null,
+    ctaColor: (updates.ctaColor as string | undefined) ?? DEFAULT_CTA_COLOR,
+    backgroundColor: (updates.backgroundColor as string | undefined) ?? DEFAULT_BACKGROUND_COLOR,
+    logoUrl: (updates.logoUrl as string | null | undefined) ?? null,
+    communicationLanguage:
+      (updates.communicationLanguage as string | undefined) ?? "en",
+    tagText: (updates.tagText as string | null | undefined) ?? null,
+    tagStyle: (updates.tagStyle as string | undefined) ?? DEFAULT_TAG_STYLE,
+    importedAt: (updates.importedAt as Date | undefined) ?? null,
+  };
+}
+
+export function toAppearance(row: typeof appearanceSettingsTable.$inferSelect) {
   return {
     id: row.id,
     websiteUrl: row.websiteUrl ?? null,
     ctaColor: row.ctaColor,
     backgroundColor: row.backgroundColor,
     logoUrl: row.logoUrl ?? null,
+    communicationLanguage: row.communicationLanguage,
     tagText: row.tagText ?? null,
     tagStyle: TAG_STYLES.has(row.tagStyle) ? row.tagStyle : DEFAULT_TAG_STYLE,
     importedAt: row.importedAt?.toISOString() ?? null,

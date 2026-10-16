@@ -30,11 +30,9 @@ import {
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
+import { agentLanguageCopy, normalizeAgentLanguage } from "@/lib/agent-language";
 
 const GREETING_WAIT_MS = 12_000;
-const GREETING_WAIT_ERROR =
-  "The greeting never arrived. Try again, or restart the API if this keeps happening.";
-
 function assistantMessageCount(messages: { sender: string }[]): number {
   return messages.reduce(
     (count, message) => count + (message.sender === "assistant" ? 1 : 0),
@@ -42,12 +40,12 @@ function assistantMessageCount(messages: { sender: string }[]): number {
   );
 }
 
-function TrainingThinkingStatus() {
+function TrainingThinkingStatus({ language }: { language: string }) {
   return (
     <div className="flex justify-start">
       <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        Preparing response...
+        {agentLanguageCopy(language, "preparingAnswer")}
       </div>
     </div>
   );
@@ -89,6 +87,7 @@ export function SupportChatPanel({
     },
   });
   const appearance = agentAppearance ?? sessionAppearance;
+  const language = normalizeAgentLanguage(appearance?.communicationLanguage);
   const browserLanguage =
     typeof navigator !== "undefined" ? navigator.language : undefined;
 
@@ -220,7 +219,7 @@ export function SupportChatPanel({
     if (!pendingUserMessage || sendError) return;
     const timer = window.setTimeout(() => {
       setSendError(
-        "We couldn't confirm your message was received. Check the connection and try again.",
+        agentLanguageCopy(language, "messageUnconfirmed"),
       );
     }, GREETING_WAIT_MS);
     return () => window.clearTimeout(timer);
@@ -300,11 +299,7 @@ export function SupportChatPanel({
         },
         onError: (error) => {
           if (runId !== runIdRef.current) return;
-          setSendError(
-            error instanceof Error
-              ? error.message
-              : "The training preview could not start.",
-          );
+          setSendError(agentLanguageCopy(language, "previewStartFailed"));
         },
       },
     );
@@ -324,7 +319,7 @@ export function SupportChatPanel({
 
     const timer = window.setTimeout(() => {
       setWelcomeWaitTimedOut(true);
-      setSendError(GREETING_WAIT_ERROR);
+      setSendError(agentLanguageCopy(language, "greetingTimeout"));
     }, GREETING_WAIT_MS);
 
     return () => window.clearTimeout(timer);
@@ -359,11 +354,7 @@ export function SupportChatPanel({
         onError: (error) => {
           if (runId !== runIdRef.current) return;
           stopThinking();
-          setSendError(
-            error instanceof Error
-              ? error.message
-              : "The training preview could not complete.",
-          );
+          setSendError(agentLanguageCopy(language, "previewCompleteFailed"));
         },
       },
     );
@@ -403,11 +394,7 @@ export function SupportChatPanel({
         },
         onError: (error) => {
           setDismissedEscalationMessageId(null);
-          setEscalationError(
-            error instanceof Error
-              ? error.message
-              : "Could not escalate this conversation.",
-          );
+          setEscalationError(agentLanguageCopy(language, "escalateFailed"));
         },
       },
     );
@@ -450,11 +437,7 @@ export function SupportChatPanel({
           // user row was never persisted (the API inserts it before answer
           // generation). The composer stays blocked until the user re-syncs
           // via "Try again", which establishes the true message list.
-          setSendError(
-            error instanceof Error
-              ? error.message
-              : "The training preview could not complete.",
-          );
+          setSendError(agentLanguageCopy(language, "messageFailed"));
         },
       },
     );
@@ -491,7 +474,9 @@ export function SupportChatPanel({
               />
             </div>
             <div className="text-[10px] opacity-80 truncate">
-              {source === "training" ? "Training preview" : "Online"}
+              {source === "training"
+                ? agentLanguageCopy(language, "trainingPreview")
+                : agentLanguageCopy(language, "previewOnline")}
             </div>
           </div>
         </div>
@@ -520,7 +505,7 @@ export function SupportChatPanel({
                 <div className="flex justify-start">
                   <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Starting chat...
+                    {agentLanguageCopy(language, "startingChat")}
                   </div>
                 </div>
               )}
@@ -529,7 +514,7 @@ export function SupportChatPanel({
                 <div className="flex justify-start">
                   <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Preparing greeting...
+                    {agentLanguageCopy(language, "preparingGreeting")}
                   </div>
                 </div>
               )}
@@ -568,8 +553,8 @@ export function SupportChatPanel({
                             disabled={escalateConversation.isPending}
                           >
                             {escalateConversation.isPending
-                              ? "Escalating..."
-                              : "Escalate"}
+                              ? agentLanguageCopy(language, "escalating")
+                              : agentLanguageCopy(language, "escalate")}
                           </Button>
                           {escalationError && (
                             <p
@@ -598,14 +583,14 @@ export function SupportChatPanel({
                 )}
 
               {source === "training" && thinkingVisible && (
-                <TrainingThinkingStatus />
+                <TrainingThinkingStatus language={language} />
               )}
 
               {source !== "training" && sendingMessage && (
                 <div className="flex justify-start">
                   <div className="bg-white border border-black/5 text-slate-800 rounded-2xl rounded-tl-sm px-4 py-2 text-sm shadow-sm flex items-center gap-2">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Typing...
+                    {agentLanguageCopy(language, "typing")}
                   </div>
                 </div>
               )}
@@ -615,16 +600,16 @@ export function SupportChatPanel({
                   role="alert"
                   className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
                 >
-                  <p className="font-medium">Training could not complete</p>
+                  <p className="font-medium">{agentLanguageCopy(language, "previewCompleteFailed")}</p>
                   <p className="mt-1">
-                    {sendError.replace(/^HTTP \d+\s[^:]+:\s*/, "")}
+                    {sendError}
                   </p>
                   <button
                     type="button"
                     className="mt-2 font-medium underline underline-offset-2"
                     onClick={handleRetry}
                   >
-                    Try again
+                    {agentLanguageCopy(language, "tryAgain")}
                   </button>
                 </div>
               )}
@@ -640,10 +625,10 @@ export function SupportChatPanel({
             onChange={(e) => setInput(e.target.value)}
             placeholder={
               waitingForQuestion
-                ? "Select a question to start"
+                ? emptyHint
                 : waitingForWelcome
-                  ? "Waiting for greeting..."
-                  : "Type your message..."
+                  ? agentLanguageCopy(language, "preparingGreeting")
+                  : agentLanguageCopy(language, "messagePlaceholder")
             }
             disabled={
               waitingForQuestion ||

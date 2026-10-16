@@ -28,6 +28,7 @@ export * from './articleInput';
 export * from './articleStatus';
 export * from './articleUpdate';
 export * from './citation';
+export * from './communicationLanguage';
 export * from './conversation';
 export * from './conversationContext';
 export * from './conversationInput';

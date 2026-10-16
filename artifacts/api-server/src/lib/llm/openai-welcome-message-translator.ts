@@ -47,11 +47,11 @@ export class OpenAIWelcomeMessageTranslator
       {
         role: "system",
         content:
-          "Translate the supplied customer-support message into the requested locale. Return only the translated message. Preserve every __SUPPORT_PLACEHOLDER_N__ token exactly, including spelling and position.",
+          "Translate the supplied customer-support message into the requested language. Return only the translated message. Preserve every __SUPPORT_PLACEHOLDER_N__ token exactly, including spelling and position. Preserve URLs, citations, names, and identifiers.",
       },
       {
         role: "user",
-        content: `Browser locale: ${locale}\n\nMessage:\n${protectedTemplate}`,
+        content: `Required customer communication language: ${locale}\n\nMessage:\n${protectedTemplate}`,
       },
     ];
     const request = (model: string) =>

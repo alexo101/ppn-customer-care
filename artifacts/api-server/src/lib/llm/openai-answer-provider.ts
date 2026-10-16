@@ -6,6 +6,7 @@ import {
   type AnswerProviderInput,
   type AnswerProviderResult,
 } from "./answer-provider";
+import { resolveReplyLocale } from "../reply-locale";
 
 const ANSWER_RESPONSE_FORMAT = {
   type: "json_schema" as const,
@@ -70,6 +71,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
           .join("\n\n")
       : "No knowledge-base context was retrieved.";
     const personContext = JSON.stringify(input.personAttributes);
+    const replyLocale = resolveReplyLocale(input.context?.agent_language);
     const promptAssembled = [
       `Person attributes: ${personContext}`,
       `Request context: ${JSON.stringify(input.context ?? {})}`,
@@ -94,6 +96,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
           input.context.agentPrompt.trim()
             ? `Team-configured agent guidance: ${input.context.agentPrompt.trim()}`
             : "",
+          replyLanguageInstruction(replyLocale),
         ].join(" "),
       },
       ...input.history.slice(-8).map((message) => ({
@@ -169,6 +172,11 @@ export class OpenAIAnswerProvider implements AnswerProvider {
       );
     }
   }
+}
+
+export function replyLanguageInstruction(agentLanguage: unknown): string {
+  const language = resolveReplyLocale(agentLanguage);
+  return `Reply language is fixed by this agent's Appearance setting: ${language}. Respond entirely in this language, regardless of the user's message language, prior conversation, supplied knowledge, or team-configured guidance. Do not switch languages. Set replyLanguage to "${language}".`;
 }
 
 export function parseStructuredResponse(value: string): {

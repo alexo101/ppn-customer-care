@@ -32,6 +32,8 @@ import { sendWelcomeMessageIfNeeded } from "../lib/welcome-message";
 import { DEFAULT_CONVERSATION_SETTINGS } from "../lib/conversation-auto-close";
 import { isUnableToAnswerMessageMetadata } from "../lib/unanswered-message";
 import { answerFromKnowledge, workflowProviderErrorMessage } from "../lib/answer-question";
+import { getAgentCommunicationLanguage } from "../lib/agent-communication-language";
+import { localizedCommunicationMessage } from "../lib/reply-locale";
 import { updateConversationAnalytics } from "../lib/conversation-analytics";
 import { appDomainAttribute, type PersonAttributes } from "../lib/targets";
 import {
@@ -491,6 +493,7 @@ router.post(
         : typeof person.attributes.user_name === "string"
           ? person.attributes.user_name
           : await resolveUserDisplayName(req.userId, req.userEmail);
+    const communicationLanguage = await getAgentCommunicationLanguage(conv.agentId);
     let answered;
     try {
       answered = await answerFromKnowledge({
@@ -507,8 +510,9 @@ router.post(
           ...(existingMeta.browser_language != null
             ? { browser_language: existingMeta.browser_language }
             : {}),
+          agent_language: communicationLanguage,
         },
-        replyLocaleCandidates: [existingMeta.browser_language, requestContext.browser_language],
+        replyLocaleCandidates: [communicationLanguage],
         userName,
         escalationTemplate:
           conversationSettings?.escalationMessage ??
@@ -516,7 +520,12 @@ router.post(
       });
     } catch (error) {
       const message = workflowProviderErrorMessage(error);
-      res.status(503).json({ error: message ?? "The assistant is temporarily unavailable. Please try again." });
+      if (message) {
+        req.log.warn({ error: message }, "Customer response generation failed");
+      }
+      res.status(503).json({
+        error: localizedCommunicationMessage("assistantUnavailable", communicationLanguage),
+      });
       return;
     }
 

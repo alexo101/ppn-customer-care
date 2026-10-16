@@ -2683,9 +2683,13 @@ components:
       type: string
       enum: [solid, outline, soft]
 
+    CommunicationLanguage:
+      type: string
+      enum: [en, es, fr, it]
+
     Appearance:
       type: object
-      required: [id, ctaColor, backgroundColor, tagStyle, createdAt, updatedAt]
+      required: [id, ctaColor, backgroundColor, communicationLanguage, tagStyle, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2697,6 +2701,8 @@ components:
           type: string
         logoUrl:
           type: ["string", "null"]
+        communicationLanguage:
+          $ref: "#/components/schemas/CommunicationLanguage"
         tagText:
           type: ["string", "null"]
           maxLength: 20
@@ -2720,6 +2726,8 @@ components:
           type: string
         logoUrl:
           type: ["string", "null"]
+        communicationLanguage:
+          $ref: "#/components/schemas/CommunicationLanguage"
         tagText:
           type: ["string", "null"]
           maxLength: 20

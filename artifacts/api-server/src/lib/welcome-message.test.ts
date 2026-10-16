@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_WELCOME_MESSAGE } from "./conversation-auto-close";
 import {
   hasRequiredWelcomeTokens,
@@ -82,8 +82,8 @@ describe("translateWelcomeTemplate", () => {
     );
   });
 
-  it("uses the configured template when translation fails", async () => {
-    const template = "Hello {user_name}, you are speaking {agent_name}.";
+  it("uses a safe localized template when translation fails", async () => {
+    const template = "Welcome, {user_name} from {agent_name}.";
     const translator = {
       translate: async () => {
         throw new Error("translator unavailable");
@@ -92,15 +92,19 @@ describe("translateWelcomeTemplate", () => {
 
     await expect(
       translateWelcomeTemplate(template, "es", translator),
-    ).resolves.toBe(template);
+    ).resolves.toBe(
+      "Hola {user_name}, estás hablando con {agent_name}. ¿Cómo puedo ayudarte?",
+    );
   });
 
-  it("does not translate without a valid browser locale", async () => {
-    const translator = { translate: async () => "unexpected" };
+  it("preserves configured English wording without calling the translator", async () => {
+    const translate = vi.fn(async () => "unexpected");
+    const translator = { translate };
     const template = "Hello {user_name}, you are speaking {agent_name}.";
 
     await expect(
       translateWelcomeTemplate(template, undefined, translator),
     ).resolves.toBe(template);
+    expect(translate).not.toHaveBeenCalled();
   });
 });

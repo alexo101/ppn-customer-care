@@ -32,6 +32,14 @@ vi.mock("./retrieval", () => ({
   retrieveRelevantChunks,
 }));
 
+vi.mock("./llm/openai-welcome-message-translator", () => ({
+  OpenAIWelcomeMessageTranslator: class {
+    async translate(template: string) {
+      return template;
+    }
+  },
+}));
+
 vi.mock("./llm", async () => {
   const actual = await vi.importActual<typeof import("./llm")>("./llm");
   return {

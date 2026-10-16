@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ESCALATE_MESSAGE_ACTION,
   buildUnableToAnswerResponse,
@@ -46,7 +46,7 @@ describe("buildUnableToAnswerResponse", () => {
 });
 
 describe("translateEscalationTemplate", () => {
-  it("translates using the reply language and preserves the user placeholder", async () => {
+  it("translates using the agent language and preserves the user placeholder", async () => {
     const translator = {
       translate: async (_template: string, locale: string) =>
         `Lo siento {user_name}, no puedo responder a eso. (${locale})`,
@@ -59,28 +59,41 @@ describe("translateEscalationTemplate", () => {
         translator,
       ),
     ).resolves.toBe(
-      "Lo siento {user_name}, no puedo responder a eso. (es-es)",
+      "Lo siento {user_name}, no puedo responder a eso. (es)",
     );
   });
 
-  it("keeps the configured template when translation loses the placeholder", async () => {
-    const template = "Sorry {user_name}, I cannot answer that.";
+  it("uses a localized safe template when translation loses the placeholder", async () => {
+    const template = "Welcome {user_name}.";
     const translator = {
       translate: async () => "Lo siento, no puedo responder a eso.",
     };
 
     await expect(
       translateEscalationTemplate(template, ["es"], translator),
-    ).resolves.toBe(template);
+    ).resolves.toBe(
+      "Lo siento, {user_name}, no puedo responder a eso. ¿Quieres que te ponga en contacto con un agente de soporte?",
+    );
   });
 
-  it("does not translate when no reply language is available", async () => {
-    const template = "Sorry {user_name}, I cannot answer that.";
-    const translator = { translate: async () => "unexpected" };
+  it("preserves configured English wording without calling the translator", async () => {
+    const template = "Welcome {user_name}.";
+    const translate = vi.fn(async () => "unexpected");
+    const translator = { translate };
 
     await expect(
       translateEscalationTemplate(template, [], translator),
     ).resolves.toBe(template);
+    expect(translate).not.toHaveBeenCalled();
+  });
+
+  it("uses the localized default when no escalation template is configured", async () => {
+    const translate = vi.fn(async () => "unexpected");
+
+    await expect(
+      translateEscalationTemplate("", ["es"], { translate }),
+    ).resolves.toContain("agente de soporte");
+    expect(translate).not.toHaveBeenCalled();
   });
 });
 

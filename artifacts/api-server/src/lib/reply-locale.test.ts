@@ -23,6 +23,7 @@ describe("resolveReplyLocale", () => {
   it("prefers the first valid candidate", () => {
     expect(resolveReplyLocale(undefined, "fr")).toBe("fr");
     expect(resolveReplyLocale("es", "it")).toBe("es");
+    expect(resolveReplyLocale("es", "en-US")).toBe("es");
   });
 });
 

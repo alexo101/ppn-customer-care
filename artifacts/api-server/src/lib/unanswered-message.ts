@@ -1,9 +1,9 @@
-import { logger } from "./logger";
+import type { WelcomeMessageTranslator } from "./llm/openai-welcome-message-translator";
+import { translateCustomerTemplate } from "./welcome-message";
 import {
-  OpenAIWelcomeMessageTranslator,
-  type WelcomeMessageTranslator,
-} from "./llm/openai-welcome-message-translator";
-import { normalizeBrowserLanguage } from "./welcome-message";
+  localizedCommunicationMessage,
+  resolveReplyLocale,
+} from "./reply-locale";
 
 export const UNABLE_TO_ANSWER_MESSAGE_KIND = "unable_to_answer";
 export const ESCALATE_MESSAGE_ACTION = "escalate";
@@ -20,27 +20,13 @@ export async function translateEscalationTemplate(
   replyLanguageCandidates: unknown[],
   translator?: WelcomeMessageTranslator,
 ): Promise<string> {
-  const locale = replyLanguageCandidates
-    .map(normalizeBrowserLanguage)
-    .find((candidate): candidate is string => Boolean(candidate));
-  if (!locale) return template;
-
-  try {
-    const translated = await (
-      translator ??
-      new OpenAIWelcomeMessageTranslator()
-    ).translate(template, locale);
-    if (!translated.trim() || !translated.includes("{user_name}")) {
-      throw new Error("Translated escalation message lost the user placeholder.");
-    }
-    return translated;
-  } catch (error) {
-    logger.warn(
-      { err: error, locale },
-      "Failed to translate escalation message; using configured template",
-    );
-    return template;
-  }
+  const locale = resolveReplyLocale(...replyLanguageCandidates);
+  return translateCustomerTemplate(
+    template,
+    locale,
+    localizedCommunicationMessage("escalationOffer", locale),
+    translator,
+  );
 }
 
 export function buildUnableToAnswerResponse(

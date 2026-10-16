@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import {
   agentConversationSettingsTable,
+  appearanceSettingsTable,
   db,
   messagesTable,
 } from "@workspace/db";
@@ -13,6 +14,7 @@ import {
   OpenAIWelcomeMessageTranslator,
   type WelcomeMessageTranslator,
 } from "./llm/openai-welcome-message-translator";
+import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
 
 export const REQUIRED_WELCOME_TOKENS = ["{user_name}", "{agent_name}"] as const;
 export const REQUIRED_ESCALATION_TOKENS = ["{user_name}"] as const;
@@ -52,33 +54,47 @@ let defaultWelcomeMessageTranslator: WelcomeMessageTranslator | undefined;
 
 export async function translateWelcomeTemplate(
   template: string,
-  browserLanguage: unknown,
+  agentLanguage: unknown,
   translator?: WelcomeMessageTranslator,
 ): Promise<string> {
-  const locale = normalizeBrowserLanguage(browserLanguage);
-  if (!locale) return template;
+  const locale = resolveReplyLocale(agentLanguage);
+  const fallback = localizedCommunicationMessage("welcome", locale);
+  const translated = await translateCustomerTemplate(template, locale, fallback, translator);
+  return hasRequiredWelcomeTokens(translated)
+    ? translated
+    : fallback;
+}
 
+export async function translateCustomerTemplate(
+  template: string,
+  agentLanguage: unknown,
+  fallback: string,
+  translator?: WelcomeMessageTranslator,
+): Promise<string> {
+  const locale = resolveReplyLocale(agentLanguage);
+  if (!template.trim()) return fallback;
+  if (locale === "en") return template;
   const cacheKey = `${locale}\u0000${template}`;
   const cached = translatedWelcomeMessages.get(cacheKey);
   if (cached) return cached;
-
   try {
     const activeTranslator =
       translator ??
       (defaultWelcomeMessageTranslator ??=
         new OpenAIWelcomeMessageTranslator());
     const translated = await activeTranslator.translate(template, locale);
-    if (!translated.trim() || !hasRequiredWelcomeTokens(translated)) {
-      throw new Error("Translated welcome message is invalid.");
+    const placeholders = [...new Set(template.match(/\{[a-zA-Z0-9_]+\}/g) ?? [])];
+    if (!translated.trim() || placeholders.some((placeholder) => !translated.includes(placeholder))) {
+      throw new Error("Translated customer message is invalid.");
     }
     translatedWelcomeMessages.set(cacheKey, translated);
     return translated;
   } catch (error) {
     logger.warn(
       { err: error, locale },
-      "Failed to translate welcome message; using configured template",
+      "Failed to translate customer message; using localized default",
     );
-    return template;
+    return fallback;
   }
 }
 
@@ -98,19 +114,20 @@ export async function sendWelcomeMessageIfNeeded(input: {
       .from(agentConversationSettingsTable)
       .where(eq(agentConversationSettingsTable.agentId, input.agentId))
       .limit(1);
+    const [appearance] = await db
+      .select({ language: appearanceSettingsTable.communicationLanguage })
+      .from(appearanceSettingsTable)
+      .where(eq(appearanceSettingsTable.agentId, input.agentId))
+      .limit(1);
+    const agentLanguage = resolveReplyLocale(appearance?.language);
     const template = (
       settings?.welcomeMessage ?? DEFAULT_CONVERSATION_SETTINGS.welcomeMessage
     ).trim();
     if (!template) return;
 
-    const browserLanguage = normalizeBrowserLanguage(
-      isPlainMetadata(input.metadata)
-        ? input.metadata.browser_language
-        : undefined,
-    );
     const localizedTemplate = await translateWelcomeTemplate(
       template,
-      browserLanguage,
+      agentLanguage,
       input.translator,
     );
     const content = interpolateWelcomeMessage(localizedTemplate, {
@@ -125,11 +142,11 @@ export async function sendWelcomeMessageIfNeeded(input: {
       content,
       metadata: {
         kind: "welcome",
-        ...(browserLanguage
-          ? {
-              browser_language: browserLanguage,
-            }
+        ...(isPlainMetadata(input.metadata) &&
+        normalizeBrowserLanguage(input.metadata.browser_language)
+          ? { browser_language: normalizeBrowserLanguage(input.metadata.browser_language) }
           : {}),
+        communication_language: agentLanguage,
       },
     });
   } catch (error) {

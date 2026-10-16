@@ -1,11 +1,13 @@
 import { Bot, Send } from "lucide-react";
 import { contrastHex, DEFAULT_BACKGROUND_COLOR, DEFAULT_CHAT_NAME, DEFAULT_CTA_COLOR } from "@/lib/appearance-theme";
+import { agentLanguageCopy, normalizeAgentLanguage, type AgentLanguage } from "@/lib/agent-language";
 
 type ChatAppearancePreviewProps = {
   name?: string;
   ctaColor?: string;
   backgroundColor?: string;
   logoUrl?: string | null;
+  communicationLanguage?: AgentLanguage;
   className?: string;
 };
 
@@ -14,10 +16,12 @@ export function ChatAppearancePreview({
   ctaColor = DEFAULT_CTA_COLOR,
   backgroundColor = DEFAULT_BACKGROUND_COLOR,
   logoUrl,
+  communicationLanguage = "en",
   className,
 }: ChatAppearancePreviewProps) {
   const onCta = contrastHex(ctaColor);
   const onBackground = contrastHex(backgroundColor);
+  const language = normalizeAgentLanguage(communicationLanguage);
 
   return (
     <div
@@ -41,14 +45,14 @@ export function ChatAppearancePreview({
               {name?.trim() || DEFAULT_CHAT_NAME}
             </div>
           </div>
-          <div className="text-[10px] opacity-80">Looks like your website</div>
+          <div className="text-[10px] opacity-80">{agentLanguageCopy(language, "previewDescription")}</div>
         </div>
       </div>
 
       <div className="p-4 space-y-3 min-h-[280px]">
         <div className="flex justify-start">
           <div className="max-w-[85%] rounded-2xl rounded-tl-sm px-3.5 py-2 text-sm bg-white text-slate-800 shadow-sm border border-black/5">
-            Hi — how can we help today?
+            {agentLanguageCopy(language, "previewWelcome")}
           </div>
         </div>
         <div className="flex justify-end">
@@ -56,12 +60,12 @@ export function ChatAppearancePreview({
             className="max-w-[85%] rounded-2xl rounded-tr-sm px-3.5 py-2 text-sm"
             style={{ backgroundColor: ctaColor, color: onCta }}
           >
-            I have a question about my order.
+            {agentLanguageCopy(language, "previewCustomer")}
           </div>
         </div>
         <div className="flex justify-start">
           <div className="max-w-[85%] rounded-2xl rounded-tl-sm px-3.5 py-2 text-sm bg-white text-slate-800 shadow-sm border border-black/5">
-            Of course. Share your order number and we will take it from there.
+            {agentLanguageCopy(language, "previewReply")}
           </div>
         </div>
       </div>
@@ -69,7 +73,7 @@ export function ChatAppearancePreview({
       <div className="p-3 border-t border-black/10 bg-white/70">
         <div className="relative">
           <div className="h-10 rounded-full bg-white border border-black/10 px-4 pr-12 text-sm text-slate-400 flex items-center">
-            Type your message...
+            {agentLanguageCopy(language, "messagePlaceholder")}
           </div>
           <div
             className="absolute right-1 top-1 h-8 w-8 rounded-full flex items-center justify-center"

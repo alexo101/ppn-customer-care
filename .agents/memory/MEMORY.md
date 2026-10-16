@@ -1,2 +1,3 @@
 - [OpenAI model access](openai-model-access.md) — public model availability does not guarantee access for the configured API project.
 - [Development database migrations](development-database-migrations.md) — new API schema fields need their migration applied to the development database before startup checks use them.
+- [Drizzle snapshot gaps](drizzle-snapshot-gaps.md) — migration generation is currently blocked by incomplete historical snapshots; preserve the ordered SQL journal.

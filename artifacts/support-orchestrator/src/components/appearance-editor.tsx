@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChatAppearancePreview } from "@/components/chat/chat-appearance-preview";
+import { AGENT_LANGUAGE_OPTIONS, normalizeAgentLanguage } from "@/lib/agent-language";
 import { toast } from "@/hooks/use-toast";
 import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 import {
@@ -35,6 +36,7 @@ type Draft = {
   ctaColor: string;
   backgroundColor: string;
   logoUrl: string;
+  communicationLanguage: string;
 };
 
 function FieldBlock({
@@ -65,6 +67,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
     ctaColor: DEFAULT_CTA_COLOR,
     backgroundColor: DEFAULT_BACKGROUND_COLOR,
     logoUrl: "",
+    communicationLanguage: "en",
   });
   const [ctaHexInput, setCtaHexInput] = useState(DEFAULT_CTA_COLOR);
   const [bgHexInput, setBgHexInput] = useState(DEFAULT_BACKGROUND_COLOR);
@@ -84,6 +87,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       ctaColor: data.ctaColor,
       backgroundColor: data.backgroundColor,
       logoUrl: data.logoUrl ?? "",
+      communicationLanguage: normalizeAgentLanguage(data.communicationLanguage),
     });
     setCtaHexInput(data.ctaColor);
     setBgHexInput(data.backgroundColor);
@@ -96,6 +100,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
         ctaColor: data?.ctaColor ?? DEFAULT_CTA_COLOR,
         backgroundColor: data?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR,
         logoUrl: data?.logoUrl ?? "",
+        communicationLanguage: normalizeAgentLanguage(data?.communicationLanguage),
       }),
     [agent, data],
   );
@@ -105,6 +110,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
     ctaColor: draft.ctaColor,
     backgroundColor: draft.backgroundColor,
     logoUrl: draft.logoUrl,
+    communicationLanguage: draft.communicationLanguage,
   });
   const isDirty = currentSnapshot !== savedSnapshot;
   const saving = updateAppearance.isPending || updateAgent.isPending;
@@ -137,6 +143,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
           ctaColor,
           backgroundColor,
           logoUrl: draft.logoUrl.trim() || null,
+          communicationLanguage: normalizeAgentLanguage(draft.communicationLanguage),
         },
       });
       queryClient.invalidateQueries({ queryKey: getListAgentsQueryKey() });
@@ -147,7 +154,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
       queryClient.invalidateQueries({ queryKey: ["/api/inbox"] });
       toast({
         title: "Appearance saved",
-        description: "Name, colors, and logo are up to date.",
+        description: "Name, colors, logo, and agent language are up to date.",
       });
     } catch (error) {
       toast({
@@ -210,6 +217,32 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
               readOnly={!canEdit}
               placeholder="e.g. Billing support"
             />
+          </FieldBlock>
+
+          <FieldBlock title="Agent language">
+            <div className="space-y-1.5">
+              <Label htmlFor={`agent-language-${agentId}`} className="text-xs text-muted-foreground">
+                Customer-facing messages and chat controls
+              </Label>
+              <select
+                id={`agent-language-${agentId}`}
+                value={draft.communicationLanguage}
+                onChange={(event) =>
+                  setDraft((previous) => ({
+                    ...previous,
+                    communicationLanguage: event.target.value,
+                  }))
+                }
+                disabled={!canEdit}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {AGENT_LANGUAGE_OPTIONS.map((language) => (
+                  <option key={language.value} value={language.value}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </FieldBlock>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -290,6 +323,7 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             ctaColor={isHexColor(draft.ctaColor) ? draft.ctaColor : DEFAULT_CTA_COLOR}
             backgroundColor={isHexColor(draft.backgroundColor) ? draft.backgroundColor : DEFAULT_BACKGROUND_COLOR}
             logoUrl={draft.logoUrl || null}
+            communicationLanguage={normalizeAgentLanguage(draft.communicationLanguage)}
             className="rounded-xl border border-border shadow-sm overflow-hidden"
           />
           <div className="flex items-center justify-end">
