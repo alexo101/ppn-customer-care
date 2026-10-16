@@ -33,7 +33,7 @@ import { DEFAULT_CONVERSATION_SETTINGS } from "../lib/conversation-auto-close";
 import { isUnableToAnswerMessageMetadata } from "../lib/unanswered-message";
 import { answerFromKnowledge, workflowProviderErrorMessage } from "../lib/answer-question";
 import { updateConversationAnalytics } from "../lib/conversation-analytics";
-import type { PersonAttributes } from "../lib/targets";
+import { appDomainAttribute, type PersonAttributes } from "../lib/targets";
 import {
   getAssignedConversation,
   markConversationEscalationUnread,
@@ -468,12 +468,14 @@ router.post(
     const email =
       (await resolveUserEmail(req.userId, req.userEmail)) ??
       (typeof existingPerson.email === "string" ? existingPerson.email : null);
+    const appDomain = appDomainAttribute(requestContext.pageDomain);
     const person: PersonAttributes = {
       personType: "user",
       attributes: {
         user_id: req.userId,
         ...(email ? { email } : {}),
         ...requestContext,
+        ...(appDomain ? { app_domain: appDomain } : {}),
       },
     };
     const [conversationSettings] = conv.agentId

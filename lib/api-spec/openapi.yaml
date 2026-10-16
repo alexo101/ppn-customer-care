@@ -2524,6 +2524,7 @@ components:
         - company
         - country
         - city
+        - app_domain
         - current_page_url
         - referring_url
         - browser_language

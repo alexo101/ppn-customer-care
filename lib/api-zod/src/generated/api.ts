@@ -1396,7 +1396,7 @@ export const ListTargetsResponseItem = zod.object({
   "conditions": zod.array(zod.object({
   "id": zod.string(),
   "personType": zod.enum(['visitor', 'lead', 'user']),
-  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
+  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'app_domain', 'current_page_url', 'referring_url', 'browser_language']),
   "operator": zod.enum(['is', 'is_not', 'contains', 'does_not_contain', 'starts_with', 'ends_with', 'is_known', 'is_unknown']),
   "value": zod.string()
 })),
@@ -1427,7 +1427,7 @@ export const CreateTargetBody = zod.object({
   "matchMode": zod.enum(['all', 'any']).optional(),
   "conditions": zod.array(zod.object({
   "personType": zod.enum(['visitor', 'lead', 'user']),
-  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
+  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'app_domain', 'current_page_url', 'referring_url', 'browser_language']),
   "operator": zod.enum(['is', 'is_not', 'contains', 'does_not_contain', 'starts_with', 'ends_with', 'is_known', 'is_unknown']),
   "value": zod.string().max(createTargetBodyConditionsItemValueMax).optional()
 })).min(createTargetBodyConditionsMin).max(createTargetBodyConditionsMax).describe('An empty list matches everyone and does not filter by any criteria.')
@@ -1441,7 +1441,7 @@ export const CreateTargetResponse = zod.object({
   "conditions": zod.array(zod.object({
   "id": zod.string(),
   "personType": zod.enum(['visitor', 'lead', 'user']),
-  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
+  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'app_domain', 'current_page_url', 'referring_url', 'browser_language']),
   "operator": zod.enum(['is', 'is_not', 'contains', 'does_not_contain', 'starts_with', 'ends_with', 'is_known', 'is_unknown']),
   "value": zod.string()
 })),
@@ -1474,7 +1474,7 @@ export const UpdateTargetBody = zod.object({
   "matchMode": zod.enum(['all', 'any']).optional(),
   "conditions": zod.array(zod.object({
   "personType": zod.enum(['visitor', 'lead', 'user']),
-  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
+  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'app_domain', 'current_page_url', 'referring_url', 'browser_language']),
   "operator": zod.enum(['is', 'is_not', 'contains', 'does_not_contain', 'starts_with', 'ends_with', 'is_known', 'is_unknown']),
   "value": zod.string().max(updateTargetBodyConditionsItemValueMax).optional()
 })).min(updateTargetBodyConditionsMin).max(updateTargetBodyConditionsMax).optional().describe('An empty list matches everyone and does not filter by any criteria.')
@@ -1488,7 +1488,7 @@ export const UpdateTargetResponse = zod.object({
   "conditions": zod.array(zod.object({
   "id": zod.string(),
   "personType": zod.enum(['visitor', 'lead', 'user']),
-  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'current_page_url', 'referring_url', 'browser_language']),
+  "attribute": zod.enum(['email', 'phone_number', 'phone_number_prefix', 'name', 'user_id', 'company', 'country', 'city', 'app_domain', 'current_page_url', 'referring_url', 'browser_language']),
   "operator": zod.enum(['is', 'is_not', 'contains', 'does_not_contain', 'starts_with', 'ends_with', 'is_known', 'is_unknown']),
   "value": zod.string()
 })),

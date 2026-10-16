@@ -469,9 +469,11 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                           placeholder={
                             condition.attribute === "phone_number_prefix"
                               ? "+34"
-                              : condition.attribute === "email"
-                                ? "mydomain.com"
-                                : "Value"
+                              : condition.attribute === "app_domain"
+                                ? "example.com"
+                                : condition.attribute === "email"
+                                  ? "mydomain.com"
+                                  : "Value"
                           }
                           className="h-8 text-xs"
                           required

@@ -33,6 +33,7 @@ export const ATTRIBUTE_LABELS: Record<TargetAttribute, string> = {
   company: "company",
   country: "country",
   city: "city",
+  app_domain: "app domain",
   current_page_url: "current page URL",
   referring_url: "referring URL",
   browser_language: "browser language",
@@ -52,7 +53,7 @@ export const OPERATOR_LABELS: Record<TargetOperator, string> = {
 export const ATTRIBUTES_BY_PERSON: Record<TargetPersonType, TargetAttribute[]> = {
   visitor: ["current_page_url", "referring_url", "browser_language", "country", "city"],
   lead: ["email", "phone_number", "phone_number_prefix", "name", "country", "city", "current_page_url"],
-  user: ["email", "phone_number", "phone_number_prefix", "name", "user_id", "company", "country", "city"],
+  user: ["email", "phone_number", "phone_number_prefix", "name", "user_id", "company", "country", "city", "app_domain"],
 };
 
 export const OPERATORS: TargetOperator[] = [

@@ -18,6 +18,7 @@ export const TargetAttribute = {
   company: 'company',
   country: 'country',
   city: 'city',
+  app_domain: 'app_domain',
   current_page_url: 'current_page_url',
   referring_url: 'referring_url',
   browser_language: 'browser_language',

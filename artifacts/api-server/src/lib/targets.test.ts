@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchesAudienceTarget } from "./targets";
+import { appDomainAttribute, matchesAudienceTarget } from "./targets";
 
 const user = {
   personType: "user" as const,
@@ -82,6 +82,29 @@ describe("matchesAudienceTarget", () => {
 
     expect(matchesAudienceTarget({ matchMode: "any", conditions }, user)).toBe(true);
     expect(matchesAudienceTarget({ matchMode: "all", conditions }, user)).toBe(false);
+  });
+
+  it("matches the website domain the user is visiting", () => {
+    expect(appDomainAttribute("App.Example.com")).toBe("app.example.com");
+    expect(appDomainAttribute("https://app.example.com/help")).toBe("app.example.com");
+    expect(appDomainAttribute("")).toBe("");
+
+    expect(
+      matchesAudienceTarget(
+        {
+          matchMode: "all",
+          conditions: [
+            {
+              personType: "user",
+              attribute: "app_domain",
+              operator: "is",
+              value: "app.example.com",
+            },
+          ],
+        },
+        { personType: "user", attributes: { app_domain: appDomainAttribute("https://app.example.com/help") } },
+      ),
+    ).toBe(true);
   });
 
   it("always matches everyone when a target has no conditions", () => {

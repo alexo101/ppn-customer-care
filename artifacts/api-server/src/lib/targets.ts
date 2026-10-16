@@ -19,6 +19,7 @@ export const ATTRIBUTES = [
   "company",
   "country",
   "city",
+  "app_domain",
   "current_page_url",
   "referring_url",
   "browser_language",
@@ -34,8 +35,20 @@ export const VALUELESS_OPERATORS = new Set<Operator>(["is_known", "is_unknown"])
 export const ATTRIBUTES_BY_PERSON: Record<PersonType, readonly Attribute[]> = {
   visitor: ["current_page_url", "referring_url", "browser_language", "country", "city"],
   lead: ["email", "phone_number", "phone_number_prefix", "name", "country", "city", "current_page_url"],
-  user: ["email", "phone_number", "phone_number_prefix", "name", "user_id", "company", "country", "city"],
+  user: ["email", "phone_number", "phone_number_prefix", "name", "user_id", "company", "country", "city", "app_domain"],
 };
+
+export function appDomainAttribute(pageDomain: unknown): string {
+  if (typeof pageDomain !== "string") return "";
+  const trimmed = pageDomain.trim();
+  if (!trimmed) return "";
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  try {
+    return new URL(candidate).hostname;
+  } catch {
+    return trimmed;
+  }
+}
 
 export type TargetConditionDraft = {
   personType: PersonType;
