@@ -101,7 +101,6 @@ async function matchingTargetIds(
   const matched = new Set<string>();
   for (const target of targets) {
     const audienceTarget: AudienceTargetForMatching = {
-      matchMode: target.matchMode === "any" ? "any" : "all",
       conditions: (conditionsByTarget.get(target.id) ?? []).map((condition) => ({
         personType: condition.personType,
         attribute: condition.attribute,

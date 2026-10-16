@@ -7,7 +7,6 @@ import {
   getListTargetsQueryKey,
   type Target,
   type TargetConditionInput,
-  type TargetMatchMode,
   type TargetPersonType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -62,13 +61,11 @@ import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-acc
 function emptyForm(): {
   name: string;
   description: string;
-  matchMode: TargetMatchMode;
   conditions: TargetConditionInput[];
 } {
   return {
     name: "",
     description: "",
-    matchMode: "all",
     conditions: [defaultCondition("user")],
   };
 }
@@ -86,7 +83,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
   const [toDelete, setToDelete] = useState<Target | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [matchMode, setMatchMode] = useState<TargetMatchMode>("all");
   const [conditions, setConditions] = useState<TargetConditionInput[]>([defaultCondition("user")]);
 
   const saving = createTarget.isPending || updateTarget.isPending;
@@ -116,7 +112,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
       ? {
           name: target.name,
           description: target.description,
-          matchMode: target.matchMode,
           conditions: target.conditions.map((condition) =>
             asUserCondition({
               personType: "user",
@@ -130,7 +125,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
     setEditing(target ?? null);
     setName(next.name);
     setDescription(next.description);
-    setMatchMode(next.matchMode);
     setConditions(next.conditions);
   };
 
@@ -179,7 +173,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
     const payload = {
       name: trimmedName,
       description: description.trim(),
-      matchMode,
       conditions: conditions.map((condition) => ({
         ...condition,
         personType: "user" as const,
@@ -287,13 +280,11 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                 <>
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-medium text-sm truncate">{target.name}</span>
-                    <Badge variant="outline" className="text-xs h-5 shrink-0">
-                      {isCatchAllTarget(target)
-                        ? "No filters"
-                        : target.matchMode === "all"
-                          ? "Match all"
-                          : "Match any"}
-                    </Badge>
+                    {isCatchAllTarget(target) ? (
+                      <Badge variant="outline" className="text-xs h-5 shrink-0">
+                        No filters
+                      </Badge>
+                    ) : null}
                   </div>
                   {target.description ? (
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{target.description}</p>
@@ -491,23 +482,6 @@ export function TargetsTab({ agentId }: { agentId: string }) {
                   );
                 })}
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs">Match</Label>
-              <Select
-                value={matchMode}
-                onValueChange={(value) => setMatchMode(value as TargetMatchMode)}
-                disabled={conditions.length === 0}
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All conditions</SelectItem>
-                  <SelectItem value="any">Any condition</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <DialogFooter>

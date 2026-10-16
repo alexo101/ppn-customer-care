@@ -12,7 +12,6 @@ import {
 import { getOwnedAgent, ensureEveryoneTarget } from "../lib/agents";
 import {
   EVERYONE_TARGET_NAME,
-  isMatchMode,
   validateTargetCondition,
   type TargetConditionDraft,
 } from "../lib/targets";
@@ -37,7 +36,7 @@ function toTarget(row: TargetRow, conditions: ConditionRow[]) {
     id: row.id,
     name: row.name,
     description: row.description,
-    matchMode: row.matchMode as "all" | "any",
+    matchMode: "all" as const,
     conditions: conditions
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.getTime() - b.createdAt.getTime())
@@ -132,12 +131,6 @@ router.post("/targets", requireAuth, requireEditor, async (req, res): Promise<vo
     return;
   }
 
-  const matchMode = parsed.data.matchMode ?? "all";
-  if (!isMatchMode(matchMode)) {
-    res.status(400).json({ error: "Match mode must be all or any." });
-    return;
-  }
-
   const conditionError = validateConditions(parsed.data.conditions);
   if (conditionError) {
     res.status(400).json({ error: conditionError });
@@ -157,7 +150,7 @@ router.post("/targets", requireAuth, requireEditor, async (req, res): Promise<vo
       agentId: parsed.data.agentId,
       name,
       description: parsed.data.description?.trim() ?? "",
-      matchMode,
+      matchMode: "all",
     })
     .returning();
 
@@ -190,11 +183,6 @@ router.patch("/targets/:id", requireAuth, requireEditor, async (req, res): Promi
     return;
   }
 
-  if (parsed.data.matchMode !== undefined && !isMatchMode(parsed.data.matchMode)) {
-    res.status(400).json({ error: "Match mode must be all or any." });
-    return;
-  }
-
   if (parsed.data.conditions) {
     const conditionError = validateConditions(parsed.data.conditions);
     if (conditionError) {
@@ -203,7 +191,7 @@ router.patch("/targets/:id", requireAuth, requireEditor, async (req, res): Promi
     }
   }
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  const updates: Record<string, unknown> = { updatedAt: new Date(), matchMode: "all" };
   if (parsed.data.name !== undefined) {
     const name = parsed.data.name.trim();
     if (!name) {
@@ -213,8 +201,6 @@ router.patch("/targets/:id", requireAuth, requireEditor, async (req, res): Promi
     updates.name = name;
   }
   if (parsed.data.description !== undefined) updates.description = parsed.data.description.trim();
-  if (parsed.data.matchMode !== undefined) updates.matchMode = parsed.data.matchMode;
-
   const [row] = await db
     .update(audienceTargetsTable)
     .set(updates)

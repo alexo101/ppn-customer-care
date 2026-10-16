@@ -14,7 +14,6 @@ describe("matchesAudienceTarget", () => {
     expect(
       matchesAudienceTarget(
         {
-          matchMode: "all",
           conditions: [
             {
               personType: "user",
@@ -33,7 +32,6 @@ describe("matchesAudienceTarget", () => {
     expect(
       matchesAudienceTarget(
         {
-          matchMode: "all",
           conditions: [
             {
               personType: "user",
@@ -50,7 +48,6 @@ describe("matchesAudienceTarget", () => {
 
   it("supports known and unknown email checks", () => {
     const target = {
-      matchMode: "all" as const,
       conditions: [
         {
           personType: "user",
@@ -64,7 +61,7 @@ describe("matchesAudienceTarget", () => {
     expect(matchesAudienceTarget(target, { personType: "user", attributes: {} })).toBe(false);
   });
 
-  it("honors any and all target match modes", () => {
+  it("requires every condition, even for a legacy target marked any", () => {
     const conditions = [
       {
         personType: "user",
@@ -80,8 +77,9 @@ describe("matchesAudienceTarget", () => {
       },
     ];
 
-    expect(matchesAudienceTarget({ matchMode: "any", conditions }, user)).toBe(true);
-    expect(matchesAudienceTarget({ matchMode: "all", conditions }, user)).toBe(false);
+    const legacyAnyTarget = { matchMode: "any", conditions };
+    expect(matchesAudienceTarget(legacyAnyTarget, user)).toBe(false);
+    expect(matchesAudienceTarget({ conditions }, user)).toBe(false);
   });
 
   it("matches the website domain the user is visiting", () => {
@@ -92,7 +90,6 @@ describe("matchesAudienceTarget", () => {
     expect(
       matchesAudienceTarget(
         {
-          matchMode: "all",
           conditions: [
             {
               personType: "user",
@@ -108,7 +105,7 @@ describe("matchesAudienceTarget", () => {
   });
 
   it("always matches everyone when a target has no conditions", () => {
-    const everyone = { matchMode: "all" as const, conditions: [] };
+    const everyone = { conditions: [] };
     expect(matchesAudienceTarget(everyone, user)).toBe(true);
     expect(matchesAudienceTarget(everyone, { personType: "visitor", attributes: {} })).toBe(true);
     expect(matchesAudienceTarget(everyone, { personType: "lead", attributes: { email: "a@b.com" } })).toBe(true);

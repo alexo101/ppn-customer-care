@@ -1,5 +1,4 @@
 export const PERSON_TYPES = ["visitor", "lead", "user"] as const;
-export const MATCH_MODES = ["all", "any"] as const;
 export const OPERATORS = [
   "is",
   "is_not",
@@ -26,7 +25,6 @@ export const ATTRIBUTES = [
 ] as const;
 
 export type PersonType = (typeof PERSON_TYPES)[number];
-export type MatchMode = (typeof MATCH_MODES)[number];
 export type Operator = (typeof OPERATORS)[number];
 export type Attribute = (typeof ATTRIBUTES)[number];
 
@@ -63,7 +61,6 @@ export type PersonAttributes = {
 };
 
 export type AudienceTargetForMatching = {
-  matchMode: MatchMode;
   conditions: Array<{
     personType: string;
     attribute: string;
@@ -74,10 +71,6 @@ export type AudienceTargetForMatching = {
 
 export function isPersonType(value: string): value is PersonType {
   return (PERSON_TYPES as readonly string[]).includes(value);
-}
-
-export function isMatchMode(value: string): value is MatchMode {
-  return (MATCH_MODES as readonly string[]).includes(value);
 }
 
 export function isOperator(value: string): value is Operator {
@@ -114,14 +107,10 @@ export function matchesAudienceTarget(
 ): boolean {
   if (isCatchAllTarget(target)) return true;
 
-  const results = target.conditions.map((condition) => {
+  return target.conditions.every((condition) => {
     if (condition.personType !== person.personType) return false;
     return matchesTargetCondition(condition, person.attributes);
   });
-
-  return target.matchMode === "any"
-    ? results.some(Boolean)
-    : results.every(Boolean);
 }
 
 function matchesTargetCondition(
