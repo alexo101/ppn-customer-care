@@ -315,6 +315,24 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             </div>
           </FieldBlock>
 
+          <div className="flex justify-end">
+            <MutatingControls>
+              <Button
+                size="sm"
+                className="h-[42px] px-4 text-base"
+                onClick={handleSave}
+                disabled={!isDirty || saving || isLoading}
+              >
+                {saving ? (
+                  <Loader2 className="w-[18px] h-[18px] mr-[5px] animate-spin" />
+                ) : (
+                  <Save className="w-[18px] h-[18px] mr-[5px]" />
+                )}
+                Save appearance
+              </Button>
+            </MutatingControls>
+          </div>
+
         </div>
 
         <div className="space-y-3">
@@ -326,23 +344,6 @@ export function AppearanceEditor({ agentId }: { agentId: string }) {
             communicationLanguage={normalizeAgentLanguage(draft.communicationLanguage)}
             className="rounded-xl border border-border shadow-sm overflow-hidden"
           />
-          <div className="flex items-center justify-end">
-            <MutatingControls>
-              <Button
-                size="sm"
-                className="h-8 text-xs"
-                onClick={handleSave}
-                disabled={!isDirty || saving || isLoading}
-              >
-                {saving ? (
-                  <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-                ) : (
-                  <Save className="w-3.5 h-3.5 mr-1" />
-                )}
-                Save appearance
-              </Button>
-            </MutatingControls>
-          </div>
         </div>
       </div>
     </div>
