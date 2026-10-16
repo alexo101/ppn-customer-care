@@ -12,6 +12,7 @@ export interface KnowledgeArticle {
   id: string;
   agentId: string;
   title: string;
+  description: string;
   bodyHtml: string;
   status: ArticleStatus;
   targetId: string | null;

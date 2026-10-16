@@ -39,6 +39,23 @@ export function articleNeedsReindex(
   return article.indexStatus === "error" || article.indexStatus === "idle" || article.indexStatus === "indexing";
 }
 
+export function articleIndexText(input: {
+  title: string;
+  description: string;
+  bodyText: string;
+  imageText?: string;
+}): string {
+  const description = input.description.trim();
+  return [
+    input.title.trim(),
+    description ? `Description: ${description}` : "",
+    input.bodyText.trim(),
+    input.imageText?.trim() ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function chunkText(
   text: string,
   options: { maxChars?: number; overlap?: number } = {},
@@ -208,7 +225,12 @@ export async function indexArticle(
     const imageText = searchableImages
       .map((image) => `[[image:${image.id}]] ${image.text}`)
       .join("\n\n");
-    const text = [article.title.trim(), sanitized.text.trim(), imageText].filter(Boolean).join("\n\n");
+    const text = articleIndexText({
+      title: article.title,
+      description: article.description,
+      bodyText: sanitized.text,
+      imageText,
+    });
     if (!text.trim()) {
       await replaceArticleChunks(articleId, [], []);
       await markIndex(articleId, "empty", {

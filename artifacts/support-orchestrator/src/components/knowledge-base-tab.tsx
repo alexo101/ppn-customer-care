@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -88,6 +89,7 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
   const [targetFilter, setTargetFilter] = useState(ALL);
   const [editing, setEditing] = useState<KnowledgeArticle | null>(null);
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
   const [targetId, setTargetId] = useState(NO_TARGET);
   const [articleToDelete, setArticleToDelete] = useState<KnowledgeArticle | null>(null);
@@ -119,6 +121,7 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
   const dirty = Boolean(
     editing &&
       (title !== editing.title ||
+        description !== (editing.description ?? "") ||
         bodyHtml !== editing.bodyHtml ||
         (targetId === NO_TARGET ? null : targetId) !== editing.targetId),
   );
@@ -126,6 +129,7 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
   const openArticle = (article: KnowledgeArticle) => {
     setEditing(article);
     setTitle(article.title);
+    setDescription(article.description ?? "");
     setBodyHtml(article.bodyHtml);
     setTargetId(article.targetId ?? NO_TARGET);
   };
@@ -156,13 +160,14 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = (exit = false) => {
     if (!editing || !canEdit) return;
     updateArticle.mutate(
       {
         id: editing.id,
         data: {
           title: title.trim(),
+          description: (description ?? "").trim(),
           bodyHtml,
           targetId: targetId === NO_TARGET ? null : targetId,
         },
@@ -170,7 +175,8 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
       {
         onSuccess: (article) => {
           invalidate();
-          openArticle(article);
+          if (exit) setEditing(null);
+          else openArticle(article);
           toast({ title: "Article saved" });
         },
         onError: handleError,
@@ -221,6 +227,7 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
         id: editing.id,
         data: {
           title: title.trim(),
+          description: (description ?? "").trim(),
           bodyHtml,
           targetId: targetId === NO_TARGET ? null : targetId,
         },
@@ -380,6 +387,17 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="shrink-0 space-y-2">
+                <Label htmlFor="article-description">Description</Label>
+                <Textarea
+                  id="article-description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  disabled={!canEdit}
+                  placeholder="Summarize what this article covers. The assistant searches this text."
+                  rows={3}
+                />
+              </div>
               <ArticleEditor articleId={editing.id} value={bodyHtml} editable={canEdit} onChange={setBodyHtml} />
             </div>
           ) : null}
@@ -402,9 +420,14 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
               ) : null}
             </div>
             {canEdit ? (
-              <Button type="button" onClick={handleSave} disabled={saving || !title.trim()}>
-                Save
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => handleSave(false)} disabled={saving || !title.trim()}>
+                  Save and continue
+                </Button>
+                <Button type="button" onClick={() => handleSave(true)} disabled={saving || !title.trim()}>
+                  Save and exit
+                </Button>
+              </div>
             ) : null}
           </DialogFooter>
         </DialogContent>

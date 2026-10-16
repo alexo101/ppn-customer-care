@@ -10,6 +10,7 @@ export interface ArticleInput {
   agentId: string;
   /** @maxLength 200 */
   title: string;
+  description?: string;
   bodyHtml: string;
   targetId?: string | null;
 }

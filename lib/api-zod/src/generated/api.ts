@@ -1115,6 +1115,7 @@ export const ListArticlesResponseItem = zod.object({
   "id": zod.string(),
   "agentId": zod.string(),
   "title": zod.string(),
+  "description": zod.string(),
   "bodyHtml": zod.string(),
   "status": zod.enum(['draft', 'published', 'archived']),
   "targetId": zod.string().nullable(),
@@ -1141,6 +1142,7 @@ export const createArticleBodyTitleMax = 200;
 export const CreateArticleBody = zod.object({
   "agentId": zod.string(),
   "title": zod.string().max(createArticleBodyTitleMax),
+  "description": zod.string().optional(),
   "bodyHtml": zod.string(),
   "targetId": zod.string().nullish()
 })
@@ -1149,6 +1151,7 @@ export const CreateArticleResponse = zod.object({
   "id": zod.string(),
   "agentId": zod.string(),
   "title": zod.string(),
+  "description": zod.string(),
   "bodyHtml": zod.string(),
   "status": zod.enum(['draft', 'published', 'archived']),
   "targetId": zod.string().nullable(),
@@ -1177,6 +1180,7 @@ export const updateArticleBodyTitleMax = 200;
 
 export const UpdateArticleBody = zod.object({
   "title": zod.string().max(updateArticleBodyTitleMax).optional(),
+  "description": zod.string().optional(),
   "bodyHtml": zod.string().optional(),
   "targetId": zod.string().nullish()
 })
@@ -1185,6 +1189,7 @@ export const UpdateArticleResponse = zod.object({
   "id": zod.string(),
   "agentId": zod.string(),
   "title": zod.string(),
+  "description": zod.string(),
   "bodyHtml": zod.string(),
   "status": zod.enum(['draft', 'published', 'archived']),
   "targetId": zod.string().nullable(),
@@ -1221,6 +1226,7 @@ export const PublishArticleResponse = zod.object({
   "id": zod.string(),
   "agentId": zod.string(),
   "title": zod.string(),
+  "description": zod.string(),
   "bodyHtml": zod.string(),
   "status": zod.enum(['draft', 'published', 'archived']),
   "targetId": zod.string().nullable(),
@@ -1247,6 +1253,7 @@ export const ArchiveArticleResponse = zod.object({
   "id": zod.string(),
   "agentId": zod.string(),
   "title": zod.string(),
+  "description": zod.string(),
   "bodyHtml": zod.string(),
   "status": zod.enum(['draft', 'published', 'archived']),
   "targetId": zod.string().nullable(),
@@ -1273,6 +1280,7 @@ export const RestoreArticleDraftResponse = zod.object({
   "id": zod.string(),
   "agentId": zod.string(),
   "title": zod.string(),
+  "description": zod.string(),
   "bodyHtml": zod.string(),
   "status": zod.enum(['draft', 'published', 'archived']),
   "targetId": zod.string().nullable(),

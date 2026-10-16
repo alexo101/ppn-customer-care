@@ -100,6 +100,7 @@ router.post("/articles", requireAuth, requireEditor, async (req, res): Promise<v
       agentId: parsed.data.agentId,
       targetId,
       title: parsed.data.title.trim(),
+      description: parsed.data.description?.trim() ?? "",
       bodyHtml: sanitized.html,
       bodyText: sanitized.text,
       status: "draft",
@@ -134,6 +135,11 @@ router.patch("/articles/:id", requireAuth, requireEditor, async (req, res): Prom
     }
     updates.title = title;
   }
+  const descriptionChanged =
+    parsed.data.description !== undefined && parsed.data.description.trim() !== existing.description;
+  if (parsed.data.description !== undefined) {
+    updates.description = parsed.data.description.trim();
+  }
   if (parsed.data.targetId !== undefined) {
     const targetId = await resolveTargetId(existing.agentId, parsed.data.targetId, res);
     if (targetId === undefined) return;
@@ -161,7 +167,9 @@ router.patch("/articles/:id", requireAuth, requireEditor, async (req, res): Prom
   }
   if (parsed.data.bodyHtml !== undefined) {
     await removeUnreferencedArticleAssets(row.id, sanitized.assetIds);
-    if (row.status === "published") queueArticleIndex(row.id);
+  }
+  if (row.status === "published" && (parsed.data.bodyHtml !== undefined || descriptionChanged)) {
+    queueArticleIndex(row.id);
   }
   res.json(toArticle(row));
 });
@@ -438,6 +446,7 @@ function toArticle(row: typeof knowledgeArticlesTable.$inferSelect) {
     id: row.id,
     agentId: row.agentId,
     title: row.title,
+    description: row.description,
     bodyHtml: row.bodyHtml,
     status: row.status,
     targetId: row.targetId,

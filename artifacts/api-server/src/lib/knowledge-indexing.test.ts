@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { articleNeedsReindex, chunkText } from "./knowledge-indexing";
+import { articleIndexText, articleNeedsReindex, chunkText } from "./knowledge-indexing";
 
 describe("chunkText", () => {
   it("combines short paragraphs without exceeding the configured size", () => {
@@ -25,6 +25,31 @@ describe("chunkText", () => {
     expect(chunkText("\n\n  \n\nSupport is available.")).toEqual([
       "Support is available.",
     ]);
+  });
+});
+
+describe("articleIndexText", () => {
+  it("places the description between the title and the body so retrieval can read it", () => {
+    expect(
+      articleIndexText({
+        title: "Refunds",
+        description: "How customers request a refund.",
+        bodyText: "Submit the request in the portal.",
+        imageText: "[[image:1]] Receipt",
+      }),
+    ).toBe(
+      "Refunds\n\nDescription: How customers request a refund.\n\nSubmit the request in the portal.\n\n[[image:1]] Receipt",
+    );
+  });
+
+  it("omits a blank description", () => {
+    expect(
+      articleIndexText({
+        title: "Refunds",
+        description: "   ",
+        bodyText: "Submit the request in the portal.",
+      }),
+    ).toBe("Refunds\n\nSubmit the request in the portal.");
   });
 });
 

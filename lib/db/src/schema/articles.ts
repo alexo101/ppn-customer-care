@@ -17,6 +17,7 @@ export const knowledgeArticlesTable = pgTable("knowledge_articles", {
     onDelete: "set null",
   }),
   title: text("title").notNull(),
+  description: text("description").notNull().default(""),
   bodyHtml: text("body_html").notNull().default(""),
   bodyText: text("body_text").notNull().default(""),
   status: text("status").notNull().default("draft"),

@@ -2371,6 +2371,7 @@ components:
           id,
           agentId,
           title,
+          description,
           bodyHtml,
           status,
           targetId,
@@ -2386,6 +2387,8 @@ components:
         agentId:
           type: string
         title:
+          type: string
+        description:
           type: string
         bodyHtml:
           type: string
@@ -2425,6 +2428,8 @@ components:
         title:
           type: string
           maxLength: 200
+        description:
+          type: string
         bodyHtml:
           type: string
         targetId:
@@ -2437,6 +2442,8 @@ components:
         title:
           type: string
           maxLength: 200
+        description:
+          type: string
         bodyHtml:
           type: string
         targetId:

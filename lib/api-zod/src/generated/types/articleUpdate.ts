@@ -9,6 +9,7 @@
 export interface ArticleUpdate {
   /** @maxLength 200 */
   title?: string;
+  description?: string;
   bodyHtml?: string;
   targetId?: string | null;
 }

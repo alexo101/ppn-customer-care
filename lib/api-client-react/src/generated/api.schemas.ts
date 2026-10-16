@@ -511,6 +511,7 @@ export interface KnowledgeArticle {
   id: string;
   agentId: string;
   title: string;
+  description: string;
   bodyHtml: string;
   status: ArticleStatus;
   targetId: string | null;
@@ -529,6 +530,7 @@ export interface ArticleInput {
   agentId: string;
   /** @maxLength 200 */
   title: string;
+  description?: string;
   bodyHtml: string;
   targetId?: string | null;
 }
@@ -536,6 +538,7 @@ export interface ArticleInput {
 export interface ArticleUpdate {
   /** @maxLength 200 */
   title?: string;
+  description?: string;
   bodyHtml?: string;
   targetId?: string | null;
 }
