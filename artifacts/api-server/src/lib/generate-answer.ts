@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import type { AnswerProvider, RetrievedChunk } from "./llm";
 import { AnswerProviderError } from "./llm";
 import type { WelcomeMessageTranslator } from "./llm/openai-welcome-message-translator";
@@ -21,6 +22,10 @@ export type GeneratedAnswer = {
   totalTokens: number;
   promptAssembled: string;
   citations: NonNullable<import("./llm").AnswerProviderResult["citations"]>;
+  timings: {
+    provider_ms: number;
+    language_alignment_ms: number;
+  };
 };
 
 const RESOLUTION_PHRASES = [
@@ -87,6 +92,7 @@ export async function generateAnswer(
       "Answer generation is not configured. Set OPENAI_API_KEY to enable it.",
     );
   }
+  const providerStartedAt = performance.now();
   const result = await provider.generate({
     message,
     history: history.map((item) => ({
@@ -97,9 +103,11 @@ export async function generateAnswer(
     personAttributes,
     context,
   });
+  const providerMs = elapsedMs(providerStartedAt);
   const answerable = result.answerable !== false && retrievedChunks.length > 0;
   const userMessageCount = history.filter((item) => item.sender === "user").length;
   const shouldAskResolution = answerable && userMessageCount >= 2;
+  const alignmentStartedAt = performance.now();
   const alignedText = answerable
     ? await alignReplyToAgentLanguage(
         result.responseText,
@@ -108,6 +116,7 @@ export async function generateAnswer(
         translator,
       )
     : result.responseText;
+  const languageAlignmentMs = elapsedMs(alignmentStartedAt);
   const responseText =
     answerable && shouldAskResolution
       ? `${alignedText}\n\n${resolutionFollowUp(language)}`
@@ -126,6 +135,10 @@ export async function generateAnswer(
     totalTokens: result.totalTokens,
     promptAssembled: result.promptAssembled,
     citations: answerable ? (result.citations ?? []) : [],
+    timings: {
+      provider_ms: providerMs,
+      language_alignment_ms: languageAlignmentMs,
+    },
   };
 }
 
@@ -139,6 +152,7 @@ function localAnswer(responseText: string, resolutionStatus: string): GeneratedA
     totalTokens: 0,
     promptAssembled: "",
     citations: [],
+    timings: { provider_ms: 0, language_alignment_ms: 0 },
   };
 }
 
@@ -150,4 +164,8 @@ function isResolution(message: string): boolean {
 function isGreeting(message: string): boolean {
   return GREETING_PHRASES.some((keyword) => message.startsWith(keyword)) ||
     LOCALIZED_GREETING_PHRASES.some((keyword) => message.startsWith(keyword));
+}
+
+function elapsedMs(startedAt: number): number {
+  return Math.round((performance.now() - startedAt) * 10) / 10;
 }

@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   audienceTargetsTable,
   db,
@@ -119,9 +119,27 @@ export async function retrieveRelevantChunks(
   embeddingProvider: EmbeddingProvider,
   limit = 5,
   options: { agentId?: string; maxDistance?: number } = {},
-): Promise<{ chunks: RetrievedChunk[]; totalTokens: number; model: string }> {
+): Promise<{
+  chunks: RetrievedChunk[];
+  totalTokens: number;
+  model: string;
+  diagnostics: {
+    vectorCandidates: number;
+    lexicalCandidates: number;
+    lexicalAccepted: number;
+  };
+}> {
   if (articleIds.length === 0 || !queryText.trim()) {
-    return { chunks: [], totalTokens: 0, model: "none" };
+    return {
+      chunks: [],
+      totalTokens: 0,
+      model: "none",
+      diagnostics: {
+        vectorCandidates: 0,
+        lexicalCandidates: 0,
+        lexicalAccepted: 0,
+      },
+    };
   }
   const embeddingResult = await embeddingProvider.embed([queryText]);
   const queryEmbedding = embeddingResult.embeddings[0];
@@ -130,7 +148,7 @@ export async function retrieveRelevantChunks(
   }
   const maxDistance = options.maxDistance ?? retrievalMaxDistance();
   const distance = sql<number>`${knowledgeChunksTable.embedding} <=> ${JSON.stringify(queryEmbedding)}::vector`;
-  const rows = await db
+  const vectorRows = await db
     .select({
       articleId: knowledgeChunksTable.articleId,
       chunkId: knowledgeChunksTable.id,
@@ -155,6 +173,92 @@ export async function retrieveRelevantChunks(
     )
     .orderBy(asc(distance))
     .limit(Math.max(1, Math.min(limit, 20)));
+
+  type CandidateRow = {
+    articleId: string;
+    chunkId: string;
+    chunkIndex: number;
+    articleTitle: string;
+    content: string;
+    distance: number;
+    lexicalScore: number;
+    exactPhraseMatch: boolean;
+  };
+  const candidates = new Map<string, CandidateRow>();
+  for (const row of vectorRows) {
+    candidates.set(row.chunkId, {
+      ...row,
+      distance: Number(row.distance),
+      lexicalScore: 0,
+      exactPhraseMatch: false,
+    });
+  }
+
+  const terms = lexicalSearchTerms(queryText);
+  const vectorHasRelevantText = vectorRows.some(
+    (row) => scoreLexicalMatch(queryText, row.content).accepted,
+  );
+  let lexicalCandidateCount = 0;
+  let lexicalAcceptedCount = 0;
+  if (terms.length > 0 && !vectorHasRelevantText) {
+    const normalizedContent = sql`translate(lower(${knowledgeChunksTable.content}), 'áéíóúüñ', 'aeiouun')`;
+    const lexicalConditions = terms.map(
+      (term) => sql`${normalizedContent} LIKE ${`%${term}%`}`,
+    );
+    const lexicalRows = await db
+      .select({
+        articleId: knowledgeChunksTable.articleId,
+        chunkId: knowledgeChunksTable.id,
+        chunkIndex: knowledgeChunksTable.chunkIndex,
+        articleTitle: knowledgeArticlesTable.title,
+        content: knowledgeChunksTable.content,
+      })
+      .from(knowledgeChunksTable)
+      .innerJoin(
+        knowledgeArticlesTable,
+        eq(knowledgeChunksTable.articleId, knowledgeArticlesTable.id),
+      )
+      .where(
+        and(
+          inArray(knowledgeChunksTable.articleId, articleIds),
+          eq(knowledgeArticlesTable.status, "published"),
+          options.agentId
+            ? eq(knowledgeArticlesTable.agentId, options.agentId)
+            : undefined,
+          or(...lexicalConditions),
+        ),
+      )
+      .limit(Math.max(12, Math.min(limit * 4, 40)));
+    lexicalCandidateCount = lexicalRows.length;
+    for (const row of lexicalRows) {
+      const match = scoreLexicalMatch(queryText, row.content);
+      if (!match.accepted) continue;
+      lexicalAcceptedCount += 1;
+      const semanticCandidate = candidates.get(row.chunkId);
+      candidates.set(row.chunkId, {
+        ...row,
+        distance: semanticCandidate?.distance ?? 1,
+        lexicalScore: match.score,
+        exactPhraseMatch: match.exactPhraseMatch,
+      });
+    }
+  }
+
+  const rows = [...candidates.values()]
+    .sort((left, right) => {
+      const leftScore =
+        left.lexicalScore * 0.6 +
+        Math.max(0, 1 - left.distance / 2) * 0.4;
+      const rightScore =
+        right.lexicalScore * 0.6 +
+        Math.max(0, 1 - right.distance / 2) * 0.4;
+      return (
+        rightScore - leftScore ||
+        Number(right.exactPhraseMatch) - Number(left.exactPhraseMatch) ||
+        left.distance - right.distance
+      );
+    })
+    .slice(0, Math.max(1, Math.min(limit, 20)));
 
   const chunkIds = rows.map((row) => row.chunkId);
   const assetLinks = chunkIds.length
@@ -194,5 +298,99 @@ export async function retrieveRelevantChunks(
     })),
     totalTokens: embeddingResult.totalTokens,
     model: embeddingResult.model,
+    diagnostics: {
+      vectorCandidates: vectorRows.length,
+      lexicalCandidates: lexicalCandidateCount,
+      lexicalAccepted: lexicalAcceptedCount,
+    },
   };
+}
+
+const LEXICAL_STOP_WORDS = new Set([
+  "a", "al", "and", "are", "as", "at", "by", "can", "could", "de", "del",
+  "do", "el", "en", "for", "from", "has", "have", "how", "i", "in", "is",
+  "it", "la", "las", "lo", "los", "me", "mi", "my", "of", "on", "or",
+  "para", "por", "que", "se", "si", "the", "to", "tu", "un", "una", "y",
+  "yo",
+]);
+
+export function scoreLexicalMatch(
+  query: string,
+  content: string,
+): { score: number; exactPhraseMatch: boolean; accepted: boolean } {
+  const normalizedQuery = normalizeSearchText(query);
+  const normalizedContent = normalizeSearchText(content);
+  if (!normalizedQuery || !normalizedContent) {
+    return { score: 0, exactPhraseMatch: false, accepted: false };
+  }
+
+  const exactPhraseMatch = normalizedContent.includes(normalizedQuery);
+  const terms = lexicalSearchTerms(query);
+  if (terms.length === 0) {
+    return {
+      score: exactPhraseMatch ? 1 : 0,
+      exactPhraseMatch,
+      accepted: exactPhraseMatch,
+    };
+  }
+
+  const matches = terms.filter((term) => normalizedContent.includes(term));
+  const score = matches.length / terms.length;
+  return {
+    score,
+    exactPhraseMatch,
+    accepted:
+      exactPhraseMatch || (matches.length >= 2 && score >= 0.67),
+  };
+}
+
+function lexicalSearchTerms(text: string): string[] {
+  const words = normalizeSearchText(text)
+    .split(" ")
+    .filter((word) => word.length >= 3 && !LEXICAL_STOP_WORDS.has(word));
+  return [...new Set(words.map(stemSearchWord))].slice(0, 8);
+}
+
+function stemSearchWord(word: string): string {
+  const suffixes = [
+    "amientos",
+    "imientos",
+    "aciones",
+    "adores",
+    "adoras",
+    "ando",
+    "iendo",
+    "ados",
+    "idas",
+    "idos",
+    "adas",
+    "aron",
+    "ieron",
+    "ado",
+    "ido",
+    "es",
+    "as",
+    "os",
+    "en",
+    "an",
+    "ar",
+    "er",
+    "ir",
+  ];
+  for (const suffix of suffixes) {
+    if (word.endsWith(suffix) && word.length - suffix.length >= 4) {
+      return word.slice(0, -suffix.length);
+    }
+  }
+  return word;
+}
+
+function normalizeSearchText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }

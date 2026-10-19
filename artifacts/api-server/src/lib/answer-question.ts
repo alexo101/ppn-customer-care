@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import { agentSettingsTable } from "@workspace/db";
 import { db } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -113,29 +114,50 @@ export async function answerFromKnowledge(input: {
   }
 
   stages[1].status = "running";
+  const eligibilityStartedAt = performance.now();
   const eligible = await listEligiblePublishedArticles(input.agentId, input.person);
+  const eligibilityMs = elapsedMs(eligibilityStartedAt);
   stages[1].status = "completed";
   stages[1].details = {
     eligible_articles: eligible.length,
     articles: eligible.map((article) => article.title),
+    duration_ms: eligibilityMs,
   };
 
   stages[2].status = "running";
-  let retrievedChunks: RetrievedChunk[] = [];
-  let retrievalModel = "none";
-  let retrievalTokens = 0;
-  if (eligible.length > 0) {
-    const retrieval = await retrieveRelevantChunks(
-      eligible.map((article) => article.id),
-      input.message,
-      createEmbeddingProvider(),
-      5,
-      { agentId: input.agentId },
-    );
-    retrievedChunks = retrieval.chunks;
-    retrievalModel = retrieval.model;
-    retrievalTokens = retrieval.totalTokens;
-  }
+  const retrievalStartedAt = performance.now();
+  const [retrieval, agentSettingsRows] = eligible.length
+    ? await Promise.all([
+        retrieveRelevantChunks(
+          eligible.map((article) => article.id),
+          input.message,
+          createEmbeddingProvider(),
+          5,
+          { agentId: input.agentId },
+        ),
+        db
+          .select()
+          .from(agentSettingsTable)
+          .where(eq(agentSettingsTable.agentId, input.agentId))
+          .limit(1),
+      ])
+    : [
+        {
+          chunks: [] as RetrievedChunk[],
+          totalTokens: 0,
+          model: "none",
+          diagnostics: {
+            vectorCandidates: 0,
+            lexicalCandidates: 0,
+            lexicalAccepted: 0,
+          },
+        },
+        [],
+      ];
+  const retrievalMs = elapsedMs(retrievalStartedAt);
+  const retrievedChunks = retrieval.chunks;
+  const retrievalModel = retrieval.model;
+  const retrievalTokens = retrieval.totalTokens;
   const articlesUsed = [...new Set(retrievedChunks.map((chunk) => chunk.articleName ?? chunk.sourceName))];
   const articleIds = [...new Set(retrievedChunks.map((chunk) => chunk.articleId ?? chunk.sourceId))];
   stages[2].status = "completed";
@@ -143,6 +165,8 @@ export async function answerFromKnowledge(input: {
     chunks_retrieved: retrievedChunks.length,
     articles: articlesUsed,
     model: retrievalModel,
+    duration_ms: retrievalMs,
+    ...("diagnostics" in retrieval ? retrieval.diagnostics : {}),
   };
 
   stages[3].status = "running";
@@ -171,11 +195,8 @@ export async function answerFromKnowledge(input: {
     };
   }
 
-  const [agentSettings] = await db
-    .select()
-    .from(agentSettingsTable)
-    .where(eq(agentSettingsTable.agentId, input.agentId))
-    .limit(1);
+  const [agentSettings] = agentSettingsRows;
+  const generationStartedAt = performance.now();
   const answer = await generateAnswer(
     input.message,
     input.history,
@@ -189,6 +210,12 @@ export async function answerFromKnowledge(input: {
       ...(agentSettings?.targetAudience ? { targetAudience: agentSettings.targetAudience } : {}),
     },
   );
+  const generationMs = elapsedMs(generationStartedAt);
+  const answerTimings = {
+    duration_ms: generationMs,
+    provider_ms: answer.timings.provider_ms,
+    language_alignment_ms: answer.timings.language_alignment_ms,
+  };
 
   if (!answer.answerable) {
     const insufficient = await insufficientAnswer(
@@ -202,6 +229,7 @@ export async function answerFromKnowledge(input: {
       model: answer.model,
       answerable: false,
       chunks_used: retrievedChunks.length,
+      ...answerTimings,
     };
     return {
       ...insufficient,
@@ -232,6 +260,7 @@ export async function answerFromKnowledge(input: {
       model: answer.model,
       answerable: false,
       guardrails: guardrailResult.actions,
+      ...answerTimings,
     };
     return {
       ...insufficient,
@@ -253,6 +282,7 @@ export async function answerFromKnowledge(input: {
     answerable: true,
     chunks_used: retrievedChunks.length,
     guardrails: guardrailResult.actions,
+    ...answerTimings,
   };
   return {
     responseText: guardrailResult.responseText,
@@ -268,6 +298,10 @@ export async function answerFromKnowledge(input: {
     assistantMetadata: { citations: answer.citations },
     stages,
   };
+}
+
+function elapsedMs(startedAt: number): number {
+  return Math.round((performance.now() - startedAt) * 10) / 10;
 }
 
 export function workflowProviderErrorMessage(error: unknown): string | null {

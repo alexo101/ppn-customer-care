@@ -84,6 +84,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
         content: [
           "You are a customer support assistant.",
           "Answer the user's question clearly and directly.",
+          "Keep answers concise: use one to three short sentences unless the documented steps require more.",
           "Use only the supplied knowledge-base passages as the source of truth.",
           "Do not invent facts, policies, prices, or steps.",
           "If the passages do not contain enough information to answer, set answerable to false and explain that the knowledge base does not contain the answer.",
@@ -117,13 +118,15 @@ export class OpenAIAnswerProvider implements AnswerProvider {
       },
     ];
 
+    const requestModel = retrievedAssets.length
+      ? process.env.VISION_ANSWER_MODEL?.trim() || "gpt-4o-mini"
+      : this.model;
     try {
       const response = await this.client.chat.completions.create({
-        model: retrievedAssets.length
-          ? process.env.VISION_ANSWER_MODEL?.trim() || "gpt-4o-mini"
-          : this.model,
+        model: requestModel,
         messages,
         response_format: ANSWER_RESPONSE_FORMAT,
+        ...answerGenerationOptions(requestModel, retrievedAssets.length > 0),
       });
       const rawResponse = response.choices[0]?.message.content?.trim() || "";
       const parsed = parseStructuredResponse(rawResponse);
@@ -172,6 +175,21 @@ export class OpenAIAnswerProvider implements AnswerProvider {
       );
     }
   }
+}
+
+export function answerGenerationOptions(
+  model: string,
+  hasImages: boolean,
+): {
+  max_completion_tokens: number;
+  reasoning_effort?: "low";
+} {
+  return {
+    max_completion_tokens: 700,
+    ...(!hasImages && /^gpt-5(?:[.-]|$)/i.test(model)
+      ? { reasoning_effort: "low" as const }
+      : {}),
+  };
 }
 
 export function answerModelContext(

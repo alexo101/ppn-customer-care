@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { performance } from "node:perf_hooks";
 import { requireAuthOrDeployment as requireAuth } from "../middlewares/requireAuth";
 import { eq, desc, sql, and, gte, lte, inArray } from "drizzle-orm";
 import { db } from "@workspace/db";
@@ -47,6 +48,10 @@ import {
 } from "../lib/conversation-lifecycle";
 
 const router: IRouter = Router();
+
+function elapsedMs(startedAt: number): number {
+  return Math.round((performance.now() - startedAt) * 10) / 10;
+}
 
 // All conversation endpoints require authentication and are scoped to the authenticated user.
 // ── List conversations ────────────────────────────────────────────────────
@@ -404,6 +409,7 @@ router.post(
   "/conversations/:id/send",
   requireAuth,
   async (req, res): Promise<void> => {
+    const requestStartedAt = performance.now();
     const params = SendMessageParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
@@ -459,7 +465,6 @@ router.post(
       return;
     }
 
-    const startTs = Date.now();
     const existingMeta = isPlainObject(conv.metadata) ? conv.metadata : {};
     const storedContext = isPlainObject(existingMeta.context) ? existingMeta.context : {};
     const requestContext: Record<string, unknown> = {
@@ -467,10 +472,40 @@ router.post(
       ...(isPlainObject(parsed.data.context) ? parsed.data.context : {}),
     };
     const existingPerson = isPlainObject(existingMeta.person) ? existingMeta.person : {};
-    const email =
-      (await resolveUserEmail(req.userId, req.userEmail)) ??
-      (typeof existingPerson.email === "string" ? existingPerson.email : null);
+    const emailLookup = resolveUserEmail(req.userId, req.userEmail);
     const appDomain = appDomainAttribute(requestContext.pageDomain);
+    const requestName =
+      typeof requestContext.name === "string"
+        ? requestContext.name
+        : typeof requestContext.user_name === "string"
+          ? requestContext.user_name
+          : null;
+    const [
+      resolvedEmail,
+      conversationSettingsRows,
+      userName,
+      communicationLanguage,
+      history,
+    ] = await Promise.all([
+      emailLookup,
+      conv.agentId
+        ? db
+            .select()
+            .from(agentConversationSettingsTable)
+            .where(eq(agentConversationSettingsTable.agentId, conv.agentId))
+            .limit(1)
+        : Promise.resolve([]),
+      requestName ?? resolveUserDisplayName(req.userId, req.userEmail),
+      getAgentCommunicationLanguage(conv.agentId),
+      db
+        .select()
+        .from(messagesTable)
+        .where(eq(messagesTable.conversationId, conv.id))
+        .orderBy(messagesTable.createdAt),
+    ]);
+    const email =
+      resolvedEmail ??
+      (typeof existingPerson.email === "string" ? existingPerson.email : null);
     const person: PersonAttributes = {
       personType: "user",
       attributes: {
@@ -480,29 +515,13 @@ router.post(
         ...(appDomain ? { app_domain: appDomain } : {}),
       },
     };
-    const [conversationSettings] = conv.agentId
-      ? await db
-          .select()
-          .from(agentConversationSettingsTable)
-          .where(eq(agentConversationSettingsTable.agentId, conv.agentId))
-          .limit(1)
-      : [];
-    const userName =
-      typeof person.attributes.name === "string"
-        ? person.attributes.name
-        : typeof person.attributes.user_name === "string"
-          ? person.attributes.user_name
-          : await resolveUserDisplayName(req.userId, req.userEmail);
-    const communicationLanguage = await getAgentCommunicationLanguage(conv.agentId);
+    const [conversationSettings] = conversationSettingsRows;
+    const requestPreparationMs = elapsedMs(requestStartedAt);
     let answered;
     try {
       answered = await answerFromKnowledge({
         message: parsed.data.content,
-        history: await db
-          .select()
-          .from(messagesTable)
-          .where(eq(messagesTable.conversationId, conv.id))
-          .orderBy(messagesTable.createdAt),
+        history,
         agentId: conv.agentId,
         person,
         context: {
@@ -518,6 +537,10 @@ router.post(
           conversationSettings?.escalationMessage ??
           DEFAULT_CONVERSATION_SETTINGS.escalationMessage,
       });
+      answered.stages[0]!.details = {
+        ...answered.stages[0]!.details,
+        request_preparation_ms: requestPreparationMs,
+      };
     } catch (error) {
       const message = workflowProviderErrorMessage(error);
       if (message) {
@@ -529,12 +552,12 @@ router.post(
       return;
     }
 
-    const latencyMs = Date.now() - startTs;
     const responseText = answered.responseText;
     const resolutionStatus = answered.resolutionStatus;
     const shouldAskResolution = answered.shouldAskResolution;
     const assistantMetadata = answered.assistantMetadata;
     const stages = answered.stages;
+    const persistenceStartedAt = performance.now();
 
     const [assistantMsg] = await db
       .insert(messagesTable)
@@ -573,6 +596,7 @@ router.post(
       .set(conversationPatch)
       .where(eq(conversationsTable.id, conv.id));
 
+    const latencyMs = elapsedMs(requestStartedAt);
     const [log] = await db
       .insert(orchestratorLogsTable)
       .values({
@@ -592,6 +616,21 @@ router.post(
       await updateConversationAnalytics(conv.id);
     }
 
+    stages.push({
+      stage: 5,
+      name: "Persist Reply",
+      status: "completed",
+      details: {
+        duration_ms: elapsedMs(persistenceStartedAt),
+        request_elapsed_ms: elapsedMs(requestStartedAt),
+      },
+    });
+    res.once("finish", () => {
+      req.log.info(
+        { end_to_end_ms: elapsedMs(requestStartedAt) },
+        "Support reply request completed",
+      );
+    });
     res.json({
       message: toMessage(assistantMsg),
       response: responseText,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  answerGenerationOptions,
   answerModelContext,
   parseStructuredResponse,
   replyLanguageInstruction,
@@ -26,6 +27,24 @@ describe("replyLanguageInstruction", () => {
     ).toEqual({
       agent_language: "es",
       currentUrl: "https://app.example.com",
+    });
+  });
+});
+
+describe("answerGenerationOptions", () => {
+  it("uses low reasoning effort for GPT-5 text answers with a bounded response", () => {
+    expect(answerGenerationOptions("gpt-5-nano", false)).toEqual({
+      max_completion_tokens: 700,
+      reasoning_effort: "low",
+    });
+  });
+
+  it("does not send GPT-5 reasoning settings to vision or non-reasoning models", () => {
+    expect(answerGenerationOptions("gpt-4o-mini", true)).toEqual({
+      max_completion_tokens: 700,
+    });
+    expect(answerGenerationOptions("gpt-4o-mini", false)).toEqual({
+      max_completion_tokens: 700,
     });
   });
 });

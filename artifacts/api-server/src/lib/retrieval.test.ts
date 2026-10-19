@@ -15,6 +15,7 @@ vi.mock("drizzle-orm", () => ({
   asc: vi.fn((column) => ({ asc: column })),
   eq: vi.fn((column, value) => ({ column, value })),
   inArray: vi.fn((column, values) => ({ column, values })),
+  or: vi.fn((...conditions) => conditions),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
     strings: [...strings],
     values,
@@ -53,6 +54,7 @@ import {
   isArticleRetrievalEligible,
   listEligiblePublishedArticles,
   retrieveRelevantChunks,
+  scoreLexicalMatch,
 } from "./retrieval";
 
 describe("knowledge retrieval", () => {
@@ -95,6 +97,29 @@ describe("knowledge retrieval", () => {
     ).toBe(false);
   });
 
+  it("accepts the documented Spanish phrasings but rejects weak lexical overlap", async () => {
+    const answerablePassage =
+      "Quiero saber si han llamado a mi cliente. En la tabla de clientes, si ya se ha empezado un contrato, significa que la llamada ya ha ocurrido.";
+    const callbackPassage =
+      "Quiero que me contacten / Quiero que me llamen. Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma.";
+
+    expect(
+      scoreLexicalMatch(
+        "Cómo sé si han llamado a mi cliente?",
+        answerablePassage,
+      ).accepted,
+    ).toBe(true);
+    expect(
+      scoreLexicalMatch("Quiero que me llamen", callbackPassage).accepted,
+    ).toBe(true);
+    expect(
+      scoreLexicalMatch(
+        "¿Cuál es mi contraseña secreta?",
+        callbackPassage,
+      ).accepted,
+    ).toBe(false);
+  });
+
   it("embeds the question and returns matching passages from eligible published articles", async () => {
     const article = {
       id: "article-published",
@@ -133,6 +158,7 @@ describe("knowledge retrieval", () => {
         resolveAtWhere: true,
       },
       { rows: [chunkRow], resolveAtWhere: false },
+      { rows: [], resolveAtWhere: false },
       { rows: [], resolveAtWhere: true },
     );
 
@@ -162,5 +188,151 @@ describe("knowledge retrieval", () => {
     ]);
     expect(retrieval.model).toBe("test-embedding-model");
     expect(retrieval.totalTokens).toBe(7);
+    expect(retrieval.diagnostics).toEqual({
+      vectorCandidates: 1,
+      lexicalCandidates: 0,
+      lexicalAccepted: 0,
+    });
+  });
+
+  it.each([
+    {
+      question: "Cómo sé si han llamado a mi cliente?",
+      content:
+        "Quiero saber si han llamado a mi cliente. En la tabla de clientes, si ya se ha empezado un contrato, significa que la llamada ya ha ocurrido.",
+    },
+    {
+      question: "Quiero que me llamen",
+      content:
+        "Quiero que me contacten / Quiero que me llamen. Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma.",
+    },
+  ])("retrieves FAQ passage for $question when vector search misses it", async ({
+    question,
+    content,
+  }) => {
+    const article = {
+      id: "article-support",
+      title: "Soporte de clientes",
+      targetId: null,
+      status: "published",
+    };
+    const lexicalRow = {
+      articleId: article.id,
+      chunkId: `chunk-${question.length}`,
+      chunkIndex: 0,
+      articleTitle: article.title,
+      content,
+    };
+    const embeddingProvider = {
+      embed: vi.fn().mockResolvedValue({
+        embeddings: [[0.1, 0.2, 0.3]],
+        model: "test-embedding-model",
+        totalTokens: 6,
+      }),
+      resolveModel: vi.fn().mockResolvedValue("test-embedding-model"),
+    };
+    selectResults.push(
+      { rows: [article], resolveAtWhere: true },
+      { rows: [], resolveAtWhere: false },
+      { rows: [lexicalRow], resolveAtWhere: false },
+      { rows: [], resolveAtWhere: true },
+    );
+
+    const eligible = await listEligiblePublishedArticles("agent-1", {
+      personType: "user",
+      attributes: {},
+    });
+    const retrieval = await retrieveRelevantChunks(
+      eligible.map((item) => item.id),
+      question,
+      embeddingProvider,
+      5,
+      { agentId: "agent-1" },
+    );
+
+    expect(retrieval.chunks).toMatchObject([
+      {
+        articleId: article.id,
+        articleName: article.title,
+        content,
+      },
+    ]);
+    expect(retrieval.diagnostics).toEqual({
+      vectorCandidates: 0,
+      lexicalCandidates: 1,
+      lexicalAccepted: 1,
+    });
+  });
+
+  it("runs lexical fallback when three semantic hits have weak query overlap", async () => {
+    const article = {
+      id: "article-support",
+      title: "Soporte de clientes",
+      targetId: null,
+      status: "published",
+    };
+    const question = "Quiero que me llamen";
+    const faqContent =
+      "Quiero que me contacten / Quiero que me llamen. Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma.";
+    const weakVectorRows = [
+      "La factura mensual se puede descargar desde el panel de pagos.",
+      "Para gestionar un contrato, abre el apartado de operaciones.",
+      "Los miembros del equipo aparecen en la sección de configuración.",
+    ].map((content, index) => ({
+      articleId: article.id,
+      chunkId: `weak-${index}`,
+      chunkIndex: index,
+      articleTitle: article.title,
+      content,
+      distance: 0.2 + index * 0.01,
+    }));
+    const embeddingProvider = {
+      embed: vi.fn().mockResolvedValue({
+        embeddings: [[0.1, 0.2, 0.3]],
+        model: "test-embedding-model",
+        totalTokens: 6,
+      }),
+      resolveModel: vi.fn().mockResolvedValue("test-embedding-model"),
+    };
+    selectResults.push(
+      { rows: [article], resolveAtWhere: true },
+      { rows: weakVectorRows, resolveAtWhere: false },
+      {
+        rows: [
+          {
+            articleId: article.id,
+            chunkId: "faq-callback",
+            chunkIndex: 3,
+            articleTitle: article.title,
+            content: faqContent,
+          },
+        ],
+        resolveAtWhere: false,
+      },
+      { rows: [], resolveAtWhere: true },
+    );
+
+    const eligible = await listEligiblePublishedArticles("agent-1", {
+      personType: "user",
+      attributes: {},
+    });
+    const retrieval = await retrieveRelevantChunks(
+      eligible.map((item) => item.id),
+      question,
+      embeddingProvider,
+      5,
+      { agentId: "agent-1" },
+    );
+
+    expect(retrieval.diagnostics).toEqual({
+      vectorCandidates: 3,
+      lexicalCandidates: 1,
+      lexicalAccepted: 1,
+    });
+    expect(retrieval.chunks[0]).toMatchObject({
+      chunkId: "faq-callback",
+      content: faqContent,
+      distance: 1,
+    });
   });
 });
