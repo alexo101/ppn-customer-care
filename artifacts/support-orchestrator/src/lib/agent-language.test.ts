@@ -27,5 +27,7 @@ describe("agent language options and chat copy", () => {
     );
     expect(agentLanguageCopy("fr", "previewWelcome")).toContain("Bonjour");
     expect(agentLanguageCopy("it", "npsQuestion")).toContain("Come valuti");
+    expect(agentLanguageCopy("es", "selectQuestion")).toContain("Selecciona una pregunta");
+    expect(agentLanguageCopy("fr", "runAgain")).toBe("Relancer");
   });
 });

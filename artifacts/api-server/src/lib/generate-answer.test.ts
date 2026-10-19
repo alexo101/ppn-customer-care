@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { generateAnswer } from "./generate-answer";
+import { alignReplyToAgentLanguage, generateAnswer } from "./generate-answer";
 import type { AnswerProvider } from "./llm";
 
 const chunk = {
@@ -103,6 +103,47 @@ describe("generateAnswer", () => {
 
     expect(result.shouldAskResolution).toBe(true);
     expect(result.responseText).toContain("¿Esta respuesta responde a tu pregunta?");
+    expect(result.replyLanguage).toBe("es");
+  });
+
+  it("translates an English model reply when the agent language is Spanish", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "Your invoice is ready.",
+      answerable: true,
+      replyLanguage: "en",
+      model: "gpt-5-nano",
+      totalTokens: 12,
+      promptAssembled: "assembled",
+      citations: [],
+    });
+    const translator = {
+      translate: vi.fn(async () => "Tu factura está lista."),
+    };
+
+    const result = await generateAnswer(
+      "Where is my invoice?",
+      [{ sender: "user", content: "Where is my invoice?" }],
+      {},
+      [chunk],
+      { generate } as AnswerProvider,
+      { agent_language: "es", browser_language: "en-US" },
+      translator,
+    );
+
+    expect(translator.translate).toHaveBeenCalledWith(
+      "Your invoice is ready.",
+      "es",
+    );
+    expect(result.responseText).toBe("Tu factura está lista.");
+    expect(result.replyLanguage).toBe("es");
+    expect(
+      await alignReplyToAgentLanguage(
+        "Tu factura está lista.",
+        "es",
+        "es",
+        translator,
+      ),
+    ).toBe("Tu factura está lista.");
   });
 
   it("treats an unanswerable model response as insufficient", async () => {

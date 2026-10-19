@@ -1,10 +1,35 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_WELCOME_MESSAGE } from "./conversation-auto-close";
+
+const { limit, values } = vi.hoisted(() => ({
+  limit: vi.fn(),
+  values: vi.fn(),
+}));
+
+vi.mock("@workspace/db", () => ({
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit,
+        }),
+      }),
+    }),
+    insert: () => ({
+      values,
+    }),
+  },
+  appearanceSettingsTable: { agentId: "agentId", communicationLanguage: "language" },
+  agentConversationSettingsTable: { agentId: "agentId", welcomeMessage: "welcomeMessage" },
+  messagesTable: { conversationId: "conversationId" },
+}));
+
 import {
   hasRequiredWelcomeTokens,
   interpolateWelcomeMessage,
   isTrainingConversation,
   normalizeBrowserLanguage,
+  sendWelcomeMessageIfNeeded,
   translateWelcomeTemplate,
 } from "./welcome-message";
 
@@ -106,5 +131,39 @@ describe("translateWelcomeTemplate", () => {
       translateWelcomeTemplate(template, undefined, translator),
     ).resolves.toBe(template);
     expect(translate).not.toHaveBeenCalled();
+  });
+});
+
+describe("training conversation greeting", () => {
+  it("uses the saved agent language instead of the browser language", async () => {
+    limit
+      .mockResolvedValueOnce([
+        { welcomeMessage: "Welcome {user_name}. This is {agent_name}." },
+      ])
+      .mockResolvedValueOnce([{ language: "es" }]);
+    values.mockResolvedValue(undefined);
+
+    await sendWelcomeMessageIfNeeded({
+      conversationId: "conversation-1",
+      agentId: "agent-1",
+      metadata: { source: "training", browser_language: "en-US" },
+      userName: "Ada",
+      agentName: "Nova",
+      translator: {
+        translate: async () => "Bienvenido {user_name}. Soy {agent_name}.",
+      },
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sender: "assistant",
+        content: "Bienvenido Ada. Soy Nova.",
+        metadata: expect.objectContaining({
+          kind: "welcome",
+          communication_language: "es",
+          browser_language: "en-us",
+        }),
+      }),
+    );
   });
 });

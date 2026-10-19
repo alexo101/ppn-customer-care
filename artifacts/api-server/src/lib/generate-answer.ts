@@ -1,10 +1,13 @@
 import type { AnswerProvider, RetrievedChunk } from "./llm";
 import { AnswerProviderError } from "./llm";
+import type { WelcomeMessageTranslator } from "./llm/openai-welcome-message-translator";
 import {
   localizedCommunicationMessage,
   resolutionFollowUp,
   resolveReplyLocale,
+  type ReplyLocale,
 } from "./reply-locale";
+import { translateCustomerTemplate } from "./welcome-message";
 
 type HistoryMessage = { sender: string; content: string };
 
@@ -43,6 +46,18 @@ export function requiresAnswerProvider(message: string): boolean {
   return !isDeterministicReply(message);
 }
 
+export async function alignReplyToAgentLanguage(
+  text: string,
+  agentLanguage: ReplyLocale,
+  reportedLanguage: unknown,
+  translator?: WelcomeMessageTranslator,
+): Promise<string> {
+  if (!text.trim()) return text;
+  if (reportedLanguage == null || reportedLanguage === "") return text;
+  if (resolveReplyLocale(reportedLanguage) === agentLanguage) return text;
+  return translateCustomerTemplate(text, agentLanguage, text, translator);
+}
+
 export async function generateAnswer(
   message: string,
   history: HistoryMessage[],
@@ -50,6 +65,7 @@ export async function generateAnswer(
   retrievedChunks: RetrievedChunk[],
   provider?: AnswerProvider,
   context: Record<string, unknown> = {},
+  translator?: WelcomeMessageTranslator,
 ): Promise<GeneratedAnswer> {
   const lower = message.toLowerCase().trim();
   const language = resolveReplyLocale(context.agent_language);
@@ -84,14 +100,22 @@ export async function generateAnswer(
   const answerable = result.answerable !== false && retrievedChunks.length > 0;
   const userMessageCount = history.filter((item) => item.sender === "user").length;
   const shouldAskResolution = answerable && userMessageCount >= 2;
+  const alignedText = answerable
+    ? await alignReplyToAgentLanguage(
+        result.responseText,
+        language,
+        result.replyLanguage,
+        translator,
+      )
+    : result.responseText;
   const responseText =
     answerable && shouldAskResolution
-      ? `${result.responseText}\n\n${resolutionFollowUp(language)}`
-      : result.responseText;
+      ? `${alignedText}\n\n${resolutionFollowUp(language)}`
+      : alignedText;
   return {
     responseText,
     answerable,
-    ...(result.replyLanguage ? { replyLanguage: result.replyLanguage } : {}),
+    replyLanguage: language,
     resolutionStatus: answerable
       ? shouldAskResolution
         ? "pending_resolution"

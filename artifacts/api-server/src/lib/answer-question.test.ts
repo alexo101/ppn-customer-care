@@ -34,8 +34,8 @@ vi.mock("./retrieval", () => ({
 
 vi.mock("./llm/openai-welcome-message-translator", () => ({
   OpenAIWelcomeMessageTranslator: class {
-    async translate(template: string) {
-      return template;
+    async translate() {
+      throw new Error("translator unavailable");
     }
   },
 }));
@@ -191,5 +191,65 @@ describe("answerFromKnowledge", () => {
         }),
       ],
     });
+  });
+
+  it("keeps Training replies in the saved agent language when the browser and question are English", async () => {
+    listEligiblePublishedArticles.mockResolvedValue([]);
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: "Where is my invoice?",
+      context: { agent_language: "es", browser_language: "en-US" },
+      replyLocaleCandidates: ["en-US", "es"],
+    });
+
+    expect(result.responseText).toContain("no he encontrado suficiente información");
+    expect(result.responseText).toContain("agente de soporte");
+    expect(result.responseText).not.toContain("couldn't find enough information");
+  });
+
+  it("asks the answer model to use the saved language instead of the browser language", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "Las facturas están en Ajustes.",
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-test",
+      totalTokens: 8,
+      promptAssembled: "prompt",
+      citations: [],
+    });
+    listEligiblePublishedArticles.mockResolvedValue([
+      { id: "article-1", title: "Billing", targetId: null },
+    ]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [
+        {
+          sourceId: "article-1",
+          sourceName: "Billing",
+          articleId: "article-1",
+          articleName: "Billing",
+          content: "Invoices are in Settings.",
+          distance: 0.1,
+        },
+      ],
+      totalTokens: 4,
+      model: "embed",
+    });
+    createAnswerProvider.mockReturnValue({ generate });
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: "Where is my invoice?",
+      context: { agent_language: "es", browser_language: "en-US" },
+      replyLocaleCandidates: ["en-US"],
+    });
+
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ agent_language: "es" }),
+        message: "Where is my invoice?",
+      }),
+    );
+    expect(result.responseText).toContain("Las facturas están en Ajustes.");
   });
 });

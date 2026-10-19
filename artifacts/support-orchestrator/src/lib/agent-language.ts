@@ -47,6 +47,11 @@ const COPY = {
     greetingTimeout: "The greeting never arrived. Try again, or restart the API if this keeps happening.",
     previewStartFailed: "The training preview could not start.",
     previewCompleteFailed: "The training preview could not complete.",
+    selectQuestion: "Select a question to test how the agent answers.",
+    previewTitle: "Customer chat preview",
+    previewTesting: "Testing the selected question",
+    previewIdle: "Select a question to run a test",
+    runAgain: "Run again",
   },
   es: {
     previewOnline: "En línea",
@@ -80,6 +85,11 @@ const COPY = {
     greetingTimeout: "No llegó el saludo. Inténtalo de nuevo.",
     previewStartFailed: "No se pudo iniciar la vista previa.",
     previewCompleteFailed: "No se pudo completar la vista previa.",
+    selectQuestion: "Selecciona una pregunta para probar cómo responde el asistente.",
+    previewTitle: "Vista previa del chat",
+    previewTesting: "Probando la pregunta seleccionada",
+    previewIdle: "Selecciona una pregunta para hacer una prueba",
+    runAgain: "Ejecutar de nuevo",
   },
   fr: {
     previewOnline: "En ligne",
@@ -113,6 +123,11 @@ const COPY = {
     greetingTimeout: "Le message d’accueil n’est pas arrivé. Réessayez.",
     previewStartFailed: "Impossible de démarrer l’aperçu.",
     previewCompleteFailed: "Impossible de terminer l’aperçu.",
+    selectQuestion: "Sélectionnez une question pour tester la réponse de l’assistant.",
+    previewTitle: "Aperçu du chat",
+    previewTesting: "Test de la question sélectionnée",
+    previewIdle: "Sélectionnez une question pour lancer un test",
+    runAgain: "Relancer",
   },
   it: {
     previewOnline: "Online",
@@ -146,6 +161,11 @@ const COPY = {
     greetingTimeout: "Il messaggio di benvenuto non è arrivato. Riprova.",
     previewStartFailed: "Impossibile avviare l’anteprima.",
     previewCompleteFailed: "Impossibile completare l’anteprima.",
+    selectQuestion: "Seleziona una domanda per provare come risponde l’assistente.",
+    previewTitle: "Anteprima della chat",
+    previewTesting: "Prova della domanda selezionata",
+    previewIdle: "Seleziona una domanda per eseguire un test",
+    runAgain: "Esegui di nuovo",
   },
 } as const;
 

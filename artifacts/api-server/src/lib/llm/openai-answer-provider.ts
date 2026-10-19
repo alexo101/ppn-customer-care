@@ -70,11 +70,11 @@ export class OpenAIAnswerProvider implements AnswerProvider {
           )
           .join("\n\n")
       : "No knowledge-base context was retrieved.";
-    const personContext = JSON.stringify(input.personAttributes);
+    const personContext = JSON.stringify(answerModelContext(input.personAttributes));
     const replyLocale = resolveReplyLocale(input.context?.agent_language);
     const promptAssembled = [
       `Person attributes: ${personContext}`,
-      `Request context: ${JSON.stringify(input.context ?? {})}`,
+      `Request context: ${JSON.stringify(answerModelContext(input.context))}`,
       `Knowledge context:\n${context}`,
       `User question:\n${input.message}`,
     ].join("\n\n");
@@ -174,9 +174,17 @@ export class OpenAIAnswerProvider implements AnswerProvider {
   }
 }
 
+export function answerModelContext(
+  context: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!context) return {};
+  const { browser_language: _browserLanguage, ...rest } = context;
+  return rest;
+}
+
 export function replyLanguageInstruction(agentLanguage: unknown): string {
   const language = resolveReplyLocale(agentLanguage);
-  return `Reply language is fixed by this agent's Appearance setting: ${language}. Respond entirely in this language, regardless of the user's message language, prior conversation, supplied knowledge, or team-configured guidance. Do not switch languages. Set replyLanguage to "${language}".`;
+  return `Reply language is fixed by this agent's Appearance setting: ${language}. Respond entirely in this language, regardless of the user's message language, the browser language, the language of supplied knowledge, prior conversation, or team-configured guidance. Do not switch languages. Set replyLanguage to "${language}".`;
 }
 
 export function parseStructuredResponse(value: string): {

@@ -21,7 +21,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { useAppearance } from "@/components/appearance-provider";
 import { SupportChatPanel } from "@/components/chat/support-chat-panel";
+import { agentLanguageCopy, normalizeAgentLanguage } from "@/lib/agent-language";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -53,6 +55,8 @@ function apiErrorMessage(error: unknown, fallback: string) {
 
 export function TrainingEditor({ agentId }: { agentId: string }) {
   const { canEdit } = useWorkspaceAccess();
+  const { appearance } = useAppearance();
+  const language = normalizeAgentLanguage(appearance?.communicationLanguage);
   const queryClient = useQueryClient();
   const { data: questions = [], isLoading } = useListTrainingQuestions({ agentId });
   const createQuestion = useCreateTrainingQuestion();
@@ -435,9 +439,11 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
       <div className="lg:w-[400px] xl:w-[440px] shrink-0 bg-muted/30 flex flex-col min-h-[520px] lg:min-h-0">
         <div className="h-14 px-4 border-b border-border flex items-center justify-between shrink-0 bg-card">
           <div className="min-w-0">
-            <div className="text-sm font-medium">Customer chat preview</div>
+            <div className="text-sm font-medium">{agentLanguageCopy(language, "previewTitle")}</div>
             <div className="text-[11px] text-muted-foreground truncate">
-              {selected ? "Testing the selected question" : "Select a question to run a test"}
+              {selected
+                ? agentLanguageCopy(language, "previewTesting")
+                : agentLanguageCopy(language, "previewIdle")}
             </div>
           </div>
           <Button
@@ -448,7 +454,7 @@ export function TrainingEditor({ agentId }: { agentId: string }) {
             onClick={() => setRunNonce((value) => value + 1)}
           >
             <RotateCcw className="w-3.5 h-3.5 mr-1" />
-            Run again
+            {agentLanguageCopy(language, "runAgain")}
           </Button>
         </div>
         <div className="flex-1 p-4 min-h-0">

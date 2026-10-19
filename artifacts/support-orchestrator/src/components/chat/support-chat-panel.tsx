@@ -30,7 +30,11 @@ import {
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
-import { agentLanguageCopy, normalizeAgentLanguage } from "@/lib/agent-language";
+import {
+  agentLanguageCopy,
+  normalizeAgentLanguage,
+  type AgentLanguageCopyKey,
+} from "@/lib/agent-language";
 
 const GREETING_WAIT_MS = 12_000;
 function assistantMessageCount(messages: { sender: string }[]): number {
@@ -70,7 +74,7 @@ export function SupportChatPanel({
   runNonce = 0,
   onClose,
   className,
-  emptyHint = "Select a question to test how the agent answers.",
+  emptyHint,
 }: SupportChatPanelProps) {
   const queryClient = useQueryClient();
   const { appearance: sessionAppearance } = useAppearance();
@@ -88,6 +92,8 @@ export function SupportChatPanel({
   });
   const appearance = agentAppearance ?? sessionAppearance;
   const language = normalizeAgentLanguage(appearance?.communicationLanguage);
+  const questionHint =
+    emptyHint ?? agentLanguageCopy(language, "selectQuestion");
   const browserLanguage =
     typeof navigator !== "undefined" ? navigator.language : undefined;
 
@@ -105,13 +111,13 @@ export function SupportChatPanel({
 
   const [convoId, setConvoId] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<AgentLanguageCopyKey | null>(null);
   const [thinkingVisible, setThinkingVisible] = useState(false);
   const [retryNonce, setRetryNonce] = useState(0);
   const [welcomeWaitTimedOut, setWelcomeWaitTimedOut] = useState(false);
   const [dismissedEscalationMessageId, setDismissedEscalationMessageId] =
     useState<string | null>(null);
-  const [escalationError, setEscalationError] = useState<string | null>(null);
+  const [escalationError, setEscalationError] = useState<AgentLanguageCopyKey | null>(null);
   const [pendingUserMessage, setPendingUserMessage] = useState<{
     content: string;
     // Ids already in the list when this send started. The API send response
@@ -218,9 +224,7 @@ export function SupportChatPanel({
   useEffect(() => {
     if (!pendingUserMessage || sendError) return;
     const timer = window.setTimeout(() => {
-      setSendError(
-        agentLanguageCopy(language, "messageUnconfirmed"),
-      );
+      setSendError("messageUnconfirmed");
     }, GREETING_WAIT_MS);
     return () => window.clearTimeout(timer);
   }, [pendingUserMessage, sendError]);
@@ -299,7 +303,7 @@ export function SupportChatPanel({
         },
         onError: (error) => {
           if (runId !== runIdRef.current) return;
-          setSendError(agentLanguageCopy(language, "previewStartFailed"));
+          setSendError("previewStartFailed");
         },
       },
     );
@@ -319,7 +323,7 @@ export function SupportChatPanel({
 
     const timer = window.setTimeout(() => {
       setWelcomeWaitTimedOut(true);
-      setSendError(agentLanguageCopy(language, "greetingTimeout"));
+      setSendError("greetingTimeout");
     }, GREETING_WAIT_MS);
 
     return () => window.clearTimeout(timer);
@@ -354,7 +358,7 @@ export function SupportChatPanel({
         onError: (error) => {
           if (runId !== runIdRef.current) return;
           stopThinking();
-          setSendError(agentLanguageCopy(language, "previewCompleteFailed"));
+          setSendError("previewCompleteFailed");
         },
       },
     );
@@ -394,7 +398,7 @@ export function SupportChatPanel({
         },
         onError: (error) => {
           setDismissedEscalationMessageId(null);
-          setEscalationError(agentLanguageCopy(language, "escalateFailed"));
+          setEscalationError("escalateFailed");
         },
       },
     );
@@ -437,7 +441,7 @@ export function SupportChatPanel({
           // user row was never persisted (the API inserts it before answer
           // generation). The composer stays blocked until the user re-syncs
           // via "Try again", which establishes the true message list.
-          setSendError(agentLanguageCopy(language, "messageFailed"));
+          setSendError("messageFailed");
         },
       },
     );
@@ -497,7 +501,7 @@ export function SupportChatPanel({
         <div className="space-y-4">
           {waitingForQuestion && messages.length === 0 && !convoId && !busy ? (
             <div className="h-full min-h-[220px] flex items-center justify-center px-6">
-              <p className="text-center text-sm text-slate-500">{emptyHint}</p>
+              <p className="text-center text-sm text-slate-500">{questionHint}</p>
             </div>
           ) : (
             <>
@@ -561,7 +565,7 @@ export function SupportChatPanel({
                               className="mt-1 text-xs text-red-700"
                               role="alert"
                             >
-                              {escalationError}
+                              {agentLanguageCopy(language, escalationError)}
                             </p>
                           )}
                         </div>
@@ -602,7 +606,7 @@ export function SupportChatPanel({
                 >
                   <p className="font-medium">{agentLanguageCopy(language, "previewCompleteFailed")}</p>
                   <p className="mt-1">
-                    {sendError}
+                    {agentLanguageCopy(language, sendError)}
                   </p>
                   <button
                     type="button"
@@ -625,7 +629,7 @@ export function SupportChatPanel({
             onChange={(e) => setInput(e.target.value)}
             placeholder={
               waitingForQuestion
-                ? emptyHint
+                ? questionHint
                 : waitingForWelcome
                   ? agentLanguageCopy(language, "preparingGreeting")
                   : agentLanguageCopy(language, "messagePlaceholder")
