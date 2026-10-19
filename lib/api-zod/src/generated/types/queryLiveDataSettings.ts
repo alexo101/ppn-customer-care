@@ -13,6 +13,5 @@ export interface QueryLiveDataSettings {
   endpointUrl: string;
   authorizationSecretName: string;
   allowedFields: string[];
-  disambiguationFields: string[];
   enabled: boolean;
 }

@@ -31,8 +31,7 @@ Return HTTP 200 with `Content-Type: application/json` and this shape:
       "authorized": true,
       "name": "Ana García",
       "facts": {
-        "callStatus": "completed",
-        "city": "Madrid"
+        "callStatus": "completed"
       }
     }
   ]
@@ -46,10 +45,10 @@ caller ID and selects only the field keys configured in the agent settings.
 Use `facts` for top-level string, number, or boolean values. Do not return
 nested objects, secrets, access tokens, or unrelated records.
 
-Fields in **Fields the assistant may use in replies** are passed to the answer
-model as client facts. Fields in **Safe fields to distinguish same-name
-clients** are shown only when there is more than one match; choose values that
-are not sensitive.
+Only fields configured in **Fields the assistant may use in replies** are passed
+to the answer model as client facts. If a name matches more than one authorized
+client, the assistant will not choose one automatically; it asks for a more
+specific name.
 
 ## Limits and safety
 

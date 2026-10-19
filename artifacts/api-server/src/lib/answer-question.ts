@@ -16,7 +16,6 @@ import type { PersonAttributes } from "./targets";
 import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
 import {
   detectLiveClientIntent,
-  formatLiveFieldLabel,
   lookupLiveClient,
   readQueryLiveDataSettings,
   type LiveClientHistoryMessage,
@@ -245,22 +244,13 @@ export async function answerFromKnowledge(input: {
       }
 
       if (lookup.status === "ambiguous") {
-        const responseText = lookup.tooMany
-          ? localizedCommunicationMessage(
-              "liveClientTooManyMatches",
-              agentLanguage,
-            )
-          : formatAmbiguousClientReply(lookup.candidates, agentLanguage);
         return buildLiveControlAnswer(
-          responseText,
+          localizedCommunicationMessage("liveClientAmbiguous", agentLanguage),
           stages,
           "ambiguous",
           true,
           { lookup_duration_ms: lookupMs, candidate_count: lookup.candidates.length },
-          {
-            status: "ambiguous",
-            clientName: liveIntent.clientName,
-          },
+          { status: "ambiguous" },
         );
       }
       if (lookup.status === "not_found") {
@@ -515,31 +505,6 @@ function buildLiveControlAnswer(
     },
     stages,
   };
-}
-
-function formatAmbiguousClientReply(
-  candidates: Array<{
-    name: string;
-    disambiguation: Record<string, string | number | boolean>;
-  }>,
-  language: string,
-): string {
-  const reply = localizedCommunicationMessage("liveClientAmbiguous", language);
-  const uniqueNames = new Set(candidates.map((candidate) => candidate.name)).size;
-  const hasClues = candidates.some(
-    (candidate) => Object.keys(candidate.disambiguation).length > 0,
-  );
-  if (uniqueNames === 1 && !hasClues) return reply;
-
-  const lines = candidates
-    .map((candidate, index) => {
-      const clues = Object.entries(candidate.disambiguation)
-        .map(([field, value]) => `${formatLiveFieldLabel(field)}: ${value}`)
-        .join(" · ");
-      return `${index + 1}. ${candidate.name}${clues ? ` — ${clues}` : ""}`;
-    })
-    .join("\n");
-  return `${reply}\n\n${lines}`;
 }
 
 function elapsedMs(startedAt: number): number {

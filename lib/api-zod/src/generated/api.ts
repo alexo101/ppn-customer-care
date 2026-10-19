@@ -266,7 +266,6 @@ export const GetAgentQueryLiveDataResponse = zod.object({
   "endpointUrl": zod.string(),
   "authorizationSecretName": zod.string(),
   "allowedFields": zod.array(zod.string()),
-  "disambiguationFields": zod.array(zod.string()),
   "enabled": zod.boolean()
 })
 
@@ -286,17 +285,12 @@ export const updateAgentQueryLiveDataBodyAllowedFieldsItemMax = 64;
 
 export const updateAgentQueryLiveDataBodyAllowedFieldsMax = 12;
 
-export const updateAgentQueryLiveDataBodyDisambiguationFieldsItemMax = 64;
-
-export const updateAgentQueryLiveDataBodyDisambiguationFieldsMax = 6;
-
 
 
 export const UpdateAgentQueryLiveDataBody = zod.object({
   "endpointUrl": zod.string().max(updateAgentQueryLiveDataBodyEndpointUrlMax),
   "authorizationSecretName": zod.string().max(updateAgentQueryLiveDataBodyAuthorizationSecretNameMax),
-  "allowedFields": zod.array(zod.string().max(updateAgentQueryLiveDataBodyAllowedFieldsItemMax)).max(updateAgentQueryLiveDataBodyAllowedFieldsMax),
-  "disambiguationFields": zod.array(zod.string().max(updateAgentQueryLiveDataBodyDisambiguationFieldsItemMax)).max(updateAgentQueryLiveDataBodyDisambiguationFieldsMax)
+  "allowedFields": zod.array(zod.string().max(updateAgentQueryLiveDataBodyAllowedFieldsItemMax)).max(updateAgentQueryLiveDataBodyAllowedFieldsMax)
 })
 
 export const UpdateAgentQueryLiveDataResponse = zod.object({
@@ -305,7 +299,6 @@ export const UpdateAgentQueryLiveDataResponse = zod.object({
   "endpointUrl": zod.string(),
   "authorizationSecretName": zod.string(),
   "allowedFields": zod.array(zod.string()),
-  "disambiguationFields": zod.array(zod.string()),
   "enabled": zod.boolean()
 })
 

@@ -347,7 +347,6 @@ describe("answerFromKnowledge", () => {
         endpointUrl: "https://api.example.com/clients?name={clientName}",
         authorizationSecretName: "LIVE_QUERY_CLIENT_TOKEN",
         allowedFields: ["callStatus"],
-        disambiguationFields: [],
       },
     };
     selectLimit.mockResolvedValue([{ configuration }]);
@@ -380,7 +379,6 @@ describe("answerFromKnowledge", () => {
       client: {
         name: "Ana García",
         facts: { callStatus: "completed" },
-        disambiguation: {},
       },
     });
     const secondTurn = await answerFromKnowledge({

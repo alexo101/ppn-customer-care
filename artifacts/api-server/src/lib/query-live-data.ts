@@ -6,7 +6,6 @@ export type QueryLiveDataSettings = {
   endpointUrl: string;
   authorizationSecretName: string;
   allowedFields: string[];
-  disambiguationFields: string[];
 };
 
 export type LiveClientFacts = Record<string, string | number | boolean>;
@@ -14,12 +13,11 @@ export type LiveClientFacts = Record<string, string | number | boolean>;
 export type LiveClientCandidate = {
   name: string;
   facts: LiveClientFacts;
-  disambiguation: LiveClientFacts;
 };
 
 export type LiveClientLookupResult =
   | { status: "matched"; client: LiveClientCandidate }
-  | { status: "ambiguous"; candidates: LiveClientCandidate[]; tooMany: boolean }
+  | { status: "ambiguous"; candidates: LiveClientCandidate[] }
   | { status: "not_found" }
   | { status: "unauthorized" }
   | { status: "unavailable" };
@@ -53,7 +51,6 @@ export const EMPTY_QUERY_LIVE_DATA_SETTINGS: QueryLiveDataSettings = {
   endpointUrl: "",
   authorizationSecretName: "",
   allowedFields: [],
-  disambiguationFields: [],
 };
 
 export function readQueryLiveDataSettings(value: unknown): QueryLiveDataSettings {
@@ -68,7 +65,6 @@ export function readQueryLiveDataSettings(value: unknown): QueryLiveDataSettings
         ? config.authorizationSecretName
         : "",
     allowedFields: readFieldList(config.allowedFields),
-    disambiguationFields: readFieldList(config.disambiguationFields),
   };
   return validateQueryLiveDataSettings(settings) === null
     ? settings
@@ -88,17 +84,10 @@ export function validateQueryLiveDataSettings(
   if (
     settings.allowedFields.length < 1 ||
     settings.allowedFields.length > 12 ||
-    settings.disambiguationFields.length > 6 ||
-    [...settings.allowedFields, ...settings.disambiguationFields].some(
-      (field) => !FIELD_KEY_PATTERN.test(field),
-    ) ||
-    hasDuplicates(settings.allowedFields) ||
-    hasDuplicates(settings.disambiguationFields)
+    settings.allowedFields.some((field) => !FIELD_KEY_PATTERN.test(field)) ||
+    hasDuplicates(settings.allowedFields)
   ) {
     return "Check the allowed response field names.";
-  }
-  if (settings.disambiguationFields.some((field) => settings.allowedFields.includes(field))) {
-    return "Disambiguation fields must be separate from reply fields.";
   }
 
   const template = settings.endpointUrl.trim();
@@ -167,18 +156,6 @@ export function detectLiveClientIntent(
       continuation: true,
     };
   }
-  if (
-    prior?.status === "ambiguous" &&
-    isLikelyDisambiguationReply(message) &&
-    !clientName
-  ) {
-    return {
-      kind: "lookup",
-      clientName: `${prior.clientName} ${message.trim()}`.slice(0, 180),
-      continuation: true,
-    };
-  }
-
   if (
     asksForSpecificClientFact(message) &&
     mentionsClientWithoutName(message) &&
@@ -252,18 +229,10 @@ export async function lookupLiveClient(
     return {
       status: "ambiguous",
       candidates: clients.slice(0, 3),
-      tooMany: clients.length > 3,
     };
   } catch {
     return { status: "unavailable" };
   }
-}
-
-export function formatLiveFieldLabel(field: string): string {
-  return field
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_.-]+/g, " ")
-    .trim();
 }
 
 function extractClientName(message: string): string | null {
@@ -325,17 +294,10 @@ function isClientDataFollowUp(message: string): boolean {
   );
 }
 
-function isLikelyDisambiguationReply(message: string): boolean {
-  const value = message.trim();
-  if (!value || value.length > 120 || isHowToQuestion(value)) return false;
-  return /^(?:the one\b|the one in\b|from\b|in\b|at\b|city\b|office\b|location\b|el de\b|la de\b|el que\b|la que\b|en\b|de\b)/i.test(value) ||
-    /^[\p{Lu}][\p{L}\p{M}'’.-]*(?:\s+[\p{Lu}][\p{L}\p{M}'’.-]*){0,2}$/u.test(value);
-}
-
 function getMostRecentLiveLookup(
   history: LiveClientHistoryMessage[],
 ):
-  | { status: "matched" | "ambiguous"; clientName: string }
+  | { status: "matched"; clientName: string }
   | { status: "awaiting_name" }
   | null {
   for (let index = history.length - 1; index >= 0; index -= 1) {
@@ -349,11 +311,11 @@ function getMostRecentLiveLookup(
       return { status: "awaiting_name" };
     }
     if (
-      (lookup.status === "matched" || lookup.status === "ambiguous") &&
+      lookup.status === "matched" &&
       typeof lookup.clientName === "string" &&
       lookup.clientName.trim()
     ) {
-      return { status: lookup.status, clientName: lookup.clientName };
+      return { status: "matched", clientName: lookup.clientName };
     }
     return null;
   }
@@ -377,7 +339,6 @@ function toCandidate(
   return {
     name,
     facts: readFields(settings.allowedFields),
-    disambiguation: readFields(settings.disambiguationFields),
   };
 }
 

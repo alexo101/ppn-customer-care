@@ -30,7 +30,6 @@ const formSchema = z.object({
   endpointUrl: z.string().max(2048),
   authorizationSecretName: z.string().max(64),
   allowedFields: z.string().max(1000),
-  disambiguationFields: z.string().max(500),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -55,7 +54,6 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
       endpointUrl: "",
       authorizationSecretName: "",
       allowedFields: "",
-      disambiguationFields: "",
     },
   });
 
@@ -65,7 +63,6 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
       endpointUrl: data.endpointUrl,
       authorizationSecretName: data.authorizationSecretName,
       allowedFields: data.allowedFields.join(", "),
-      disambiguationFields: data.disambiguationFields.join(", "),
     });
   }, [data, form]);
 
@@ -74,7 +71,6 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
       endpointUrl: values.endpointUrl.trim(),
       authorizationSecretName: values.authorizationSecretName.trim(),
       allowedFields: parseFieldNames(values.allowedFields),
-      disambiguationFields: parseFieldNames(values.disambiguationFields),
     };
     updateSettings.mutate(
       { id: agentId, data: payload },
@@ -197,48 +193,6 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
                   </FormItem>
                 )}
               />
-
-              <FormField
-                control={form.control}
-                name="disambiguationFields"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Safe fields to distinguish same-name clients</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        {...field}
-                        rows={2}
-                        placeholder="city, office"
-                        disabled={!canEdit || updateSettings.isPending}
-                        data-testid="query-live-disambiguation-fields"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Optional. Use non-sensitive values only; these are shown only when the
-                      endpoint finds more than one match.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-                The endpoint must authenticate the bearer token, enforce access for the
-                signed-in workspace user, and return only records that user may view. Anonymous
-                deployment sessions cannot query client data. Return JSON in this shape:
-                <pre className="mt-2 overflow-x-auto rounded bg-background p-2 font-mono text-[11px] text-foreground">
-{`{
-  "authorized": true,
-  "authorizedForUserId": "<X-Orchestrator-Caller-Id>",
-  "clients": [{
-    "authorized": true,
-    "name": "Ana García",
-    "facts": { "callStatus": "completed", "city": "Madrid" }
-  }]
-}`}
-                </pre>
-                The full contract and limits are in docs/query-live-data-endpoint.md.
-              </div>
 
               <MutatingControls>
                 <div className="flex justify-end">

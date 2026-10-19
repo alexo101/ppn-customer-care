@@ -12,7 +12,6 @@ const settings: QueryLiveDataSettings = {
   endpointUrl: "https://api.example.com/clients?name={clientName}",
   authorizationSecretName: secretName,
   allowedFields: ["callStatus"],
-  disambiguationFields: ["city"],
 };
 
 afterEach(() => {
@@ -101,22 +100,18 @@ describe("query live client data", () => {
     ).toEqual({ kind: "ask_name" });
   });
 
-  it("uses a short clarification only after an ambiguous lookup", () => {
+  it("does not turn an ambiguous-client clarification into a different name lookup", () => {
     expect(
       detectLiveClientIntent("the one in Madrid", [
         {
           sender: "assistant",
           content: "Which client do you mean?",
           metadata: {
-            liveDataLookup: { status: "ambiguous", clientName: "Ana García" },
+            liveDataLookup: { status: "ambiguous" },
           },
         },
       ]),
-    ).toEqual({
-      kind: "lookup",
-      clientName: "Ana García the one in Madrid",
-      continuation: true,
-    });
+    ).toEqual({ kind: "none" });
   });
 
   it("URL-encodes the name, sends the verified caller, filters fields, and requires an authorized unique result", async () => {
@@ -163,7 +158,6 @@ describe("query live client data", () => {
       client: {
         name: "Ana García",
         facts: { callStatus: "completed" },
-        disambiguation: { city: "Madrid" },
       },
     });
   });
@@ -192,8 +186,8 @@ describe("query live client data", () => {
     expect(ambiguous).toMatchObject({
       status: "ambiguous",
       candidates: [
-        { name: "Ana García", disambiguation: { city: "Madrid" } },
-        { name: "Ana García", disambiguation: { city: "Valencia" } },
+        { name: "Ana García" },
+        { name: "Ana García" },
       ],
     });
 

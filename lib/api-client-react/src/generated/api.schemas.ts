@@ -41,7 +41,6 @@ export interface QueryLiveDataSettings {
   endpointUrl: string;
   authorizationSecretName: string;
   allowedFields: string[];
-  disambiguationFields: string[];
   enabled: boolean;
 }
 
@@ -55,11 +54,6 @@ export interface QueryLiveDataSettingsInput {
      * @items.maxLength 64
      */
   allowedFields: string[];
-  /**
-     * @maxItems 6
-     * @items.maxLength 64
-     */
-  disambiguationFields: string[];
 }
 
 export interface DeploymentToken {

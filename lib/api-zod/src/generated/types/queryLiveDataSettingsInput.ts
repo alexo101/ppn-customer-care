@@ -16,9 +16,4 @@ export interface QueryLiveDataSettingsInput {
      * @items.maxLength 64
      */
   allowedFields: string[];
-  /**
-     * @maxItems 6
-     * @items.maxLength 64
-     */
-  disambiguationFields: string[];
 }

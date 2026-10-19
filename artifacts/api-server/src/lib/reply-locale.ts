@@ -62,16 +62,10 @@ const FALLBACK_MESSAGES = {
     fr: "Je n’ai trouvé aucun client correspondant à ce nom. Vérifiez l’orthographe et réessayez.",
   },
   liveClientAmbiguous: {
-    en: "I found more than one matching client. Please tell me the city or another detail your team uses to distinguish them.",
-    es: "He encontrado más de un cliente con ese nombre. Indícame la ciudad u otro dato que utilice tu equipo para distinguirlos.",
-    it: "Ho trovato più clienti con questo nome. Indicami la città o un altro dettaglio usato dal tuo team per distinguerli.",
-    fr: "J’ai trouvé plusieurs clients correspondant à ce nom. Indiquez la ville ou un autre détail utilisé par votre équipe pour les distinguer.",
-  },
-  liveClientTooManyMatches: {
-    en: "I found several possible clients. Please add a city or another detail your team uses to narrow down the search.",
-    es: "He encontrado varios clientes posibles. Indícame la ciudad u otro dato que utilice tu equipo para concretar la búsqueda.",
-    it: "Ho trovato diversi clienti possibili. Indicami la città o un altro dettaglio usato dal tuo team per restringere la ricerca.",
-    fr: "J’ai trouvé plusieurs clients possibles. Indiquez la ville ou un autre détail utilisé par votre équipe pour préciser la recherche.",
+    en: "I found more than one client with that name. Please provide a more specific name and try again.",
+    es: "He encontrado más de un cliente con ese nombre. Indícame un nombre más específico e inténtalo de nuevo.",
+    it: "Ho trovato più clienti con questo nome. Indicami un nome più specifico e riprova.",
+    fr: "J’ai trouvé plusieurs clients portant ce nom. Veuillez indiquer un nom plus précis et réessayer.",
   },
   liveClientUnavailable: {
     en: "I can't access this client's information right now. Please try again later or contact your support team.",
