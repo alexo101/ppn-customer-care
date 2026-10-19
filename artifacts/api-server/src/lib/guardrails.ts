@@ -11,10 +11,11 @@ export function applyGuardrails(
   input: {
     retrievedChunks: RetrievedChunk[];
     personAttributes: Record<string, unknown>;
+    hasAuthorizedLiveData?: boolean;
   },
 ): GuardrailResult {
   const actions: string[] = [];
-  if (input.retrievedChunks.length === 0) {
+  if (input.retrievedChunks.length === 0 && !input.hasAuthorizedLiveData) {
     return {
       responseText,
       actions: ["grounding_required"],

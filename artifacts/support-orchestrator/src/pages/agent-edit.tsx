@@ -9,6 +9,7 @@ import { TrainingEditor } from "@/components/training-editor";
 import { EscalationEditor } from "@/components/escalation-editor";
 import { ConversationSettingsEditor } from "@/components/conversation-settings-editor";
 import { KnowledgeBaseTab } from "@/components/knowledge-base-tab";
+import { QueryLiveDataEditor } from "@/components/query-live-data-editor";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -91,6 +92,9 @@ export default function EditAgentPage() {
           <div className="max-w-7xl mx-auto">
             {stepId === "appearance" && <AppearanceEditor agentId={agentId} />}
             {stepId === "knowledge-base" && <KnowledgeBaseTab agentId={agentId} />}
+            {stepId === "query-live-data" && (
+              <QueryLiveDataEditor agentId={agentId} />
+            )}
             {stepId === "escalations" && <EscalationEditor agentId={agentId} />}
             {stepId === "conversation-settings" && (
               <ConversationSettingsEditor agentId={agentId} />

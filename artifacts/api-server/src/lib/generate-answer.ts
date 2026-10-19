@@ -71,6 +71,10 @@ export async function generateAnswer(
   provider?: AnswerProvider,
   context: Record<string, unknown> = {},
   translator?: WelcomeMessageTranslator,
+  liveData?: {
+    clientName: string;
+    facts: Record<string, string | number | boolean>;
+  },
 ): Promise<GeneratedAnswer> {
   const lower = message.toLowerCase().trim();
   const language = resolveReplyLocale(context.agent_language);
@@ -100,11 +104,14 @@ export async function generateAnswer(
       content: item.content,
     })),
     retrievedChunks,
+    liveData,
     personAttributes,
     context,
   });
   const providerMs = elapsedMs(providerStartedAt);
-  const answerable = result.answerable !== false && retrievedChunks.length > 0;
+  const answerable =
+    result.answerable !== false &&
+    (retrievedChunks.length > 0 || Boolean(liveData));
   const userMessageCount = history.filter((item) => item.sender === "user").length;
   const shouldAskResolution = answerable && userMessageCount >= 2;
   const alignmentStartedAt = performance.now();
@@ -133,7 +140,9 @@ export async function generateAnswer(
     shouldAskResolution,
     model: result.model,
     totalTokens: result.totalTokens,
-    promptAssembled: result.promptAssembled,
+    promptAssembled: liveData
+      ? `[authorized live client values omitted; fields: ${Object.keys(liveData.facts).join(", ")}]`
+      : result.promptAssembled,
     citations: answerable ? (result.citations ?? []) : [],
     timings: {
       provider_ms: providerMs,

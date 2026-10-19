@@ -254,6 +254,63 @@ export const UpdateAgentSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get live client data lookup settings for an agent
+ */
+export const GetAgentQueryLiveDataParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetAgentQueryLiveDataResponse = zod.object({
+  "agentId": zod.string(),
+  "method": zod.enum(['GET']),
+  "endpointUrl": zod.string(),
+  "authorizationSecretName": zod.string(),
+  "allowedFields": zod.array(zod.string()),
+  "disambiguationFields": zod.array(zod.string()),
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * @summary Update live client data lookup settings for an agent
+ */
+export const UpdateAgentQueryLiveDataParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateAgentQueryLiveDataBodyEndpointUrlMax = 2048;
+
+export const updateAgentQueryLiveDataBodyAuthorizationSecretNameMax = 64;
+
+export const updateAgentQueryLiveDataBodyAllowedFieldsItemMax = 64;
+
+export const updateAgentQueryLiveDataBodyAllowedFieldsMax = 12;
+
+export const updateAgentQueryLiveDataBodyDisambiguationFieldsItemMax = 64;
+
+export const updateAgentQueryLiveDataBodyDisambiguationFieldsMax = 6;
+
+
+
+export const UpdateAgentQueryLiveDataBody = zod.object({
+  "endpointUrl": zod.string().max(updateAgentQueryLiveDataBodyEndpointUrlMax),
+  "authorizationSecretName": zod.string().max(updateAgentQueryLiveDataBodyAuthorizationSecretNameMax),
+  "allowedFields": zod.array(zod.string().max(updateAgentQueryLiveDataBodyAllowedFieldsItemMax)).max(updateAgentQueryLiveDataBodyAllowedFieldsMax),
+  "disambiguationFields": zod.array(zod.string().max(updateAgentQueryLiveDataBodyDisambiguationFieldsItemMax)).max(updateAgentQueryLiveDataBodyDisambiguationFieldsMax)
+})
+
+export const UpdateAgentQueryLiveDataResponse = zod.object({
+  "agentId": zod.string(),
+  "method": zod.enum(['GET']),
+  "endpointUrl": zod.string(),
+  "authorizationSecretName": zod.string(),
+  "allowedFields": zod.array(zod.string()),
+  "disambiguationFields": zod.array(zod.string()),
+  "enabled": zod.boolean()
+})
+
+
+/**
  * @summary Create a one-time-view deployment token
  */
 export const CreateAgentDeploymentTokenParams = zod.object({

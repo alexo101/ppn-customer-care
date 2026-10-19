@@ -15,6 +15,14 @@ import { listEligiblePublishedArticles, retrieveRelevantChunks } from "./retriev
 import type { PersonAttributes } from "./targets";
 import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
 import {
+  detectLiveClientIntent,
+  formatLiveFieldLabel,
+  lookupLiveClient,
+  readQueryLiveDataSettings,
+  type LiveClientHistoryMessage,
+  type LiveLookupCaller,
+} from "./query-live-data";
+import {
   buildUnableToAnswerResponse,
   translateEscalationTemplate,
 } from "./unanswered-message";
@@ -41,8 +49,9 @@ export type AnswerWorkflowResult = {
 
 export async function answerFromKnowledge(input: {
   message: string;
-  history: Array<{ sender: string; content: string }>;
+  history: LiveClientHistoryMessage[];
   agentId: string | null;
+  caller?: LiveLookupCaller;
   person: PersonAttributes;
   context: Record<string, unknown>;
   replyLocaleCandidates: unknown[];
@@ -57,7 +66,8 @@ export async function answerFromKnowledge(input: {
     context_fields: Object.keys(input.context).filter((key) => input.context[key] != null),
   };
 
-  if (isDeterministicReply(input.message)) {
+  const liveIntent = detectLiveClientIntent(input.message, input.history);
+  if (isDeterministicReply(input.message) && liveIntent.kind === "none") {
     stages[1].status = "completed";
     stages[1].details = { eligible_articles: 0, skipped: true };
     stages[2].status = "completed";
@@ -111,6 +121,166 @@ export async function answerFromKnowledge(input: {
       promptAssembled: "",
       stages,
     };
+  }
+
+  if (liveIntent.kind !== "none") {
+    const [settingsRow] = await db
+      .select()
+      .from(agentSettingsTable)
+      .where(eq(agentSettingsTable.agentId, input.agentId))
+      .limit(1);
+    const queryLiveData = readQueryLiveDataSettings(settingsRow?.configuration);
+    if (queryLiveData.endpointUrl) {
+      if (liveIntent.kind === "ask_name") {
+        return buildLiveControlAnswer(
+          localizedCommunicationMessage("liveClientNameRequired", agentLanguage),
+          stages,
+          "name_required",
+          false,
+          {},
+          { status: "awaiting_name" },
+        );
+      }
+      if (!input.caller) {
+        return buildLiveControlAnswer(
+          localizedCommunicationMessage("liveClientRequiresSignIn", agentLanguage),
+          stages,
+          "sign_in_required",
+          false,
+        );
+      }
+
+      const lookupStartedAt = performance.now();
+      const lookup = await lookupLiveClient(
+        queryLiveData,
+        input.caller,
+        liveIntent.clientName,
+      );
+      const lookupMs = elapsedMs(lookupStartedAt);
+      if (lookup.status === "matched") {
+        const generationStartedAt = performance.now();
+        const liveData = {
+          clientName: lookup.client.name,
+          facts: lookup.client.facts,
+        };
+        const answer = await generateAnswer(
+          input.message,
+          input.history,
+          input.person.attributes,
+          [],
+          createAnswerProvider(),
+          {
+            ...input.context,
+            agent_language: agentLanguage,
+            ...(settingsRow?.prompt ? { agentPrompt: settingsRow.prompt } : {}),
+            ...(settingsRow?.targetAudience
+              ? { targetAudience: settingsRow.targetAudience }
+              : {}),
+          },
+          undefined,
+          liveData,
+        );
+        const answerTimings = {
+          duration_ms: elapsedMs(generationStartedAt),
+          provider_ms: answer.timings.provider_ms,
+          language_alignment_ms: answer.timings.language_alignment_ms,
+        };
+        if (!answer.answerable) {
+          return buildLiveControlAnswer(
+            localizedCommunicationMessage("liveClientUnavailable", agentLanguage),
+            stages,
+            "live_data_unavailable",
+            false,
+            { lookup_duration_ms: lookupMs, ...answerTimings },
+          );
+        }
+        const guarded = applyGuardrails(answer.responseText, {
+          retrievedChunks: [],
+          personAttributes: input.person.attributes,
+          hasAuthorizedLiveData: true,
+        });
+        stages[1].status = "completed";
+        stages[1].details = {
+          eligible_articles: 0,
+          skipped: true,
+          source: "live_client_data",
+        };
+        stages[2].status = "completed";
+        stages[2].details = {
+          chunks_retrieved: 0,
+          model: "none",
+          live_lookup_status: "matched",
+          fields_used: Object.keys(liveData.facts),
+          duration_ms: lookupMs,
+        };
+        stages[3].status = "completed";
+        stages[3].details = {
+          resolution_status: answer.resolutionStatus,
+          model: answer.model,
+          answerable: true,
+          source: "live_client_data",
+          guardrails: guarded.actions,
+          ...answerTimings,
+        };
+        return {
+          responseText: guarded.responseText,
+          resolutionStatus: answer.resolutionStatus,
+          shouldAskResolution: answer.shouldAskResolution,
+          answerable: true,
+          articlesUsed: [],
+          articleIds: [],
+          retrievedChunks: [],
+          model: answer.model,
+          totalTokens: answer.totalTokens,
+          promptAssembled: answer.promptAssembled,
+          assistantMetadata: {
+            citations: [],
+            liveDataLookup: {
+              status: "matched",
+              clientName: lookup.client.name,
+            },
+          },
+          stages,
+        };
+      }
+
+      if (lookup.status === "ambiguous") {
+        const responseText = lookup.tooMany
+          ? localizedCommunicationMessage(
+              "liveClientTooManyMatches",
+              agentLanguage,
+            )
+          : formatAmbiguousClientReply(lookup.candidates, agentLanguage);
+        return buildLiveControlAnswer(
+          responseText,
+          stages,
+          "ambiguous",
+          true,
+          { lookup_duration_ms: lookupMs, candidate_count: lookup.candidates.length },
+          {
+            status: "ambiguous",
+            clientName: liveIntent.clientName,
+          },
+        );
+      }
+      if (lookup.status === "not_found") {
+        return buildLiveControlAnswer(
+          localizedCommunicationMessage("liveClientNoMatch", agentLanguage),
+          stages,
+          "not_found",
+          true,
+          { lookup_duration_ms: lookupMs },
+          { status: "not_found" },
+        );
+      }
+      return buildLiveControlAnswer(
+        localizedCommunicationMessage("liveClientUnavailable", agentLanguage),
+        stages,
+        lookup.status,
+        false,
+        { lookup_duration_ms: lookupMs },
+      );
+    }
   }
 
   stages[1].status = "running";
@@ -298,6 +468,78 @@ export async function answerFromKnowledge(input: {
     assistantMetadata: { citations: answer.citations },
     stages,
   };
+}
+
+function buildLiveControlAnswer(
+  responseText: string,
+  stages: AnswerWorkflowResult["stages"],
+  lookupStatus: string,
+  answerable: boolean,
+  details: Record<string, unknown> = {},
+  liveDataLookup?: Record<string, unknown>,
+): AnswerWorkflowResult {
+  stages[1].status = "completed";
+  stages[1].details = {
+    eligible_articles: 0,
+    skipped: true,
+    source: "live_client_data",
+  };
+  stages[2].status = "completed";
+  stages[2].details = {
+    chunks_retrieved: 0,
+    model: "none",
+    live_lookup_status: lookupStatus,
+    ...details,
+  };
+  stages[3].status = "completed";
+  stages[3].details = {
+    resolution_status: answerable ? "active" : "pending_clarification",
+    model: "none",
+    answerable,
+    source: "live_client_data",
+  };
+  return {
+    responseText,
+    resolutionStatus: answerable ? "active" : "pending_clarification",
+    shouldAskResolution: false,
+    answerable,
+    articlesUsed: [],
+    articleIds: [],
+    retrievedChunks: [],
+    model: "none",
+    totalTokens: 0,
+    promptAssembled: "",
+    assistantMetadata: {
+      citations: [],
+      ...(liveDataLookup ? { liveDataLookup } : {}),
+    },
+    stages,
+  };
+}
+
+function formatAmbiguousClientReply(
+  candidates: Array<{
+    name: string;
+    disambiguation: Record<string, string | number | boolean>;
+  }>,
+  language: string,
+): string {
+  const reply = localizedCommunicationMessage("liveClientAmbiguous", language);
+  const uniqueNames = new Set(candidates.map((candidate) => candidate.name)).size;
+  const hasClues = candidates.some(
+    (candidate) => Object.keys(candidate.disambiguation).length > 0,
+  );
+  if (uniqueNames === 1 && !hasClues) return reply;
+
+  const lines = candidates
+    .map((candidate, index) => {
+      const clues = Object.entries(candidate.disambiguation)
+        .map(([field, value]) => `${formatLiveFieldLabel(field)}: ${value}`)
+        .join(" · ");
+      return `${index + 1}. ${candidate.name}${clues ? ` — ${clues}` : ""}`;
+    })
+    .join("\n");
+  return `${reply}\n\n${lines}`;
 }
 
 function elapsedMs(startedAt: number): number {

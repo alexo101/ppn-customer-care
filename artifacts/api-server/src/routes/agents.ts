@@ -9,11 +9,19 @@ import {
   UpdateAgentParams,
   UpdateAgentBody,
   DeleteAgentParams,
+  GetAgentQueryLiveDataParams,
+  UpdateAgentQueryLiveDataParams,
+  UpdateAgentQueryLiveDataBody,
 } from "@workspace/api-zod";
 import { ensureDefaultAgentIfNeeded, ensureEveryoneTarget, getOwnedAgent, toAgent } from "../lib/agents";
 import { ensureAgentEscalationInbox, syncEscalationTeamNameWithAgent } from "../lib/escalations";
 import { ensureAgentConversationSettings } from "../lib/conversation-settings";
 import { hashDeploymentToken, newDeploymentToken } from "../lib/connection-secrets";
+import {
+  EMPTY_QUERY_LIVE_DATA_SETTINGS,
+  readQueryLiveDataSettings,
+  validateQueryLiveDataSettings,
+} from "../lib/query-live-data";
 
 const router: IRouter = Router();
 
@@ -191,5 +199,98 @@ router.patch("/agents/:id/settings", requireAuth, requireEditor, async (req, res
   }).returning();
   res.json(settings);
 });
+
+router.get("/agents/:id/query-live-data", requireAuth, async (req, res): Promise<void> => {
+  const params = GetAgentQueryLiveDataParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const agent = await getOwnedAgent(req.userId, params.data.id);
+  if (!agent) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+  const [settings] = await db
+    .select({ configuration: agentSettingsTable.configuration })
+    .from(agentSettingsTable)
+    .where(eq(agentSettingsTable.agentId, agent.id))
+    .limit(1);
+  const queryLiveData = readQueryLiveDataSettings(settings?.configuration);
+  res.json({
+    agentId: agent.id,
+    method: "GET",
+    ...queryLiveData,
+    enabled: Boolean(queryLiveData.endpointUrl),
+  });
+});
+
+router.patch(
+  "/agents/:id/query-live-data",
+  requireAuth,
+  requireEditor,
+  async (req, res): Promise<void> => {
+    const params = UpdateAgentQueryLiveDataParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = UpdateAgentQueryLiveDataBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const agent = await getOwnedAgent(req.userId, params.data.id);
+    if (!agent) {
+      res.status(404).json({ error: "Agent not found" });
+      return;
+    }
+
+    const settings = parsed.data.endpointUrl.trim()
+      ? {
+          endpointUrl: parsed.data.endpointUrl.trim(),
+          authorizationSecretName: parsed.data.authorizationSecretName.trim(),
+          allowedFields: parsed.data.allowedFields,
+          disambiguationFields: parsed.data.disambiguationFields,
+        }
+      : { ...EMPTY_QUERY_LIVE_DATA_SETTINGS };
+    const validationError = validateQueryLiveDataSettings(settings);
+    if (validationError) {
+      res.status(400).json({ error: validationError });
+      return;
+    }
+
+    const [existing] = await db
+      .select({ configuration: agentSettingsTable.configuration })
+      .from(agentSettingsTable)
+      .where(eq(agentSettingsTable.agentId, agent.id))
+      .limit(1);
+    const existingConfiguration =
+      typeof existing?.configuration === "object" &&
+      existing.configuration !== null &&
+      !Array.isArray(existing.configuration)
+        ? existing.configuration
+        : {};
+    const configuration = {
+      ...existingConfiguration,
+      queryLiveData: settings,
+    };
+    await db
+      .insert(agentSettingsTable)
+      .values({ agentId: agent.id, configuration })
+      .onConflictDoUpdate({
+        target: agentSettingsTable.agentId,
+        set: { configuration, updatedAt: new Date() },
+      });
+
+    res.json({
+      agentId: agent.id,
+      method: "GET",
+      ...settings,
+      enabled: Boolean(settings.endpointUrl),
+    });
+  },
+);
 
 export default router;

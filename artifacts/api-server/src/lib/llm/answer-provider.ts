@@ -20,6 +20,10 @@ export type AnswerProviderInput = {
   message: string;
   history: Array<{ role: "user" | "assistant"; content: string }>;
   retrievedChunks: RetrievedChunk[];
+  liveData?: {
+    clientName: string;
+    facts: Record<string, string | number | boolean>;
+  };
   personAttributes: Record<string, unknown>;
   context?: Record<string, unknown>;
 };

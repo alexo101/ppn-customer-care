@@ -5,12 +5,14 @@ const {
   retrieveRelevantChunks,
   createAnswerProvider,
   createEmbeddingProvider,
+  lookupLiveClient,
   selectLimit,
 } = vi.hoisted(() => ({
   listEligiblePublishedArticles: vi.fn(),
   retrieveRelevantChunks: vi.fn(),
   createAnswerProvider: vi.fn(),
   createEmbeddingProvider: vi.fn(),
+  lookupLiveClient: vi.fn(),
   selectLimit: vi.fn(),
 }));
 
@@ -31,6 +33,14 @@ vi.mock("./retrieval", () => ({
   listEligiblePublishedArticles,
   retrieveRelevantChunks,
 }));
+
+vi.mock("./query-live-data", async () => {
+  const actual =
+    await vi.importActual<typeof import("./query-live-data")>(
+      "./query-live-data",
+    );
+  return { ...actual, lookupLiveClient };
+});
 
 vi.mock("./llm/openai-welcome-message-translator", () => ({
   OpenAIWelcomeMessageTranslator: class {
@@ -69,6 +79,7 @@ describe("answerFromKnowledge", () => {
     retrieveRelevantChunks.mockReset();
     createAnswerProvider.mockReset();
     createEmbeddingProvider.mockReset();
+    lookupLiveClient.mockReset();
     selectLimit.mockReset();
     selectLimit.mockResolvedValue([]);
     createEmbeddingProvider.mockReturnValue({ embed: vi.fn() });
@@ -328,5 +339,80 @@ describe("answerFromKnowledge", () => {
       chunks_retrieved: 1,
       articles: [article.title],
     });
+  });
+
+  it("continues a client-name clarification into an authorized lookup in the same conversation", async () => {
+    const configuration = {
+      queryLiveData: {
+        endpointUrl: "https://api.example.com/clients?name={clientName}",
+        authorizationSecretName: "LIVE_QUERY_CLIENT_TOKEN",
+        allowedFields: ["callStatus"],
+        disambiguationFields: [],
+      },
+    };
+    selectLimit.mockResolvedValue([{ configuration }]);
+
+    const firstTurn = await answerFromKnowledge({
+      ...baseInput,
+      message: "¿Han llamado a mi cliente?",
+      history: [{ sender: "user", content: "¿Han llamado a mi cliente?" }],
+      caller: { userId: "user_123", agentId: "agent-1" },
+      context: { agent_language: "es" },
+    });
+    expect(firstTurn.responseText).toContain("¿De qué cliente");
+    expect(firstTurn.assistantMetadata).toMatchObject({
+      liveDataLookup: { status: "awaiting_name" },
+    });
+    expect(lookupLiveClient).not.toHaveBeenCalled();
+
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "La última llamada está completada.",
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-test",
+      totalTokens: 7,
+      promptAssembled: "private live values",
+      citations: [],
+    });
+    createAnswerProvider.mockReturnValue({ generate });
+    lookupLiveClient.mockResolvedValue({
+      status: "matched",
+      client: {
+        name: "Ana García",
+        facts: { callStatus: "completed" },
+        disambiguation: {},
+      },
+    });
+    const secondTurn = await answerFromKnowledge({
+      ...baseInput,
+      message: "Ana García",
+      history: [
+        { sender: "user", content: "¿Han llamado a mi cliente?" },
+        {
+          sender: "assistant",
+          content: firstTurn.responseText,
+          metadata: firstTurn.assistantMetadata,
+        },
+        { sender: "user", content: "Ana García" },
+      ],
+      caller: { userId: "user_123", agentId: "agent-1" },
+      context: { agent_language: "es" },
+    });
+
+    expect(lookupLiveClient).toHaveBeenCalledWith(
+      configuration.queryLiveData,
+      { userId: "user_123", agentId: "agent-1" },
+      "Ana García",
+    );
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        liveData: {
+          clientName: "Ana García",
+          facts: { callStatus: "completed" },
+        },
+      }),
+    );
+    expect(secondTurn.responseText).toContain("La última llamada");
+    expect(secondTurn.promptAssembled).not.toContain("private live values");
   });
 });

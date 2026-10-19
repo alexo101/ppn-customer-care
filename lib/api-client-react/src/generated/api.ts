@@ -69,6 +69,8 @@ import type {
   Message,
   NpsInput,
   OrchestratorLog,
+  QueryLiveDataSettings,
+  QueryLiveDataSettingsInput,
   Question,
   RedeemInvitationInput,
   SendMessageInput,
@@ -928,6 +930,155 @@ export const useUpdateAgentSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateAgentSettingsMutationOptions(options));
+    }
+
+export const getGetAgentQueryLiveDataUrl = (id: string,) => {
+
+
+
+
+  return `/api/agents/${id}/query-live-data`
+}
+
+/**
+ * @summary Get live client data lookup settings for an agent
+ */
+export const getAgentQueryLiveData = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<QueryLiveDataSettings> => {
+
+  return customFetch<QueryLiveDataSettings>(getGetAgentQueryLiveDataUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAgentQueryLiveDataQueryKey = (id: string,) => {
+    return [
+    `/api/agents/${id}/query-live-data`
+    ] as const;
+    }
+
+
+export const getGetAgentQueryLiveDataQueryOptions = <TData = Awaited<ReturnType<typeof getAgentQueryLiveData>>, TError = ErrorType<unknown>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentQueryLiveData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAgentQueryLiveDataQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentQueryLiveData>>> = ({ signal }) => getAgentQueryLiveData(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgentQueryLiveData>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAgentQueryLiveDataQueryResult = NonNullable<Awaited<ReturnType<typeof getAgentQueryLiveData>>>
+export type GetAgentQueryLiveDataQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get live client data lookup settings for an agent
+ */
+
+export function useGetAgentQueryLiveData<TData = Awaited<ReturnType<typeof getAgentQueryLiveData>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentQueryLiveData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAgentQueryLiveDataQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAgentQueryLiveDataUrl = (id: string,) => {
+
+
+
+
+  return `/api/agents/${id}/query-live-data`
+}
+
+/**
+ * @summary Update live client data lookup settings for an agent
+ */
+export const updateAgentQueryLiveData = async (id: string,
+    queryLiveDataSettingsInput: QueryLiveDataSettingsInput, options?: Parameters<typeof customFetch>[1]): Promise<QueryLiveDataSettings> => {
+
+  return customFetch<QueryLiveDataSettings>(getUpdateAgentQueryLiveDataUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(queryLiveDataSettingsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAgentQueryLiveDataMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentQueryLiveData>>, TError,{id: string;data: BodyType<QueryLiveDataSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAgentQueryLiveData>>, TError,{id: string;data: BodyType<QueryLiveDataSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateAgentQueryLiveData'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAgentQueryLiveData>>, {id: string;data: BodyType<QueryLiveDataSettingsInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAgentQueryLiveData(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAgentQueryLiveDataMutationResult = NonNullable<Awaited<ReturnType<typeof updateAgentQueryLiveData>>>
+    export type UpdateAgentQueryLiveDataMutationBody = BodyType<QueryLiveDataSettingsInput>
+    export type UpdateAgentQueryLiveDataMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update live client data lookup settings for an agent
+ */
+export const useUpdateAgentQueryLiveData = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentQueryLiveData>>, TError,{id: string;data: BodyType<QueryLiveDataSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAgentQueryLiveData>>,
+        TError,
+        {id: string;data: BodyType<QueryLiveDataSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAgentQueryLiveDataMutationOptions(options));
     }
 
 export const getCreateAgentDeploymentTokenUrl = (id: string,) => {

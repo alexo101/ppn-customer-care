@@ -43,6 +43,42 @@ const FALLBACK_MESSAGES = {
     it: "{user_name}, non ho trovato informazioni sufficienti per rispondere a questa domanda.",
     fr: "{user_name}, je n’ai pas trouvé assez d’informations pour répondre à cette question.",
   },
+  liveClientNameRequired: {
+    en: "Which client's information would you like me to check?",
+    es: "¿De qué cliente quieres que consulte la información?",
+    it: "Di quale cliente vuoi che controlli le informazioni?",
+    fr: "Pour quel client souhaitez-vous que je vérifie les informations ?",
+  },
+  liveClientRequiresSignIn: {
+    en: "Please sign in to your workspace to check individual client information.",
+    es: "Inicia sesión en tu espacio de trabajo para consultar información de un cliente.",
+    it: "Accedi al tuo spazio di lavoro per consultare le informazioni di un cliente.",
+    fr: "Connectez-vous à votre espace de travail pour consulter les informations d’un client.",
+  },
+  liveClientNoMatch: {
+    en: "I couldn't find a client matching that name. Please check the spelling and try again.",
+    es: "No he encontrado ningún cliente con ese nombre. Comprueba cómo se escribe e inténtalo de nuevo.",
+    it: "Non ho trovato un cliente con questo nome. Controlla l’ortografia e riprova.",
+    fr: "Je n’ai trouvé aucun client correspondant à ce nom. Vérifiez l’orthographe et réessayez.",
+  },
+  liveClientAmbiguous: {
+    en: "I found more than one matching client. Please tell me the city or another detail your team uses to distinguish them.",
+    es: "He encontrado más de un cliente con ese nombre. Indícame la ciudad u otro dato que utilice tu equipo para distinguirlos.",
+    it: "Ho trovato più clienti con questo nome. Indicami la città o un altro dettaglio usato dal tuo team per distinguerli.",
+    fr: "J’ai trouvé plusieurs clients correspondant à ce nom. Indiquez la ville ou un autre détail utilisé par votre équipe pour les distinguer.",
+  },
+  liveClientTooManyMatches: {
+    en: "I found several possible clients. Please add a city or another detail your team uses to narrow down the search.",
+    es: "He encontrado varios clientes posibles. Indícame la ciudad u otro dato que utilice tu equipo para concretar la búsqueda.",
+    it: "Ho trovato diversi clienti possibili. Indicami la città o un altro dettaglio usato dal tuo team per restringere la ricerca.",
+    fr: "J’ai trouvé plusieurs clients possibles. Indiquez la ville ou un autre détail utilisé par votre équipe pour préciser la recherche.",
+  },
+  liveClientUnavailable: {
+    en: "I can't access this client's information right now. Please try again later or contact your support team.",
+    es: "Ahora mismo no puedo acceder a la información de este cliente. Inténtalo más tarde o contacta con tu equipo de soporte.",
+    it: "Al momento non riesco ad accedere alle informazioni di questo cliente. Riprova più tardi o contatta il team di supporto.",
+    fr: "Je ne peux pas accéder aux informations de ce client pour le moment. Réessayez plus tard ou contactez votre équipe d’assistance.",
+  },
   escalationOffer: {
     en: "Sorry {user_name}, I cannot answer that. Would you like me to connect you with a support agent?",
     es: "Lo siento, {user_name}, no puedo responder a eso. ¿Quieres que te ponga en contacto con un agente de soporte?",

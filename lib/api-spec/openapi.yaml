@@ -266,6 +266,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/AgentSettings"
 
+  /agents/{id}/query-live-data:
+    get:
+      operationId: getAgentQueryLiveData
+      tags: [agents]
+      summary: Get live client data lookup settings for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Live client data lookup settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryLiveDataSettings"
+    patch:
+      operationId: updateAgentQueryLiveData
+      tags: [agents]
+      summary: Update live client data lookup settings for an agent
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryLiveDataSettingsInput"
+      responses:
+        "200":
+          description: Updated live client data lookup settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryLiveDataSettings"
+        "400":
+          description: Invalid settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /agents/{id}/deployment-token:
     post:
       operationId: createAgentDeploymentToken
@@ -1757,6 +1803,40 @@ components:
         llmModel: { type: string }
         temperature: { type: string }
         configuration: { type: object, additionalProperties: true }
+
+    QueryLiveDataSettings:
+      type: object
+      required:
+        [agentId, method, endpointUrl, authorizationSecretName, allowedFields, disambiguationFields, enabled]
+      properties:
+        agentId: { type: string }
+        method:
+          type: string
+          enum: [GET]
+        endpointUrl: { type: string }
+        authorizationSecretName: { type: string }
+        allowedFields:
+          type: array
+          items: { type: string }
+        disambiguationFields:
+          type: array
+          items: { type: string }
+        enabled: { type: boolean }
+    QueryLiveDataSettingsInput:
+      type: object
+      required:
+        [endpointUrl, authorizationSecretName, allowedFields, disambiguationFields]
+      properties:
+        endpointUrl: { type: string, maxLength: 2048 }
+        authorizationSecretName: { type: string, maxLength: 64 }
+        allowedFields:
+          type: array
+          maxItems: 12
+          items: { type: string, maxLength: 64 }
+        disambiguationFields:
+          type: array
+          maxItems: 6
+          items: { type: string, maxLength: 64 }
     DeploymentToken:
       type: object
       required: [id, token, tokenPrefix]

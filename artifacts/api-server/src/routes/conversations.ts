@@ -523,6 +523,9 @@ router.post(
         message: parsed.data.content,
         history,
         agentId: conv.agentId,
+        ...(conv.agentId && req.workspaceMemberId
+          ? { caller: { userId: req.userId, agentId: conv.agentId } }
+          : {}),
         person,
         context: {
           ...requestContext,
