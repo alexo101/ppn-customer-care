@@ -8,7 +8,7 @@ placeholder is replaced with the URL-encoded name supplied in the chat.
 
 The orchestrator sends:
 
-- `Authorization: Bearer <value of the configured LIVE_QUERY_ Replit secret>`
+- `Authorization: Bearer <value of the LIVE_QUERY_CLIENT_API_TOKEN Replit secret>`
 - `X-Orchestrator-Caller-Id: <verified workspace user ID>`
 - `X-Orchestrator-Agent-Id: <agent ID>`
 - `Accept: application/json`
@@ -39,14 +39,15 @@ Return HTTP 200 with `Content-Type: application/json` and this shape:
 ```
 
 For no matching client, return an empty `clients` array. Return only records
-authorized for the caller. A record is ignored unless its `authorized` value is
-`true`. The orchestrator checks that `authorizedForUserId` matches the verified
-caller ID and selects only the field keys configured in the agent settings.
-Use `facts` for top-level string, number, or boolean values. Do not return
-nested objects, secrets, access tokens, or unrelated records.
+authorized for the caller and only the minimal facts required to answer support
+questions. A record is ignored unless its `authorized` value is `true`. The
+orchestrator checks that `authorizedForUserId` matches the verified caller ID.
+Every top-level string, number, or boolean in `facts` may be sent to the answer
+model; nested objects, credential-like keys, and invalid field names are
+discarded. Do not return secrets, access tokens, or unrelated records.
 
-Only fields configured in **Fields the assistant may use in replies** are passed
-to the answer model as client facts. If a name matches more than one authorized
+The bearer token must be stored in Replit Secrets under the fixed name
+`LIVE_QUERY_CLIENT_API_TOKEN`. If a name matches more than one authorized
 client, the assistant will not choose one automatically; it asks for a more
 specific name.
 
@@ -54,5 +55,5 @@ specific name.
 
 The server rejects non-HTTPS, local/private-address, and redirected requests.
 Requests time out after 4.5 seconds and responses are limited to 64 KiB.
-Endpoint response values are treated as untrusted data, restricted to the
-configured field allowlist, and are not included in orchestration prompt logs.
+Endpoint response values are treated as untrusted data and are not included in
+orchestration prompt logs.

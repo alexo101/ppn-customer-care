@@ -7,11 +7,9 @@ import {
   type QueryLiveDataSettings,
 } from "./query-live-data";
 
-const secretName = "LIVE_QUERY_TEST_TOKEN";
+const secretName = "LIVE_QUERY_CLIENT_API_TOKEN";
 const settings: QueryLiveDataSettings = {
   endpointUrl: "https://api.example.com/clients?name={clientName}",
-  authorizationSecretName: secretName,
-  allowedFields: ["callStatus"],
 };
 
 afterEach(() => {
@@ -19,7 +17,7 @@ afterEach(() => {
 });
 
 describe("query live client data", () => {
-  it("accepts only an HTTPS URL with one client-name placeholder and a prefixed secret name", () => {
+  it("accepts only an HTTPS URL with one client-name placeholder", () => {
     expect(validateQueryLiveDataSettings(settings)).toBeNull();
     expect(
       validateQueryLiveDataSettings({
@@ -33,12 +31,6 @@ describe("query live client data", () => {
         endpointUrl: "https://api.example.com/clients?name={clientName}&copy={clientName}",
       }),
     ).toContain("exactly once");
-    expect(
-      validateQueryLiveDataSettings({
-        ...settings,
-        authorizationSecretName: "DATABASE_URL",
-      }),
-    ).toContain("LIVE_QUERY_");
     expect(
       validateQueryLiveDataSettings({
         ...settings,
@@ -114,7 +106,7 @@ describe("query live client data", () => {
     ).toEqual({ kind: "none" });
   });
 
-  it("URL-encodes the name, sends the verified caller, filters fields, and requires an authorized unique result", async () => {
+  it("URL-encodes the name, sends the verified caller, and passes endpoint facts without credentials", async () => {
     process.env[secretName] = "test-only-token";
     const loadedSettings = readQueryLiveDataSettings({
       queryLiveData: settings,
@@ -142,7 +134,7 @@ describe("query live client data", () => {
                 facts: {
                   callStatus: "completed",
                   city: "Madrid",
-                  privateNotes: "not allowlisted",
+                  apiKey: "never forwarded",
                 },
               },
             ],
@@ -157,7 +149,7 @@ describe("query live client data", () => {
       status: "matched",
       client: {
         name: "Ana García",
-        facts: { callStatus: "completed" },
+        facts: { callStatus: "completed", city: "Madrid" },
       },
     });
   });

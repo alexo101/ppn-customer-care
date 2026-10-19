@@ -345,8 +345,6 @@ describe("answerFromKnowledge", () => {
     const configuration = {
       queryLiveData: {
         endpointUrl: "https://api.example.com/clients?name={clientName}",
-        authorizationSecretName: "LIVE_QUERY_CLIENT_TOKEN",
-        allowedFields: ["callStatus"],
       },
     };
     selectLimit.mockResolvedValue([{ configuration }]);

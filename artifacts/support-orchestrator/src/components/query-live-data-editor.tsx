@@ -82,7 +82,7 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-6">
-      <SettingsSection title="Query live data">
+      <SettingsSection title="Configure the search of live information">
         <p className="text-sm text-muted-foreground">
           Look up a named client when a question asks for that client’s current information.
           General how-to questions continue to use the knowledge base.

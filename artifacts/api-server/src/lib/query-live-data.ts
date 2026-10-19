@@ -4,8 +4,6 @@ import { Agent, request, type AgentOptions } from "node:https";
 
 export type QueryLiveDataSettings = {
   endpointUrl: string;
-  authorizationSecretName: string;
-  allowedFields: string[];
 };
 
 export type LiveClientFacts = Record<string, string | number | boolean>;
@@ -39,9 +37,10 @@ export type LiveClientIntent =
   | { kind: "none" };
 
 const CLIENT_NAME_PLACEHOLDER = "{clientName}";
+const LIVE_QUERY_SECRET_NAME = "LIVE_QUERY_CLIENT_API_TOKEN";
 const FIELD_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
-const SECRET_NAME_PATTERN = /^LIVE_QUERY_[A-Z0-9_]{1,57}$/;
 const MAX_RESPONSE_BYTES = 64 * 1024;
+const MAX_FACT_FIELDS = 24;
 const REQUEST_TIMEOUT_MS = 4500;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 30;
@@ -49,8 +48,6 @@ const rateLimitWindows = new Map<string, { startedAt: number; count: number }>()
 
 export const EMPTY_QUERY_LIVE_DATA_SETTINGS: QueryLiveDataSettings = {
   endpointUrl: "",
-  authorizationSecretName: "",
-  allowedFields: [],
 };
 
 export function readQueryLiveDataSettings(value: unknown): QueryLiveDataSettings {
@@ -60,11 +57,6 @@ export function readQueryLiveDataSettings(value: unknown): QueryLiveDataSettings
   const config = value.queryLiveData;
   const settings: QueryLiveDataSettings = {
     endpointUrl: typeof config.endpointUrl === "string" ? config.endpointUrl : "",
-    authorizationSecretName:
-      typeof config.authorizationSecretName === "string"
-        ? config.authorizationSecretName
-        : "",
-    allowedFields: readFieldList(config.allowedFields),
   };
   return validateQueryLiveDataSettings(settings) === null
     ? settings
@@ -77,17 +69,6 @@ export function validateQueryLiveDataSettings(
   if (!settings.endpointUrl.trim()) return null;
   if (settings.endpointUrl.length > 2048) {
     return "The endpoint URL must be 2,048 characters or fewer.";
-  }
-  if (!SECRET_NAME_PATTERN.test(settings.authorizationSecretName)) {
-    return "Use a Replit secret name that starts with LIVE_QUERY_.";
-  }
-  if (
-    settings.allowedFields.length < 1 ||
-    settings.allowedFields.length > 12 ||
-    settings.allowedFields.some((field) => !FIELD_KEY_PATTERN.test(field)) ||
-    hasDuplicates(settings.allowedFields)
-  ) {
-    return "Check the allowed response field names.";
   }
 
   const template = settings.endpointUrl.trim();
@@ -176,7 +157,7 @@ export async function lookupLiveClient(
   if (invalidSettings || !settings.endpointUrl.trim()) {
     return { status: "unavailable" };
   }
-  const secret = process.env[settings.authorizationSecretName];
+  const secret = process.env[LIVE_QUERY_SECRET_NAME];
   if (!secret) return { status: "unavailable" };
   if (!consumeRateLimit(`${caller.agentId}:${caller.userId}`)) {
     return { status: "unavailable" };
@@ -217,7 +198,7 @@ export async function lookupLiveClient(
     const clients = parsed.clients
       .filter(isRecord)
       .filter((record) => record.authorized === true)
-      .map((record) => toCandidate(record, settings))
+      .map(toCandidate)
       .filter((candidate): candidate is LiveClientCandidate => candidate !== null);
 
     if (clients.length === 0) return { status: "not_found" };
@@ -324,22 +305,26 @@ function getMostRecentLiveLookup(
 
 function toCandidate(
   record: Record<string, unknown>,
-  settings: QueryLiveDataSettings,
 ): LiveClientCandidate | null {
   const name = safeText(record.name, 120);
-  const facts = record.facts;
-  if (!name || !isRecord(facts)) return null;
-  const readFields = (fields: string[]) =>
-    fields.reduce<LiveClientFacts>((result, field) => {
-      const value = facts[field];
-      const safeValue = safeFact(value);
-      if (safeValue !== null) result[field] = safeValue;
-      return result;
-    }, {});
-  return {
-    name,
-    facts: readFields(settings.allowedFields),
-  };
+  const facts = readFacts(record.facts);
+  return name && Object.keys(facts).length > 0 ? { name, facts } : null;
+}
+
+function readFacts(value: unknown): LiveClientFacts {
+  if (!isRecord(value)) return {};
+  const facts: LiveClientFacts = {};
+  for (const [field, value] of Object.entries(value).slice(0, MAX_FACT_FIELDS)) {
+    if (
+      !FIELD_KEY_PATTERN.test(field) ||
+      /(?:password|secret|token|credential|api.?key)/i.test(field)
+    ) {
+      continue;
+    }
+    const safeValue = safeFact(value);
+    if (safeValue !== null) facts[field] = safeValue;
+  }
+  return facts;
 }
 
 function safeFact(value: unknown): string | number | boolean | null {
@@ -353,18 +338,6 @@ function safeText(value: unknown, maxLength: number): string | null {
   if (typeof value !== "string") return null;
   const safe = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
   return safe ? safe.slice(0, maxLength) : null;
-}
-
-function readFieldList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (field): field is string =>
-      typeof field === "string" && FIELD_KEY_PATTERN.test(field),
-  );
-}
-
-function hasDuplicates(values: string[]): boolean {
-  return new Set(values).size !== values.length;
 }
 
 function consumeRateLimit(key: string, now = Date.now()): boolean {
