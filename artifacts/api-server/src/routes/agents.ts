@@ -250,8 +250,6 @@ router.patch(
     const settings = parsed.data.endpointUrl.trim()
       ? {
           endpointUrl: parsed.data.endpointUrl.trim(),
-          authorizationSecretName: parsed.data.authorizationSecretName.trim(),
-          allowedFields: parsed.data.allowedFields,
         }
       : { ...EMPTY_QUERY_LIVE_DATA_SETTINGS };
     const validationError = validateQueryLiveDataSettings(settings);

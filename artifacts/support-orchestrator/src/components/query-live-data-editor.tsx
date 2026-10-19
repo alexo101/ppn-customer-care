@@ -22,21 +22,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsSection } from "@/components/settings-section";
-import { Textarea } from "@/components/ui/textarea";
 import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 import { toast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   endpointUrl: z.string().max(2048),
-  authorizationSecretName: z.string().max(64),
-  allowedFields: z.string().max(1000),
 });
 
 type FormValues = z.infer<typeof formSchema>;
-
-function parseFieldNames(value: string): string[] {
-  return [...new Set(value.split(/[,\n]/).map((field) => field.trim()).filter(Boolean))];
-}
 
 export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
   const { canEdit } = useWorkspaceAccess();
@@ -52,8 +45,6 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       endpointUrl: "",
-      authorizationSecretName: "",
-      allowedFields: "",
     },
   });
 
@@ -61,16 +52,12 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
     if (!data) return;
     form.reset({
       endpointUrl: data.endpointUrl,
-      authorizationSecretName: data.authorizationSecretName,
-      allowedFields: data.allowedFields.join(", "),
     });
   }, [data, form]);
 
   const onSubmit = (values: FormValues) => {
     const payload: QueryLiveDataSettingsInput = {
       endpointUrl: values.endpointUrl.trim(),
-      authorizationSecretName: values.authorizationSecretName.trim(),
-      allowedFields: parseFieldNames(values.allowedFields),
     };
     updateSettings.mutate(
       { id: agentId, data: payload },
@@ -140,54 +127,6 @@ export function QueryLiveDataEditor({ agentId }: { agentId: string }) {
                       Use a public HTTPS URL and include {"{clientName}"} exactly once in the
                       path or query string. The name is URL-encoded before the request. Leave
                       empty to disable live lookups.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="authorizationSecretName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Authorization secret name</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="LIVE_QUERY_CLIENT_API_TOKEN"
-                        disabled={!canEdit || updateSettings.isPending}
-                        data-testid="query-live-secret-name"
-                        autoComplete="off"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Add the token itself in Replit Secrets. The secret name must start with
-                      LIVE_QUERY_; its value is never saved in this agent’s settings.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="allowedFields"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fields the assistant may use in replies</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        {...field}
-                        rows={2}
-                        placeholder="callStatus, contractStatus"
-                        disabled={!canEdit || updateSettings.isPending}
-                        data-testid="query-live-allowed-fields"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Comma-separate the exact keys returned inside each client’s facts object.
-                      Only these values can be used to answer.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

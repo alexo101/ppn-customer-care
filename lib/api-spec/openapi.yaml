@@ -1807,29 +1807,20 @@ components:
     QueryLiveDataSettings:
       type: object
       required:
-        [agentId, method, endpointUrl, authorizationSecretName, allowedFields, enabled]
+        [agentId, method, endpointUrl, enabled]
       properties:
         agentId: { type: string }
         method:
           type: string
           enum: [GET]
         endpointUrl: { type: string }
-        authorizationSecretName: { type: string }
-        allowedFields:
-          type: array
-          items: { type: string }
         enabled: { type: boolean }
     QueryLiveDataSettingsInput:
       type: object
       required:
-        [endpointUrl, authorizationSecretName, allowedFields]
+        [endpointUrl]
       properties:
         endpointUrl: { type: string, maxLength: 2048 }
-        authorizationSecretName: { type: string, maxLength: 64 }
-        allowedFields:
-          type: array
-          maxItems: 12
-          items: { type: string, maxLength: 64 }
     DeploymentToken:
       type: object
       required: [id, token, tokenPrefix]
