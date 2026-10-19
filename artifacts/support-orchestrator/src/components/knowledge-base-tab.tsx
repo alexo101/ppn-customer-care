@@ -12,7 +12,7 @@ import {
   useUpdateArticle,
   type KnowledgeArticle,
 } from "@workspace/api-client-react";
-import { Archive, FileText, MoreVertical, Trash } from "lucide-react";
+import { Archive, FileText, MoreVertical, Search, Trash } from "lucide-react";
 import { ArticleEditor } from "@/components/article-editor";
 import { MutatingControls, useWorkspaceAccess } from "@/components/workspace-access";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { articleKeywordSnippets } from "@/lib/article-search";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";
@@ -87,6 +88,7 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
   const deleteArticle = useDeleteArticle();
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [targetFilter, setTargetFilter] = useState(ALL);
+  const [keyword, setKeyword] = useState("");
   const [editing, setEditing] = useState<KnowledgeArticle | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -116,6 +118,23 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
         return article.targetId === targetFilter;
       }),
     [articles, statusFilter, targetFilter],
+  );
+
+  const keywordQuery = keyword.trim();
+  const searchResults = useMemo(
+    () =>
+      keywordQuery
+        ? visibleArticles.flatMap((article) =>
+            [article.title, article.description, article.bodyHtml].flatMap((source, sourceIndex) =>
+              articleKeywordSnippets(source, keywordQuery).map((snippet, snippetIndex) => ({
+                key: `${article.id}-${sourceIndex}-${snippetIndex}`,
+                article,
+                snippet,
+              })),
+            ),
+          )
+        : [],
+    [visibleArticles, keywordQuery],
   );
 
   const dirty = Boolean(
@@ -264,10 +283,20 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold">Articles</h3>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-              {visibleArticles.length}
+              {keywordQuery ? searchResults.length : visibleArticles.length}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="Search articles"
+                aria-label="Search articles"
+                className="h-8 w-56 pl-8 text-xs"
+              />
+            </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-8 w-36 text-xs" aria-label="Filter by status">
                 <SelectValue />
@@ -304,6 +333,26 @@ export function KnowledgeBaseTab({ agentId }: { agentId: string }) {
           </p>
         ) : visibleArticles.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No articles match these filters.</p>
+        ) : keywordQuery && searchResults.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No articles contain that keyword.</p>
+        ) : keywordQuery ? (
+          <div className="space-y-2">
+            {searchResults.map(({ key, article, snippet }) => (
+              <button
+                key={key}
+                type="button"
+                className="flex w-full flex-col gap-1 rounded-lg border border-border/80 p-3 text-left"
+                onClick={() => openArticle(article)}
+              >
+                <span className="truncate text-sm font-medium">{article.title}</span>
+                <p className="text-xs text-muted-foreground">
+                  {snippet.before ? <span>{snippet.before} </span> : null}
+                  <strong className="font-semibold text-foreground">{snippet.match}</strong>
+                  {snippet.after ? <span> {snippet.after}</span> : null}
+                </p>
+              </button>
+            ))}
+          </div>
         ) : (
           <div className="space-y-2">
             {visibleArticles.map((article) => {
