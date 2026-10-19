@@ -252,4 +252,81 @@ describe("answerFromKnowledge", () => {
     );
     expect(result.responseText).toContain("Las facturas están en Ajustes.");
   });
+
+  it("retrieves a Spanish question's eligible article and sends its passage to AI in Spanish", async () => {
+    const question = "¿Cómo puedo cancelar el servicio?";
+    const article = { id: "article-1", title: "Cancelaciones", targetId: null };
+    const retrievedChunk = {
+      sourceId: article.id,
+      sourceName: article.title,
+      articleId: article.id,
+      articleName: article.title,
+      chunkId: "chunk-1",
+      content: "To cancel, open Account settings and select Cancel service.",
+      distance: 0.12,
+    };
+    const embeddingProvider = { embed: vi.fn() };
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "Para cancelar, abre la configuración de la cuenta y selecciona Cancelar servicio.",
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-test",
+      totalTokens: 12,
+      promptAssembled: "Spanish question with retrieved article context",
+      citations: [
+        {
+          sourceId: article.id,
+          sourceName: article.title,
+          articleId: article.id,
+          articleName: article.title,
+          chunkId: retrievedChunk.chunkId,
+          excerpt: retrievedChunk.content,
+        },
+      ],
+    });
+    listEligiblePublishedArticles.mockResolvedValue([article]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [retrievedChunk],
+      totalTokens: 5,
+      model: "embed-test",
+    });
+    createEmbeddingProvider.mockReturnValue(embeddingProvider);
+    createAnswerProvider.mockReturnValue({ generate });
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: question,
+      context: { agent_language: "es", browser_language: "en-US" },
+      replyLocaleCandidates: ["en-US"],
+    });
+
+    expect(listEligiblePublishedArticles).toHaveBeenCalledWith(
+      "agent-1",
+      person,
+    );
+    expect(retrieveRelevantChunks).toHaveBeenCalledWith(
+      [article.id],
+      question,
+      embeddingProvider,
+      5,
+      { agentId: "agent-1" },
+    );
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: question,
+        retrievedChunks: [retrievedChunk],
+        context: expect.objectContaining({ agent_language: "es" }),
+      }),
+    );
+    expect(result.responseText).toContain("Para cancelar");
+    expect(result.articlesUsed).toEqual([article.title]);
+    expect(result.articleIds).toEqual([article.id]);
+    expect(result.assistantMetadata).toMatchObject({
+      citations: [expect.objectContaining({ articleId: article.id })],
+    });
+    expect(result.stages[2]?.details).toMatchObject({
+      chunks_retrieved: 1,
+      articles: [article.title],
+    });
+  });
 });

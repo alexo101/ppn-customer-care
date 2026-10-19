@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, appearanceSettingsTable } from "@workspace/db";
 import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import {
@@ -19,6 +19,7 @@ import {
   normalizeHttpUrl,
 } from "../lib/importWebsiteStyles";
 import { ensureDefaultAgentIfNeeded, getOwnedAgent } from "../lib/agents";
+import { getLatestAgentAppearance } from "../lib/agent-appearance-settings";
 
 const HEX_COLOR = /^#([0-9A-Fa-f]{6})$/;
 const MAX_LOGO_CHARS = 900_000;
@@ -226,56 +227,82 @@ async function importAppearanceFor(
 }
 
 async function getOrCreateAppearance(userId: string, agentId: string | null) {
-  const existing = await findAppearance(userId, agentId);
-  if (existing) return existing;
-
-  const [created] = await db
-    .insert(appearanceSettingsTable)
-    .values({
-      userId,
-      agentId,
-      ctaColor: DEFAULT_CTA_COLOR,
-      backgroundColor: DEFAULT_BACKGROUND_COLOR,
-    })
-    .returning();
-
-  return created;
-}
-
-async function findAppearance(userId: string, agentId: string | null) {
-  if (agentId) {
-    const [row] = await db
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${appearanceLockKey(userId, agentId)}, 0))`,
+    );
+    const where = agentId
+      ? eq(appearanceSettingsTable.agentId, agentId)
+      : and(
+          eq(appearanceSettingsTable.userId, userId),
+          isNull(appearanceSettingsTable.agentId),
+        );
+    const [existing] = await tx
       .select()
       .from(appearanceSettingsTable)
-      .where(and(eq(appearanceSettingsTable.userId, userId), eq(appearanceSettingsTable.agentId, agentId)))
+      .where(where)
+      .orderBy(
+        desc(appearanceSettingsTable.updatedAt),
+        desc(appearanceSettingsTable.createdAt),
+        desc(appearanceSettingsTable.id),
+      )
       .limit(1);
-    return row ?? null;
-  }
+    if (existing) return existing;
 
-  const [row] = await db
-    .select()
-    .from(appearanceSettingsTable)
-    .where(eq(appearanceSettingsTable.userId, userId))
-    .limit(1);
-  return row ?? null;
+    const [created] = await tx
+      .insert(appearanceSettingsTable)
+      .values({
+        userId,
+        agentId,
+        ctaColor: DEFAULT_CTA_COLOR,
+        backgroundColor: DEFAULT_BACKGROUND_COLOR,
+      })
+      .returning();
+    return created;
+  });
 }
 
 async function upsertAppearance(userId: string, agentId: string | null, updates: Record<string, unknown>) {
-  const existing = await findAppearance(userId, agentId);
-  if (existing) {
-    const [row] = await db
-      .update(appearanceSettingsTable)
-      .set(updates)
-      .where(eq(appearanceSettingsTable.id, existing.id))
-      .returning();
-    return row;
-  }
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${appearanceLockKey(userId, agentId)}, 0))`,
+    );
+    const where = agentId
+      ? eq(appearanceSettingsTable.agentId, agentId)
+      : and(
+          eq(appearanceSettingsTable.userId, userId),
+          isNull(appearanceSettingsTable.agentId),
+        );
+    const [existing] = await tx
+      .select()
+      .from(appearanceSettingsTable)
+      .where(where)
+      .orderBy(
+        desc(appearanceSettingsTable.updatedAt),
+        desc(appearanceSettingsTable.createdAt),
+        desc(appearanceSettingsTable.id),
+      )
+      .limit(1);
 
-  const [created] = await db
-    .insert(appearanceSettingsTable)
-    .values(buildAppearanceInsertValues(userId, agentId, updates))
-    .returning();
-  return created;
+    if (existing) {
+      const [row] = await tx
+        .update(appearanceSettingsTable)
+        .set(updates)
+        .where(eq(appearanceSettingsTable.id, existing.id))
+        .returning();
+      return row;
+    }
+
+    const [created] = await tx
+      .insert(appearanceSettingsTable)
+      .values(buildAppearanceInsertValues(userId, agentId, updates))
+      .returning();
+    return created;
+  });
+}
+
+function appearanceLockKey(userId: string, agentId: string | null): string {
+  return agentId ? `agent-appearance:${agentId}` : `user-appearance:${userId}`;
 }
 
 export function buildAppearanceInsertValues(

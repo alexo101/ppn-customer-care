@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_WELCOME_MESSAGE } from "./conversation-auto-close";
 
-const { limit, values } = vi.hoisted(() => ({
+const { limit, values, getAgentCommunicationLanguage } = vi.hoisted(() => ({
   limit: vi.fn(),
   values: vi.fn(),
+  getAgentCommunicationLanguage: vi.fn(),
 }));
 
 vi.mock("@workspace/db", () => ({
@@ -22,6 +23,9 @@ vi.mock("@workspace/db", () => ({
   appearanceSettingsTable: { agentId: "agentId", communicationLanguage: "language" },
   agentConversationSettingsTable: { agentId: "agentId", welcomeMessage: "welcomeMessage" },
   messagesTable: { conversationId: "conversationId" },
+}));
+vi.mock("./agent-communication-language", () => ({
+  getAgentCommunicationLanguage,
 }));
 
 import {
@@ -136,11 +140,10 @@ describe("translateWelcomeTemplate", () => {
 
 describe("training conversation greeting", () => {
   it("uses the saved agent language instead of the browser language", async () => {
-    limit
-      .mockResolvedValueOnce([
-        { welcomeMessage: "Welcome {user_name}. This is {agent_name}." },
-      ])
-      .mockResolvedValueOnce([{ language: "es" }]);
+    limit.mockResolvedValueOnce([
+      { welcomeMessage: "Welcome {user_name}. This is {agent_name}." },
+    ]);
+    getAgentCommunicationLanguage.mockResolvedValue("es");
     values.mockResolvedValue(undefined);
 
     await sendWelcomeMessageIfNeeded({

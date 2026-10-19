@@ -1,7 +1,6 @@
 import { eq } from "drizzle-orm";
 import {
   agentConversationSettingsTable,
-  appearanceSettingsTable,
   db,
   messagesTable,
 } from "@workspace/db";
@@ -15,6 +14,7 @@ import {
   type WelcomeMessageTranslator,
 } from "./llm/openai-welcome-message-translator";
 import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
+import { getAgentCommunicationLanguage } from "./agent-communication-language";
 
 export const REQUIRED_WELCOME_TOKENS = ["{user_name}", "{agent_name}"] as const;
 export const REQUIRED_ESCALATION_TOKENS = ["{user_name}"] as const;
@@ -114,12 +114,7 @@ export async function sendWelcomeMessageIfNeeded(input: {
       .from(agentConversationSettingsTable)
       .where(eq(agentConversationSettingsTable.agentId, input.agentId))
       .limit(1);
-    const [appearance] = await db
-      .select({ language: appearanceSettingsTable.communicationLanguage })
-      .from(appearanceSettingsTable)
-      .where(eq(appearanceSettingsTable.agentId, input.agentId))
-      .limit(1);
-    const agentLanguage = resolveReplyLocale(appearance?.language);
+    const agentLanguage = await getAgentCommunicationLanguage(input.agentId);
     const template = (
       settings?.welcomeMessage ?? DEFAULT_CONVERSATION_SETTINGS.welcomeMessage
     ).trim();

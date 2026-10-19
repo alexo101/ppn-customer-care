@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   db,
   agentsTable,
@@ -45,10 +45,21 @@ async function attachUnscopedRows(userId: string, agentId: string) {
     .update(conversationsTable)
     .set({ agentId })
     .where(and(eq(conversationsTable.userId, userId), isNull(conversationsTable.agentId)));
-  await db
-    .update(appearanceSettingsTable)
-    .set({ agentId })
-    .where(and(eq(appearanceSettingsTable.userId, userId), isNull(appearanceSettingsTable.agentId)));
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${"agent-appearance:" + agentId}, 0))`,
+    );
+    const [existing] = await tx
+      .select({ id: appearanceSettingsTable.id })
+      .from(appearanceSettingsTable)
+      .where(eq(appearanceSettingsTable.agentId, agentId))
+      .limit(1);
+    if (existing) return;
+    await tx
+      .update(appearanceSettingsTable)
+      .set({ agentId })
+      .where(and(eq(appearanceSettingsTable.userId, userId), isNull(appearanceSettingsTable.agentId)));
+  });
 }
 
 export async function ensureDefaultAgentIfNeeded(userId: string) {

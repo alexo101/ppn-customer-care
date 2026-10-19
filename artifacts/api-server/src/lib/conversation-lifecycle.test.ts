@@ -1,18 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { dbMock, analyticsMock } = vi.hoisted(() => ({
+const { dbMock, analyticsMock, translateCustomerTemplateMock } = vi.hoisted(() => ({
   dbMock: {
     rows: [] as unknown[],
+    appearances: [] as unknown[],
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
   },
   analyticsMock: vi.fn(),
+  translateCustomerTemplateMock: vi.fn(),
 }));
 
 vi.mock("drizzle-orm", () => ({
   and: vi.fn(() => ({})),
+  desc: vi.fn((value) => ({ desc: value })),
   eq: vi.fn(() => ({})),
+  inArray: vi.fn(() => ({})),
   ne: vi.fn(() => ({})),
 }));
 vi.mock("@workspace/db", () => ({
@@ -28,8 +32,14 @@ vi.mock("@workspace/db", () => ({
   appearanceSettingsTable: {
     agentId: "appearance.agentId",
     communicationLanguage: "appearance.communicationLanguage",
+    updatedAt: "appearance.updatedAt",
+    createdAt: "appearance.createdAt",
+    id: "appearance.id",
   },
   messagesTable: { conversationId: "message.conversationId" },
+}));
+vi.mock("./welcome-message", () => ({
+  translateCustomerTemplate: translateCustomerTemplateMock,
 }));
 vi.mock("./conversation-analytics", () => ({
   updateConversationAnalytics: analyticsMock,
@@ -216,14 +226,22 @@ describe("closeInactiveConversations", () => {
           welcomeMessage: "",
           escalationMessage: "",
         },
-        communicationLanguage: "es",
       },
     ];
+    dbMock.appearances = [
+      { agentId: "agent-1", language: "es" },
+      { agentId: "agent-1", language: "en" },
+    ];
+    let selectCount = 0;
     dbMock.select.mockImplementation(() => {
+      const result = selectCount++ === 0 ? dbMock.rows : dbMock.appearances;
       const builder = {
         from: vi.fn(() => builder),
         leftJoin: vi.fn(() => builder),
-        where: vi.fn().mockResolvedValue(dbMock.rows),
+        where: vi.fn(() =>
+          result === dbMock.rows ? Promise.resolve(result) : builder,
+        ),
+        orderBy: vi.fn(() => Promise.resolve(result)),
       };
       return builder;
     });
@@ -234,6 +252,15 @@ describe("closeInactiveConversations", () => {
       };
       return builder;
     });
+    dbMock.insert.mockImplementation(() => {
+      const builder = {
+        values: vi.fn(() => builder),
+        returning: vi.fn().mockResolvedValue([{ id: "assistant-message" }]),
+      };
+      return builder;
+    });
+    translateCustomerTemplateMock.mockReset();
+    translateCustomerTemplateMock.mockResolvedValue("Hasta luego.");
   });
 
   it("silently closes when the configured closing message is blank", async () => {
@@ -243,5 +270,41 @@ describe("closeInactiveConversations", () => {
     expect(dbMock.insert).not.toHaveBeenCalled();
     expect(dbMock.update).toHaveBeenCalledOnce();
     expect(analyticsMock).toHaveBeenCalledWith("conversation-1");
+  });
+
+  it("uses the newest agent appearance language when duplicate settings remain", async () => {
+    dbMock.rows = [
+      {
+        conversation: {
+          id: "conversation-1",
+          agentId: "agent-1",
+          status: "active",
+          lastActivityAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+          metadata: {},
+        },
+        settings: { ...defaultSettings, closingMessage: "See you later." },
+      },
+    ];
+    let selectCount = 0;
+    dbMock.select.mockImplementation(() => {
+      const result = selectCount++ === 0 ? dbMock.rows : dbMock.appearances;
+      const builder = {
+        from: vi.fn(() => builder),
+        leftJoin: vi.fn(() => builder),
+        where: vi.fn(() =>
+          result === dbMock.rows ? Promise.resolve(result) : builder,
+        ),
+        orderBy: vi.fn(() => Promise.resolve(result)),
+      };
+      return builder;
+    });
+
+    await closeInactiveConversations(now);
+
+    expect(translateCustomerTemplateMock).toHaveBeenCalledWith(
+      "See you later.",
+      "es",
+      expect.any(String),
+    );
   });
 });
