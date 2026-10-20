@@ -194,6 +194,80 @@ describe("answerFromKnowledge", () => {
     expect(result.articleIds).toEqual(["billing-article"]);
   });
 
+  it("answers an exact documented callback FAQ without depending on model output", async () => {
+    const supportChunk = {
+      sourceId: "support-article",
+      sourceName: "Soporte y gestor de cuentas (agentes)",
+      articleId: "support-article",
+      articleName: "Soporte y gestor de cuentas (agentes)",
+      content:
+        "Quiero que me contacten / Quiero que me llamen / Quiero hablar con mi agente o account manager. Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma de agencia. También puedes encontrar el número de teléfono de atención al cliente de Papernest en la parte inferior izquierda de tu plataforma.",
+      distance: 0.1,
+    };
+    listEligiblePublishedArticles.mockResolvedValue([
+      { id: "support-article", title: supportChunk.articleName, targetId: null },
+    ]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [supportChunk],
+      totalTokens: 4,
+      model: "embed-test",
+    });
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: "Quiero que me llamen",
+      history: [{ sender: "user", content: "Quiero que me llamen" }],
+      context: { agent_language: "es" },
+    });
+
+    expect(createAnswerProvider).not.toHaveBeenCalled();
+    expect(result.answerable).toBe(true);
+    expect(result.responseText).toBe(
+      "Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma de agencia.",
+    );
+    expect(result.internalDiagnostics).toMatchObject({
+      outcome: "answered_from_exact_faq",
+    });
+    expect(result.assistantMetadata.citations).toHaveLength(1);
+  });
+
+  it("does not use an exact FAQ fallback when the source language differs from the agent language", async () => {
+    const supportChunk = {
+      sourceId: "support-article",
+      sourceName: "Support",
+      content:
+        "I want a callback. You can find your account manager at the bottom left of the platform.",
+      distance: 0.1,
+    };
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "I could not verify that.",
+      answerable: false,
+      model: "gpt-test",
+      totalTokens: 3,
+      promptAssembled: "prompt",
+      groundedClaims: [],
+    });
+    listEligiblePublishedArticles.mockResolvedValue([
+      { id: "support-article", title: "Support", targetId: null },
+    ]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [supportChunk],
+      totalTokens: 4,
+      model: "embed-test",
+    });
+    createAnswerProvider.mockReturnValue({ generate });
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: "I want a callback",
+      history: [{ sender: "user", content: "I want a callback" }],
+      context: { agent_language: "es" },
+    });
+
+    expect(generate).toHaveBeenCalled();
+    expect(result.answerable).toBe(false);
+  });
+
   it("answers a documented missing-menu question with the access requirement", async () => {
     const question = "No veo la sección Ingresos.";
     const billingChunk = {
@@ -326,8 +400,10 @@ describe("answerFromKnowledge", () => {
 
     const result = await answerFromKnowledge({
       ...baseInput,
-      message: "Quiero que me llamen",
-      history: [{ sender: "user", content: "Quiero que me llamen" }],
+      message: "¿Dónde puedo encontrar a mi gestor?",
+      history: [
+        { sender: "user", content: "¿Dónde puedo encontrar a mi gestor?" },
+      ],
       context: { agent_language: "es" },
     });
 

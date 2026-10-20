@@ -212,6 +212,67 @@ describe("applyGuardrails", () => {
     expect(result.responseText).not.toContain("Solicitar llamada");
   });
 
+  it("keeps translated generic settings navigation valid without dropping destination checks", () => {
+    const result = applyGuardrails("Untrusted draft.", {
+      retrievedChunks: [{
+        sourceId: "article",
+        sourceName: "Help Center",
+        content: "Invoices are in Settings.",
+        distance: 0.1,
+      }],
+      personAttributes: {},
+      groundedClaims: [
+        claim(
+          "Las facturas están en Ajustes.",
+          "Invoices are in Settings.",
+        ),
+      ],
+    });
+
+    expect(result.blocked).toBe(false);
+    expect(result.responseText).toBe("Las facturas están en Ajustes.");
+  });
+
+  it("rejects an unsupported destination for a settings control", () => {
+    const evidence = "Open profile settings.";
+    const result = applyGuardrails("Untrusted draft.", {
+      retrievedChunks: [{
+        sourceId: "article",
+        sourceName: "Help Center",
+        content: evidence,
+        distance: 0.1,
+      }],
+      personAttributes: {},
+      groundedClaims: [
+        claim("Open billing settings.", evidence),
+      ],
+    });
+
+    expect(result.blocked).toBe(true);
+    expect(result.diagnostics.rejectionReasons).toContain(
+      "unsupported_control_destination",
+    );
+  });
+
+  it("accepts a supported settings destination", () => {
+    const evidence = "Open billing settings.";
+    const result = applyGuardrails("Untrusted draft.", {
+      retrievedChunks: [{
+        sourceId: "article",
+        sourceName: "Help Center",
+        content: evidence,
+        distance: 0.1,
+      }],
+      personAttributes: {},
+      groundedClaims: [
+        claim("Open billing settings.", evidence),
+      ],
+    });
+
+    expect(result.blocked).toBe(false);
+    expect(result.responseText).toBe("Open billing settings.");
+  });
+
   it("rejects an invented contact channel appended to a documented contact path", () => {
     const evidence =
       "Contacta directamente con tu CSX para solicitar un callback.";

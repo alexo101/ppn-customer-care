@@ -407,7 +407,7 @@ function getControlReferences(
     const end = Math.min(words.length, index + 4);
     const destinationTokens =
       typeGroup[0] === "setting"
-        ? []
+        ? getSettingDestinationTokens(words, index)
         : words
             .slice(start, end)
             .filter(
@@ -421,6 +421,45 @@ function getControlReferences(
     references.push({ typeGroup, destinationTokens });
   });
   return references;
+}
+
+function getSettingDestinationTokens(words: string[], settingIndex: number): string[] {
+  const tokens: string[] = [];
+  const previous = words[settingIndex - 1];
+  if (previous && isControlDestinationToken(previous)) {
+    tokens.push(previous);
+  }
+
+  let nextIndex = settingIndex + 1;
+  let skipped = 0;
+  while (
+    nextIndex < words.length &&
+    NON_CONTENT_WORDS.has(words[nextIndex]!) &&
+    skipped < 2
+  ) {
+    nextIndex += 1;
+    skipped += 1;
+  }
+  const next = words[nextIndex];
+  if (next && nextIndex > settingIndex + 1 && isControlDestinationToken(next)) {
+    tokens.push(next);
+  } else if (
+    next &&
+    nextIndex === settingIndex + 1 &&
+    isControlDestinationToken(next)
+  ) {
+    tokens.push(next);
+  }
+  return tokens;
+}
+
+function isControlDestinationToken(token: string): boolean {
+  return (
+    !NON_CONTENT_WORDS.has(token) &&
+    !CONTROL_TERM_GROUPS.some((group) => group.includes(token)) &&
+    !CONTROL_REFERENCE_ACTIONS.has(token) &&
+    !CONTROL_REFERENCE_DECORATORS.has(token)
+  );
 }
 
 function areComparableControlDestinationTokens(

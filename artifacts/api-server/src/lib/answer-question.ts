@@ -433,6 +433,59 @@ export async function answerFromKnowledge(input: {
     };
   }
 
+  const exactFaqAnswer = findExactFaqAnswer(
+    input.message,
+    retrievedChunks,
+    agentLanguage,
+  );
+  if (exactFaqAnswer) {
+    const userMessageCount = input.history.filter(
+      (message) => message.sender === "user",
+    ).length;
+    const shouldAskResolution = userMessageCount >= 2;
+    const citation = {
+      sourceId: exactFaqAnswer.chunk.sourceId,
+      sourceName: exactFaqAnswer.chunk.sourceName,
+      articleId: exactFaqAnswer.chunk.articleId ?? exactFaqAnswer.chunk.sourceId,
+      articleName:
+        exactFaqAnswer.chunk.articleName ?? exactFaqAnswer.chunk.sourceName,
+      ...(exactFaqAnswer.chunk.chunkId
+        ? { chunkId: exactFaqAnswer.chunk.chunkId }
+        : {}),
+      excerpt: exactFaqAnswer.answer,
+    };
+    stages[3].status = "completed";
+    stages[3].details = {
+      resolution_status: shouldAskResolution ? "pending_resolution" : "active",
+      model: "deterministic-exact-faq",
+      answerable: true,
+      chunks_used: 1,
+      source: "exact_faq_match",
+    };
+    return {
+      responseText: shouldAskResolution
+        ? `${exactFaqAnswer.answer}\n\n${resolutionFollowUp(agentLanguage)}`
+        : exactFaqAnswer.answer,
+      resolutionStatus: shouldAskResolution ? "pending_resolution" : "active",
+      shouldAskResolution,
+      answerable: true,
+      articlesUsed: [exactFaqAnswer.chunk.articleName ?? exactFaqAnswer.chunk.sourceName],
+      articleIds: [exactFaqAnswer.chunk.articleId ?? exactFaqAnswer.chunk.sourceId],
+      retrievedChunks,
+      model: [retrievalModel, "deterministic-exact-faq"]
+        .filter((model) => model !== "none")
+        .join(", "),
+      totalTokens: retrievalTokens,
+      promptAssembled: "",
+      internalDiagnostics: {
+        outcome: "answered_from_exact_faq",
+        retrievedChunkCount: retrievedChunks.length,
+      },
+      assistantMetadata: { citations: [citation] },
+      stages,
+    };
+  }
+
   const [agentSettings] = agentSettingsRows;
   const generationStartedAt = performance.now();
   const answer = await generateAnswer(
@@ -584,6 +637,70 @@ function buildLiveControlAnswer(
 
 function elapsedMs(startedAt: number): number {
   return Math.round((performance.now() - startedAt) * 10) / 10;
+}
+
+function findExactFaqAnswer(
+  message: string,
+  chunks: RetrievedChunk[],
+  agentLanguage: ReturnType<typeof resolveReplyLocale>,
+): { answer: string; chunk: RetrievedChunk } | undefined {
+  if (agentLanguage !== "en" && agentLanguage !== "es") return undefined;
+  const normalizedMessage = normalizeFaqText(message);
+  if (!normalizedMessage) return undefined;
+
+  for (const chunk of chunks) {
+    const firstSentenceEnd = chunk.content.search(/[.!?](?:\s|$)/);
+    if (firstSentenceEnd < 0) continue;
+    const questionGroup = chunk.content.slice(0, firstSentenceEnd);
+    const matchingQuestion = questionGroup
+      .split("/")
+      .map((part) => part.trim())
+      .find((part) => normalizeFaqText(part) === normalizedMessage);
+    if (!matchingQuestion || detectFaqLanguage(matchingQuestion) !== agentLanguage) {
+      continue;
+    }
+
+    const answerStart = firstSentenceEnd + 1;
+    const answerText = chunk.content.slice(answerStart).trim();
+    const answerEnd = answerText.search(/[.!?](?:\s|$)/);
+    const answer = (
+      answerEnd >= 0 ? answerText.slice(0, answerEnd + 1) : answerText
+    ).trim();
+    if (
+      answer.length < 12 ||
+      detectFaqLanguage(answer) !== agentLanguage
+    ) {
+      continue;
+    }
+    return { answer, chunk };
+  }
+  return undefined;
+}
+
+function normalizeFaqText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function detectFaqLanguage(value: string): "en" | "es" | undefined {
+  const tokens = new Set(normalizeFaqText(value).split(" "));
+  const english = [
+    "the", "are", "is", "in", "on", "from", "for", "you", "your", "with",
+    "and", "or", "of", "can", "to", "find", "go", "call",
+  ].filter((word) => tokens.has(word)).length;
+  const spanish = [
+    "el", "la", "las", "los", "una", "uno", "en", "de", "del", "que", "para",
+    "puedes", "puede", "esta", "estan", "con", "por", "y", "quiero", "llamen",
+    "contacten", "hablar", "encuentra",
+  ].filter((word) => tokens.has(word)).length;
+  if (english >= 2 && english > spanish) return "en";
+  if (spanish >= 2 && spanish > english) return "es";
+  return undefined;
 }
 
 export function workflowProviderErrorMessage(error: unknown): string | null {
