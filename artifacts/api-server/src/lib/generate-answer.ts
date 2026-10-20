@@ -1,5 +1,6 @@
 import { performance } from "node:perf_hooks";
 import type {
+  AnswerProviderDiagnostics,
   AnswerProvider,
   GroundedAnswerClaim,
   RetrievedChunk,
@@ -32,6 +33,7 @@ export type GeneratedAnswer = {
   promptAssembled: string;
   citations: NonNullable<import("./llm").AnswerProviderResult["citations"]>;
   groundedClaims: GroundedAnswerClaim[];
+  providerDiagnostics?: AnswerProviderDiagnostics;
   timings: {
     provider_ms: number;
     language_alignment_ms: number;
@@ -187,6 +189,7 @@ export async function generateAnswer(
       : result.promptAssembled,
     citations: answerable ? (result.citations ?? []) : [],
     groundedClaims: alignedGroundedClaims,
+    ...(result.diagnostics ? { providerDiagnostics: result.diagnostics } : {}),
     timings: {
       provider_ms: providerMs,
       language_alignment_ms: languageAlignmentMs,

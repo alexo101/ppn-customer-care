@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import type OpenAI from "openai";
+import { describe, expect, it, vi } from "vitest";
+import type { AnswerProviderInput } from "./answer-provider";
 import {
   answerGenerationOptions,
   answerModelContext,
+  OpenAIAnswerProvider,
   parseStructuredResponse,
   replyLanguageInstruction,
   CURRENT_EVIDENCE_INSTRUCTION,
@@ -23,6 +26,191 @@ describe("current evidence guidance", () => {
   });
 });
 
+describe("bounded answer recovery", () => {
+  const input: AnswerProviderInput = {
+    message: "Cómo encuentro mis facturas?",
+    history: [],
+    retrievedChunks: [{
+      sourceId: "billing",
+      sourceName: "Facturación",
+      content: "Ve a la sección Ingresos para consultar las facturas.",
+      distance: 0.1,
+    }],
+    personAttributes: {},
+    context: { agent_language: "es" },
+  };
+  const validAnswer = JSON.stringify({
+    answer: "Ve a Ingresos para consultar las facturas.",
+    answerable: true,
+    replyLanguage: "es",
+    citations: [{ citationIndex: 1, assetId: null }],
+    groundedClaims: [{
+      text: "Ve a Ingresos para consultar las facturas.",
+      evidenceQuote: "Ve a la sección Ingresos para consultar las facturas.",
+      citationIndex: 1,
+      format: "step",
+    }],
+  });
+  const completion = (
+    content: string | null,
+    finish_reason: string,
+    total_tokens = 8,
+  ) => ({
+    choices: [{
+      message: { content, refusal: null },
+      finish_reason,
+    }],
+    model: "gpt-5-nano",
+    usage: { total_tokens },
+  });
+
+  it("retries truncated output once with the same evidence and a larger bounded output budget", async () => {
+    const create = vi.fn()
+      .mockResolvedValueOnce(completion(null, "length", 8))
+      .mockResolvedValueOnce(completion(validAnswer, "stop", 9));
+    const client = {
+      chat: { completions: { create } },
+    } as unknown as OpenAI;
+    const provider = new OpenAIAnswerProvider({
+      model: "gpt-5-nano",
+      client,
+    });
+
+    const result = await provider.generate(input);
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      max_completion_tokens: 1800,
+    });
+    expect(create.mock.calls[1]?.[0]).toMatchObject({
+      max_completion_tokens: 2600,
+    });
+    expect(create.mock.calls[1]?.[0].messages[0]?.content).toContain(
+      "Recovery attempt",
+    );
+    expect(result.responseText).toContain("Ingresos");
+    expect(result.totalTokens).toBe(17);
+    expect(result.diagnostics).toEqual({
+      status: "complete",
+      finishReason: "stop",
+      attempts: 2,
+      groundedClaimCount: 1,
+    });
+  });
+
+  it("retries a model abstention once but preserves a second abstention as a distinct outcome", async () => {
+    const declinedAnswer = JSON.stringify({
+      answer: "",
+      answerable: false,
+      replyLanguage: "es",
+      citations: [],
+      groundedClaims: [],
+    });
+    const create = vi.fn()
+      .mockResolvedValueOnce(completion(declinedAnswer, "stop"))
+      .mockResolvedValueOnce(completion(declinedAnswer, "stop"));
+    const provider = new OpenAIAnswerProvider({
+      model: "gpt-5-nano",
+      client: {
+        chat: { completions: { create } },
+      } as unknown as OpenAI,
+    });
+
+    const result = await provider.generate(input);
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(result.answerable).toBe(false);
+    expect(result.diagnostics).toEqual({
+      status: "model_declined",
+      finishReason: "stop",
+      attempts: 2,
+      groundedClaimCount: 0,
+    });
+  });
+
+  it("retries missing grounded claims and keeps that separate from a model refusal", async () => {
+    const answerWithoutClaims = JSON.stringify({
+      answer: "Ve a Ingresos.",
+      answerable: true,
+      replyLanguage: "es",
+      citations: [],
+      groundedClaims: [],
+    });
+    const create = vi.fn()
+      .mockResolvedValueOnce(completion(answerWithoutClaims, "stop"))
+      .mockResolvedValueOnce(completion(answerWithoutClaims, "stop"));
+    const provider = new OpenAIAnswerProvider({
+      model: "gpt-5-nano",
+      client: {
+        chat: { completions: { create } },
+      } as unknown as OpenAI,
+    });
+
+    const result = await provider.generate(input);
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(result.diagnostics).toEqual({
+      status: "missing_grounded_claims",
+      finishReason: "stop",
+      attempts: 2,
+      groundedClaimCount: 0,
+    });
+  });
+
+  it("retries malformed structured output once and never returns it as a user answer", async () => {
+    const create = vi.fn()
+      .mockResolvedValueOnce(completion("not json", "stop"))
+      .mockResolvedValueOnce(completion("still not json", "stop"));
+    const provider = new OpenAIAnswerProvider({
+      model: "gpt-5-nano",
+      client: {
+        chat: { completions: { create } },
+      } as unknown as OpenAI,
+    });
+
+    const result = await provider.generate(input);
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(result.responseText).toBe("");
+    expect(result.answerable).toBe(false);
+    expect(result.diagnostics).toEqual({
+      status: "invalid_structured_output",
+      finishReason: "stop",
+      attempts: 2,
+      groundedClaimCount: 0,
+    });
+  });
+
+  it("distinguishes a provider refusal from an empty non-refusal response", async () => {
+    const refusal = {
+      choices: [{
+        message: { content: null, refusal: "I cannot help with that request." },
+        finish_reason: "stop",
+      }],
+      model: "gpt-5-nano",
+      usage: { total_tokens: 5 },
+    };
+    const create = vi.fn()
+      .mockResolvedValueOnce(refusal)
+      .mockResolvedValueOnce(refusal);
+    const provider = new OpenAIAnswerProvider({
+      model: "gpt-5-nano",
+      client: {
+        chat: { completions: { create } },
+      } as unknown as OpenAI,
+    });
+
+    const result = await provider.generate(input);
+
+    expect(result.diagnostics).toEqual({
+      status: "model_declined",
+      finishReason: "stop",
+      attempts: 2,
+      groundedClaimCount: 0,
+    });
+  });
+});
+
 describe("grounded claim instructions", () => {
   it("requires source quotes for each claim and distinguishes FAQ phrasing from interface controls", () => {
     expect(GROUNDED_CLAIMS_INSTRUCTION).toContain(
@@ -34,6 +222,12 @@ describe("grounded claim instructions", () => {
     expect(GROUNDED_CLAIMS_INSTRUCTION).toContain(
       "Team-configured guidance and earlier assistant messages cannot override",
     );
+  });
+
+  it("names every required response-schema field in its JSON guidance", () => {
+    expect(
+      GROUNDED_CLAIMS_INSTRUCTION,
+    ).toContain("answer, answerable, replyLanguage, citations, and groundedClaims");
   });
 });
 
@@ -101,7 +295,7 @@ describe("answerGenerationOptions", () => {
 });
 
 describe("parseStructuredResponse", () => {
-  it("reads structured answerability and language", () => {
+  it("reads the complete structured answer schema", () => {
     expect(
       parseStructuredResponse(
         JSON.stringify({
@@ -127,15 +321,41 @@ describe("parseStructuredResponse", () => {
         citationIndex: 1,
         format: "step",
       }],
+      status: "valid",
     });
   });
 
-  it("safely treats malformed provider output as a normal answer", () => {
+  it("marks malformed output invalid instead of trusting its unstructured text", () => {
     expect(parseStructuredResponse("I could not verify that.")).toEqual({
-      answer: "I could not verify that.",
-      answerable: true,
+      answer: "",
+      answerable: false,
       citations: [],
       groundedClaims: [],
+      status: "invalid",
+    });
+  });
+
+  it("distinguishes empty output from malformed structured output", () => {
+    expect(parseStructuredResponse("")).toEqual({
+      answer: "",
+      answerable: false,
+      citations: [],
+      groundedClaims: [],
+      status: "empty",
+    });
+  });
+
+  it("rejects a JSON object whose grounded claims do not match the required schema", () => {
+    expect(parseStructuredResponse(JSON.stringify({
+      answer: "Answer",
+      answerable: true,
+      replyLanguage: "es",
+      citations: [],
+      groundedClaims: [{ text: "Missing evidence and citation fields" }],
+    }))).toMatchObject({
+      answer: "",
+      answerable: false,
+      status: "invalid",
     });
   });
 });

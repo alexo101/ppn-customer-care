@@ -45,6 +45,19 @@ export type AnswerCitation = {
   excerpt?: string;
 };
 
+export type AnswerProviderDiagnostics = {
+  status:
+    | "complete"
+    | "model_declined"
+    | "missing_grounded_claims"
+    | "invalid_structured_output"
+    | "empty_output"
+    | "truncated_output";
+  finishReason: string | null;
+  attempts: number;
+  groundedClaimCount: number;
+};
+
 export type AnswerProviderResult = {
   responseText: string;
   answerable: boolean;
@@ -54,6 +67,7 @@ export type AnswerProviderResult = {
   promptAssembled: string;
   citations?: AnswerCitation[];
   groundedClaims?: GroundedAnswerClaim[];
+  diagnostics?: AnswerProviderDiagnostics;
 };
 
 export interface AnswerProvider {

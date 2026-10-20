@@ -47,6 +47,7 @@ export type AnswerWorkflowResult = {
   model: string;
   totalTokens: number;
   promptAssembled: string;
+  internalDiagnostics?: Record<string, unknown>;
   assistantMetadata: Record<string, unknown>;
   stages: Array<{
     stage: number;
@@ -417,6 +418,10 @@ export async function answerFromKnowledge(input: {
     };
     return {
       ...insufficient,
+      internalDiagnostics: {
+        outcome: "no_retrieved_passages",
+        retrievedChunkCount: 0,
+      },
       answerable: false,
       articlesUsed,
       articleIds,
@@ -456,6 +461,20 @@ export async function answerFromKnowledge(input: {
     groundedClaims: answer.groundedClaims,
   });
   if (!answer.answerable || guardrailResult.blocked) {
+    const providerStatus = answer.providerDiagnostics?.status;
+    const outcome =
+      providerStatus && providerStatus !== "complete"
+        ? providerStatus
+        : !answer.answerable
+          ? "model_declined"
+          : guardrailResult.diagnostics.claimsReceived === 0
+          ? "grounded_claims_missing"
+          : "all_grounded_claims_rejected";
+    const diagnostics = {
+      outcome,
+      provider: answer.providerDiagnostics ?? { status: "not_reported" },
+      evidence: guardrailResult.diagnostics,
+    };
     const insufficient = await insufficientAnswer(
       input.escalationTemplate,
       input.userName,
@@ -472,6 +491,7 @@ export async function answerFromKnowledge(input: {
     };
     return {
       ...insufficient,
+      internalDiagnostics: diagnostics,
       answerable: false,
       articlesUsed,
       articleIds,
@@ -505,6 +525,11 @@ export async function answerFromKnowledge(input: {
     model: [retrievalModel, answer.model].filter((model) => model !== "none").join(", "),
     totalTokens: retrievalTokens + answer.totalTokens,
     promptAssembled: answer.promptAssembled,
+    internalDiagnostics: {
+      outcome: "answered",
+      provider: answer.providerDiagnostics ?? { status: "not_reported" },
+      evidence: guardrailResult.diagnostics,
+    },
     assistantMetadata: { citations: answer.citations },
     stages,
   };

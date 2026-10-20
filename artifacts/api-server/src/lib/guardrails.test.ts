@@ -215,25 +215,29 @@ describe("applyGuardrails", () => {
   it("rejects an invented contact channel appended to a documented contact path", () => {
     const evidence =
       "Contacta directamente con tu CSX para solicitar un callback.";
-    const result = applyGuardrails("Untrusted draft answer.", {
-      retrievedChunks: [{
-        sourceId: "article",
-        sourceName: "Help Center",
-        content: evidence,
-        distance: 0.1,
-      }],
-      personAttributes: {},
-      groundedClaims: [
-        claim(
-          "Contacta directamente con tu CSX por WhatsApp para solicitar un callback.",
-          evidence,
-          "step",
-        ),
-      ],
-    });
+    for (const instruction of [
+      "Contacta directamente con tu CSX por WhatsApp para solicitar un callback.",
+      "Contacta directamente con tu CSX en Facebook para solicitar un callback.",
+      "Contacta directamente con tu CSX via Facebook para solicitar un callback.",
+      "Contacta directamente con tu CSX through Facebook for a callback.",
+    ]) {
+      const result = applyGuardrails("Untrusted draft answer.", {
+        retrievedChunks: [{
+          sourceId: "article",
+          sourceName: "Help Center",
+          content: evidence,
+          distance: 0.1,
+        }],
+        personAttributes: {},
+        groundedClaims: [claim(instruction, evidence, "step")],
+      });
 
-    expect(result.blocked).toBe(true);
-    expect(result.responseText).not.toContain("WhatsApp");
+      expect(result.blocked, instruction).toBe(true);
+      expect(result.responseText).not.toMatch(/WhatsApp|Facebook/i);
+      expect(result.diagnostics.rejectionReasons).toContain(
+        "unsupported_contact_method",
+      );
+    }
   });
 
   it("validates live-data claims against an authorized fact pair", () => {

@@ -34,6 +34,7 @@ import { DEFAULT_CONVERSATION_SETTINGS } from "../lib/conversation-auto-close";
 import { isUnableToAnswerMessageMetadata } from "../lib/unanswered-message";
 import { answerFromKnowledge, workflowProviderErrorMessage } from "../lib/answer-question";
 import { getAgentCommunicationLanguage } from "../lib/agent-communication-language";
+import { toPublicMessage } from "../lib/conversation-message";
 import { localizedCommunicationMessage } from "../lib/reply-locale";
 import { updateConversationAnalytics } from "../lib/conversation-analytics";
 import { appDomainAttribute, type PersonAttributes } from "../lib/targets";
@@ -282,7 +283,7 @@ router.get(
       .where(eq(messagesTable.conversationId, params.data.id))
       .orderBy(messagesTable.createdAt);
 
-    res.json(rows.map(toMessage));
+    res.json(rows.map(toPublicMessage));
   },
 );
 
@@ -455,7 +456,7 @@ router.post(
         .where(eq(conversationsTable.id, conv.id));
       await markConversationEscalationUnread(conv.id);
       res.json({
-        message: toMessage(userMsg),
+        message: toPublicMessage(userMsg),
         response: "",
         stages: [],
         shouldAskResolution: false,
@@ -544,10 +545,19 @@ router.post(
         ...answered.stages[0]!.details,
         request_preparation_ms: requestPreparationMs,
       };
+      if (answered.internalDiagnostics) {
+        req.log.info(
+          { answer_diagnostics: answered.internalDiagnostics },
+          "Support answer diagnostics",
+        );
+      }
     } catch (error) {
       const message = workflowProviderErrorMessage(error);
       if (message) {
-        req.log.warn({ error: message }, "Customer response generation failed");
+        req.log.warn(
+          { diagnostic_code: "provider_request_failed", error: message },
+          "Customer response generation failed",
+        );
       }
       res.status(503).json({
         error: localizedCommunicationMessage("assistantUnavailable", communicationLanguage),
@@ -635,7 +645,7 @@ router.post(
       );
     });
     res.json({
-      message: toMessage(assistantMsg),
+      message: toPublicMessage(assistantMsg),
       response: responseText,
       stages,
       shouldAskResolution,
@@ -999,17 +1009,6 @@ function toConversation(row: typeof conversationsTable.$inferSelect) {
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     agentId: row.agentId ?? null,
     npsScore: row.npsScore ?? null,
-  };
-}
-
-function toMessage(row: typeof messagesTable.$inferSelect) {
-  return {
-    id: row.id,
-    conversationId: row.conversationId,
-    sender: row.sender,
-    content: row.content,
-    metadata: row.metadata ?? {},
-    createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
   };
 }
 

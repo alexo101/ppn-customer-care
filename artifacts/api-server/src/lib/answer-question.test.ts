@@ -352,11 +352,16 @@ describe("answerFromKnowledge", () => {
     expect(result.answerable).toBe(false);
     expect(result.responseText).toContain("Ada, I couldn't find enough information");
     expect(result.responseText).toContain("Ada, I can connect you with a person.");
+    expect(result.internalDiagnostics).toEqual({
+      outcome: "no_retrieved_passages",
+      retrievedChunkCount: 0,
+    });
     expect(result.assistantMetadata).toMatchObject({
       kind: "unable_to_answer",
       actions: ["escalate"],
       citations: [],
     });
+    expect(result.assistantMetadata).not.toHaveProperty("diagnostics");
   });
 
   it("does not answer from chunks that fail retrieval", async () => {
@@ -406,7 +411,62 @@ describe("answerFromKnowledge", () => {
     expect(result.responseText).not.toContain("$40");
     expect(result.responseText).toContain("couldn't find enough information");
     expect(result.assistantMetadata).toMatchObject({ actions: ["escalate"], citations: [] });
+    expect(result.internalDiagnostics).toMatchObject({
+      outcome: "model_declined",
+      evidence: {
+        claimsReceived: 0,
+        claimsAccepted: 0,
+      },
+    });
+    expect(result.assistantMetadata).not.toHaveProperty("diagnostics");
     expect(result.articlesUsed).toEqual(["Billing"]);
+  });
+
+  it("records evidence rejection separately from retrieval and model refusal", async () => {
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "Ve a la sección de Facebook para consultar el estado.",
+      answerable: true,
+      model: "gpt-test",
+      totalTokens: 8,
+      promptAssembled: "prompt",
+      groundedClaims: [{
+        text: "Ve a la sección de Facebook para consultar el estado.",
+        evidenceQuote: "This quoted passage is not in the retrieved article.",
+        citationIndex: 1,
+        format: "step",
+      }],
+    });
+    listEligiblePublishedArticles.mockResolvedValue([
+      { id: "article-1", title: "Client status", targetId: null },
+    ]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [{
+        sourceId: "article-1",
+        sourceName: "Client status",
+        articleId: "article-1",
+        articleName: "Client status",
+        content: "The contract status appears in the client table.",
+        distance: 0.1,
+      }],
+      totalTokens: 4,
+      model: "embed",
+    });
+    createAnswerProvider.mockReturnValue({ generate });
+
+    const result = await answerFromKnowledge(baseInput);
+
+    expect(result.answerable).toBe(false);
+    expect(result.articlesUsed).toEqual(["Client status"]);
+    expect(result.internalDiagnostics).toMatchObject({
+      outcome: "all_grounded_claims_rejected",
+      provider: { status: "not_reported" },
+      evidence: {
+        claimsReceived: 1,
+        claimsAccepted: 0,
+        rejectionReasons: ["evidence_quote_not_in_cited_chunk"],
+      },
+    });
+    expect(result.assistantMetadata).not.toHaveProperty("diagnostics");
   });
 
   it("returns a grounded answer with article citations", async () => {
@@ -456,7 +516,7 @@ describe("answerFromKnowledge", () => {
     expect(result.answerable).toBe(true);
     expect(result.responseText).toContain("Invoices are in Settings.");
     expect(result.articleIds).toEqual(["article-1"]);
-    expect(result.assistantMetadata).toEqual({
+    expect(result.assistantMetadata).toMatchObject({
       citations: [
         expect.objectContaining({
           articleId: "article-1",
@@ -465,6 +525,16 @@ describe("answerFromKnowledge", () => {
         }),
       ],
     });
+    expect(result.internalDiagnostics).toMatchObject({
+      outcome: "answered",
+      provider: { status: "not_reported" },
+      evidence: {
+        claimsReceived: 1,
+        claimsAccepted: 1,
+        rejectionReasons: [],
+      },
+    });
+    expect(result.assistantMetadata).not.toHaveProperty("diagnostics");
   });
 
   it("keeps Training replies in the saved agent language when the browser and question are English", async () => {

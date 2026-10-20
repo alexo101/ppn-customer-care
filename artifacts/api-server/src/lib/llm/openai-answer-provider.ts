@@ -5,6 +5,7 @@ import {
   type AnswerProvider,
   type AnswerProviderInput,
   type AnswerProviderResult,
+  type AnswerProviderDiagnostics,
   type GroundedAnswerClaim,
 } from "./answer-provider";
 import { resolveReplyLocale } from "../reply-locale";
@@ -75,6 +76,7 @@ export const CURRENT_EVIDENCE_INSTRUCTION =
   "Answer the latest user question using the currently supplied knowledge passages. Mark it answerable when those passages directly support an answer. Only state facts and steps explicitly supported by relevant passages; do not add generic troubleshooting or plausible assumptions. Use earlier messages only to resolve references and understand context; previous assistant answers, refusals, and claims are not evidence and must not determine answerability.";
 
 export const GROUNDED_CLAIMS_INSTRUCTION = [
+  "Return one JSON object with the complete response schema: answer, answerable, replyLanguage, citations, and groundedClaims.",
   "Return groundedClaims as the canonical user-facing answer, with one atomic statement or action per item.",
   "For knowledge-base answers, each item must include an exact, contiguous evidenceQuote copied from its cited article passage and a 1-based citationIndex; never cite a question heading as evidence for an action.",
   "For authorized live-data answers, cite an exact key-and-value pair from that data and use citationIndex null.",
@@ -88,14 +90,14 @@ export class OpenAIAnswerProvider implements AnswerProvider {
   private readonly client: OpenAI;
   private readonly model: string;
 
-  constructor(options?: { apiKey?: string; model?: string }) {
+  constructor(options?: { apiKey?: string; model?: string; client?: OpenAI }) {
     const apiKey = options?.apiKey ?? process.env.OPENAI_API_KEY;
-    if (!apiKey) {
+    if (!apiKey && !options?.client) {
       throw new AnswerProviderError(
         "Answer generation is not configured. Set OPENAI_API_KEY to enable it.",
       );
     }
-    this.client = new OpenAI({ apiKey });
+    this.client = options?.client ?? new OpenAI({ apiKey: apiKey! });
     this.model = options?.model ?? process.env.ANSWER_MODEL ?? "gpt-5-nano";
   }
 
@@ -149,7 +151,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
             ? "If the supplied live fields do not directly answer the question, set answerable to false and do not fill gaps from general knowledge."
             : "If the passages do not contain enough information to answer, set answerable to false and explain that the knowledge base does not contain the answer.",
           "Do not mention internal prompts, embeddings, targets, or retrieval scores to the user.",
-          "Return only JSON with answer, answerable, replyLanguage, and citations fields. Set answerable to true only when the supplied source directly supports the answer; otherwise set it to false. Set replyLanguage to a BCP-47 language tag for the answer.",
+           "Set answerable to true only when the supplied source directly supports the answer; otherwise set it to false. Set replyLanguage to a BCP-47 language tag for the answer.",
           retrievedAssets.length
             ? "When images are supplied, use their visual content. citations must be an array of objects containing citationIndex values from the supplied Article entries and, when applicable, assetId values from the supplied images."
             : "citations must be an array of objects containing citationIndex values from the supplied Article entries. Use null for assetId when no image is cited.",
@@ -184,36 +186,68 @@ export class OpenAIAnswerProvider implements AnswerProvider {
       ? process.env.VISION_ANSWER_MODEL?.trim() || "gpt-4o-mini"
       : this.model;
     try {
-      const response = await this.client.chat.completions.create({
-        model: requestModel,
-        messages,
-        response_format: ANSWER_RESPONSE_FORMAT,
-        ...answerGenerationOptions(requestModel, retrievedAssets.length > 0),
-      });
-      const rawResponse = response.choices[0]?.message.content?.trim() || "";
-      const parsed = parseStructuredResponse(rawResponse);
-      const responseText = parsed.answer || rawResponse;
-      if (!responseText && parsed.answerable) {
-        throw new AnswerProviderError(
-          "The answer model returned an empty response.",
-        );
+      const baseOptions = answerGenerationOptions(
+        requestModel,
+        retrievedAssets.length > 0,
+      );
+      let totalTokens = 0;
+      let finalResult: AnswerProviderResult | undefined;
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const attemptOptions = attempt === 1
+          ? baseOptions
+          : {
+              ...baseOptions,
+              max_completion_tokens: Math.min(
+                baseOptions.max_completion_tokens + 800,
+                2600,
+              ),
+            };
+        const response = await this.client.chat.completions.create({
+          model: requestModel,
+          messages: attempt === 1
+            ? messages
+            : withGroundedRecoveryInstruction(messages),
+          response_format: ANSWER_RESPONSE_FORMAT,
+          ...attemptOptions,
+        });
+        totalTokens += response.usage?.total_tokens ?? 0;
+        const choice = response.choices[0];
+        const rawResponse = choice?.message.content?.trim() || "";
+        const parsed = parseStructuredResponse(rawResponse);
+        const diagnostics = classifyProviderOutput({
+          parsed,
+          finishReason: choice?.finish_reason ?? null,
+          isRefusal: Boolean(choice?.message.refusal),
+          attempts: attempt,
+          hasGroundedContext:
+            input.retrievedChunks.length > 0 || Boolean(input.liveData),
+        });
+        finalResult = {
+          responseText: parsed.status === "valid" ? parsed.answer : "",
+          answerable:
+            parsed.status === "valid" &&
+            diagnostics.status !== "model_declined" &&
+            diagnostics.status !== "truncated_output" &&
+            diagnostics.status !== "invalid_structured_output" &&
+            diagnostics.status !== "empty_output",
+          ...(parsed.replyLanguage
+            ? { replyLanguage: parsed.replyLanguage }
+            : {}),
+          model: response.model || this.model,
+          totalTokens,
+          promptAssembled,
+          groundedClaims: parsed.groundedClaims,
+          diagnostics,
+          citations: validateCitations(
+            parsed.citations,
+            input.retrievedChunks,
+            retrievedAssets,
+          ),
+        };
+
+        if (diagnostics.status === "complete" || attempt === 2) break;
       }
-      return {
-        responseText,
-        answerable: parsed.answerable,
-        ...(parsed.replyLanguage
-          ? { replyLanguage: parsed.replyLanguage }
-          : {}),
-        model: response.model || this.model,
-        totalTokens: response.usage?.total_tokens ?? 0,
-        promptAssembled,
-        groundedClaims: parsed.groundedClaims,
-        citations: validateCitations(
-          parsed.citations,
-          input.retrievedChunks,
-          retrievedAssets,
-        ),
-      };
+      return finalResult!;
     } catch (error) {
       if (error instanceof AnswerProviderError) throw error;
       const providerError = error as {
@@ -275,17 +309,34 @@ export function parseStructuredResponse(value: string): {
   replyLanguage?: string;
   citations: Array<Record<string, unknown>>;
   groundedClaims: GroundedAnswerClaim[];
+  status: "valid" | "invalid" | "empty";
 } {
   if (!value) {
     return {
       answer: "",
-      answerable: true,
+      answerable: false,
       citations: [],
       groundedClaims: [],
+      status: "empty",
     };
   }
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (
+      typeof parsed.answer !== "string" ||
+      typeof parsed.answerable !== "boolean" ||
+      typeof parsed.replyLanguage !== "string" ||
+      !Array.isArray(parsed.citations) ||
+      !Array.isArray(parsed.groundedClaims)
+    ) {
+      return {
+        answer: "",
+        answerable: false,
+        citations: [],
+        groundedClaims: [],
+        status: "invalid",
+      };
+    }
     const answer =
       typeof parsed.answer === "string"
         ? parsed.answer.trim()
@@ -302,6 +353,15 @@ export function parseStructuredResponse(value: string): {
             Boolean(item) && typeof item === "object",
         )
       : [];
+    if (citations.length !== parsed.citations.length) {
+      return {
+        answer: "",
+        answerable: false,
+        citations: [],
+        groundedClaims: [],
+        status: "invalid",
+      };
+    }
     const groundedClaims = Array.isArray(parsed.groundedClaims)
       ? parsed.groundedClaims.flatMap((item): GroundedAnswerClaim[] => {
           if (!item || typeof item !== "object") return [];
@@ -309,7 +369,11 @@ export function parseStructuredResponse(value: string): {
           if (
             typeof claim.text !== "string" ||
             typeof claim.evidenceQuote !== "string" ||
-            !(typeof claim.citationIndex === "number" || claim.citationIndex === null) ||
+            !(
+              (typeof claim.citationIndex === "number" &&
+                Number.isInteger(claim.citationIndex)) ||
+              claim.citationIndex === null
+            ) ||
             (claim.format !== "paragraph" &&
               claim.format !== "step" &&
               claim.format !== "bullet")
@@ -324,21 +388,84 @@ export function parseStructuredResponse(value: string): {
           }];
         })
       : [];
+    if (groundedClaims.length !== parsed.groundedClaims.length) {
+      return {
+        answer: "",
+        answerable: false,
+        citations: [],
+        groundedClaims: [],
+        status: "invalid",
+      };
+    }
     return {
       answer,
       answerable: parsed.answerable === false ? false : true,
       ...(replyLanguage ? { replyLanguage } : {}),
       citations,
       groundedClaims,
+      status: "valid",
     };
   } catch {
     return {
-      answer: value,
-      answerable: true,
+      answer: "",
+      answerable: false,
       citations: [],
       groundedClaims: [],
+      status: "invalid",
     };
   }
+}
+
+function classifyProviderOutput(input: {
+  parsed: ReturnType<typeof parseStructuredResponse>;
+  finishReason: string | null;
+  isRefusal: boolean;
+  attempts: number;
+  hasGroundedContext: boolean;
+}): AnswerProviderDiagnostics {
+  let status: AnswerProviderDiagnostics["status"];
+  if (input.finishReason === "length") {
+    status = "truncated_output";
+  } else if (input.isRefusal) {
+    status = "model_declined";
+  } else if (input.parsed.status === "empty") {
+    status = "empty_output";
+  } else if (input.parsed.status === "invalid") {
+    status = "invalid_structured_output";
+  } else if (!input.parsed.answerable && input.parsed.groundedClaims.length === 0) {
+    status = "model_declined";
+  } else if (
+    input.hasGroundedContext &&
+    input.parsed.groundedClaims.length === 0
+  ) {
+    status = "missing_grounded_claims";
+  } else {
+    status = "complete";
+  }
+  return {
+    status,
+    finishReason: input.finishReason,
+    attempts: input.attempts,
+    groundedClaimCount: input.parsed.groundedClaims.length,
+  };
+}
+
+function withGroundedRecoveryInstruction(
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  return messages.map((message, index) => {
+    if (
+      index !== 0 ||
+      message.role !== "system" ||
+      typeof message.content !== "string"
+    ) {
+      return message;
+    }
+    return {
+      ...message,
+      content: `${message.content} Recovery attempt: reread the same authorized evidence and return the shortest complete JSON answer with exact support for every claim. If the passages support a partial answer, answer only that supported part. Do not guess.`,
+    };
+  });
 }
 
 function validateCitations(

@@ -4,6 +4,17 @@ export type GuardrailResult = {
   responseText: string;
   actions: string[];
   blocked: boolean;
+  diagnostics: {
+    claimsReceived: number;
+    claimsAccepted: number;
+    rejectionReasons: string[];
+  };
+};
+
+const EMPTY_GUARDRAIL_DIAGNOSTICS: GuardrailResult["diagnostics"] = {
+  claimsReceived: 0,
+  claimsAccepted: 0,
+  rejectionReasons: [],
 };
 
 export function applyGuardrails(
@@ -25,37 +36,67 @@ export function applyGuardrails(
       responseText,
       actions: ["grounding_required"],
       blocked: true,
+      diagnostics: {
+        ...EMPTY_GUARDRAIL_DIAGNOSTICS,
+        rejectionReasons: ["evidence_source_missing"],
+      },
     };
   }
 
   let guarded = responseText;
+  let diagnostics = EMPTY_GUARDRAIL_DIAGNOSTICS;
   if (input.retrievedChunks.length > 0) {
     const claims = input.groundedClaims ?? [];
-    const supportedClaims = resolveSupportedClaims(
+    const resolution = resolveSupportedClaims(
       claims,
       input.retrievedChunks,
     );
-    if (supportedClaims.length === 0) {
+    diagnostics = {
+      claimsReceived: claims.length,
+      claimsAccepted: resolution.supportedClaims.length,
+      rejectionReasons: [...new Set(resolution.rejectionReasons)],
+    };
+    if (resolution.supportedClaims.length === 0) {
       return {
         responseText,
         actions: ["grounded_claims_required"],
         blocked: true,
+        diagnostics: {
+          ...diagnostics,
+          rejectionReasons: diagnostics.rejectionReasons.length
+            ? diagnostics.rejectionReasons
+            : [claims.length ? "all_claims_rejected" : "grounded_claims_missing"],
+        },
       };
     }
-    if (supportedClaims.length < claims.length) {
+    if (resolution.supportedClaims.length < claims.length) {
       actions.push("unsupported_claims_removed");
     }
-    guarded = renderGroundedClaims(supportedClaims);
+    guarded = renderGroundedClaims(resolution.supportedClaims);
   } else if (input.hasAuthorizedLiveData && input.authorizedLiveData) {
     const claims = input.groundedClaims ?? [];
     const supportedClaims = claims.filter((claim) =>
       isClaimSupportedByLiveData(claim, input.authorizedLiveData!),
     );
+    diagnostics = {
+      claimsReceived: claims.length,
+      claimsAccepted: supportedClaims.length,
+      rejectionReasons:
+        supportedClaims.length < claims.length
+          ? ["live_fact_not_supported"]
+          : [],
+    };
     if (supportedClaims.length === 0) {
       return {
         responseText,
         actions: ["live_data_claims_required"],
         blocked: true,
+        diagnostics: {
+          ...diagnostics,
+          rejectionReasons: diagnostics.rejectionReasons.length
+            ? diagnostics.rejectionReasons
+            : [claims.length ? "all_live_claims_rejected" : "grounded_claims_missing"],
+        },
       };
     }
     if (supportedClaims.length < claims.length) {
@@ -75,6 +116,7 @@ export function applyGuardrails(
     responseText: guarded,
     actions: [...new Set(actions)],
     blocked: false,
+    diagnostics,
   };
 }
 
@@ -180,9 +222,26 @@ const CONTACT_CHANNEL_GROUPS = [
 ];
 
 const CONTACT_METHOD_PREPOSITIONS = [
-  "via", "by", "through", "using", "on", "por", "mediante", "a traves de",
-  "por medio de",
+  "via", "by", "through", "using", "on", "in", "at", "over", "from",
+  "en", "por", "mediante", "desde", "sur", "a traves de", "por medio de",
 ];
+
+const CONTACT_LOCATION_WORDS = new Set([
+  "bottom", "left", "right", "top", "corner", "side", "section", "menu",
+  "panel", "screen", "platform", "page", "lower", "upper", "parte",
+  "inferior", "superior", "izquierda", "derecha", "esquina", "lateral",
+  "pantalla", "plataforma", "pagina", "menu", "panel", "settings", "setting",
+  "ajuste", "ajustes", "configuracion", "configuraciones", "ingresos",
+  "agency", "agencia", "account", "cuenta",
+]);
+
+const CONTACT_INTENT_WORDS = new Set([
+  "contact", "contacts", "contacted", "contacting", "contacta", "contactar",
+  "contacto", "reach", "reaching", "call", "calls", "calling", "llama",
+  "llamar", "llamen", "message", "messages", "messaging", "mensaje",
+  "mensajes", "write", "writes", "writing", "escribe", "escribir", "email",
+  "mail", "speak", "talk", "hablar", "comunicar", "comunicate",
+]);
 
 const QUOTED_SPEECH_MARKERS =
   /\b(?:say|tell|write|type|message|phrase|ask them|use this phrase|di|dile|diles|decir|escribe|escribir|mensaje|frase|usa esta frase|puedes usar)\b/;
@@ -190,27 +249,33 @@ const QUOTED_SPEECH_MARKERS =
 export function isClaimSupportedByEvidence(
   claim: GroundedAnswerClaim,
   chunks: RetrievedChunk[],
+  rejectionReasons?: string[],
 ): boolean {
   const text = claim.text.trim();
   const evidence = claim.evidenceQuote.trim();
-  if (!text || !evidence || evidence.length > 500) return false;
+  if (!text || !evidence) {
+    return rejectClaim(rejectionReasons, "empty_claim_or_evidence");
+  }
+  if (evidence.length > 500) {
+    return rejectClaim(rejectionReasons, "evidence_quote_too_long");
+  }
   if (
     claim.citationIndex === null ||
     !Number.isInteger(claim.citationIndex) ||
     claim.citationIndex < 1
   ) {
-    return false;
+    return rejectClaim(rejectionReasons, "invalid_citation_index");
   }
 
   const chunk = chunks[claim.citationIndex - 1];
-  if (!chunk) return false;
+  if (!chunk) return rejectClaim(rejectionReasons, "citation_out_of_range");
   const evidenceText = [
     chunk.content,
     ...(chunk.assets ?? []).map((asset) => asset.altText),
   ].join("\n");
   const normalizedEvidence = normalizeText(evidence);
   if (!normalizedEvidence || !normalizeText(evidenceText).includes(normalizedEvidence)) {
-    return false;
+    return rejectClaim(rejectionReasons, "evidence_quote_not_in_cited_chunk");
   }
 
   const claimTokens = contentTokens(text);
@@ -223,7 +288,7 @@ export function isClaimSupportedByEvidence(
     (matches.length < Math.min(2, claimTokens.length) ||
       matches.length / claimTokens.length < 0.4);
   if (weakLexicalMatch && !hasLikelyLanguageTranslation(text, evidence)) {
-    return false;
+    return rejectClaim(rejectionReasons, "lexical_evidence_mismatch");
   }
 
   const evidenceWords = new Set(normalizeText(evidence).split(" "));
@@ -240,13 +305,13 @@ export function isClaimSupportedByEvidence(
         ),
     )
   ) {
-    return false;
+    return rejectClaim(rejectionReasons, "unsupported_control_type");
   }
-  if (
-    !areControlDestinationsSupported(text, evidence) ||
-    !areContactChannelsSupported(text, evidence)
-  ) {
-    return false;
+  if (!areControlDestinationsSupported(text, evidence)) {
+    return rejectClaim(rejectionReasons, "unsupported_control_destination");
+  }
+  if (!areContactChannelsSupported(text, evidence)) {
+    return rejectClaim(rejectionReasons, "unsupported_contact_method");
   }
 
   const normalizedClaim = normalizeText(text);
@@ -254,7 +319,7 @@ export function isClaimSupportedByEvidence(
     EXAMPLE_MARKERS.some((marker) => normalizedClaim.includes(marker)) &&
     !EXAMPLE_MARKERS.some((marker) => normalizeText(evidence).includes(marker))
   ) {
-    return false;
+    return rejectClaim(rejectionReasons, "unsupported_example_marker");
   }
 
   const quotedPhrases = [...text.matchAll(/["“”«»]([^"“”«»]+)["“”«»]/g)]
@@ -263,7 +328,7 @@ export function isClaimSupportedByEvidence(
   if (
     quotedPhrases.some((phrase) => !normalizeText(evidence).includes(phrase))
   ) {
-    return false;
+    return rejectClaim(rejectionReasons, "unsupported_quoted_text");
   }
   const claimHasControl = claimWords.some((word) =>
     CONTROL_TERM_GROUPS.some((group) => group.includes(word)),
@@ -283,19 +348,21 @@ export function isClaimSupportedByEvidence(
         QUOTED_SPEECH_MARKERS.test(normalizedEvidence))
     )
   ) {
-    return false;
+    return rejectClaim(rejectionReasons, "unsupported_quoted_text");
   }
 
   const claimNumbers = text.match(/\d+(?:[.,]\d+)*/g) ?? [];
   const evidenceNumbers = new Set(evidence.match(/\d+(?:[.,]\d+)*/g) ?? []);
   if (claimNumbers.some((number) => !evidenceNumbers.has(number))) {
-    return false;
+    return rejectClaim(rejectionReasons, "unsupported_number");
   }
 
-  return (
-    areControlDestinationsSupported(text, evidence) &&
-    areContactChannelsSupported(text, evidence)
-  );
+  return true;
+}
+
+function rejectClaim(rejectionReasons: string[] | undefined, reason: string): false {
+  rejectionReasons?.push(reason);
+  return false;
 }
 
 function areControlDestinationsSupported(
@@ -338,16 +405,19 @@ function getControlReferences(
     if (!typeGroup) return;
     const start = Math.max(0, index - 3);
     const end = Math.min(words.length, index + 4);
-    const destinationTokens = words
-      .slice(start, end)
-      .filter(
-        (token, offset) =>
-          start + offset !== index &&
-          !NON_CONTENT_WORDS.has(token) &&
-          !CONTROL_TERM_GROUPS.some((group) => group.includes(token)) &&
-          !CONTROL_REFERENCE_ACTIONS.has(token) &&
-          !CONTROL_REFERENCE_DECORATORS.has(token),
-      );
+    const destinationTokens =
+      typeGroup[0] === "setting"
+        ? []
+        : words
+            .slice(start, end)
+            .filter(
+              (token, offset) =>
+                start + offset !== index &&
+                !NON_CONTENT_WORDS.has(token) &&
+                !CONTROL_TERM_GROUPS.some((group) => group.includes(token)) &&
+                !CONTROL_REFERENCE_ACTIONS.has(token) &&
+                !CONTROL_REFERENCE_DECORATORS.has(token),
+            );
     references.push({ typeGroup, destinationTokens });
   });
   return references;
@@ -383,7 +453,19 @@ function areContactChannelsSupported(text: string, evidence: string): boolean {
     }
   }
 
+  const hasContactIntent = normalizedText
+    .split(" ")
+    .some((word) => CONTACT_INTENT_WORDS.has(word));
+  if (!hasContactIntent) return true;
+
   return extractContactMethodPhrases(normalizedText).every((method) => {
+    const methodWords = method.split(" ");
+    if (
+      methodWords.length > 0 &&
+      methodWords.every((word) => CONTACT_LOCATION_WORDS.has(word))
+    ) {
+      return true;
+    }
     const channelGroup = CONTACT_CHANNEL_GROUPS.find((group) =>
       group.some((term) => includesNormalizedPhrase(method, term)),
     );
@@ -410,19 +492,28 @@ function extractContactMethodPhrases(normalizedText: string): string[] {
     const methodWords: string[] = [];
     for (
       let next = index + phraseLength;
-      next < words.length && methodWords.length < 3;
+      next < words.length && methodWords.length < 4;
       next += 1
     ) {
       const word = words[next];
+      if (["or", "and", "o", "y"].includes(word)) break;
       if (
-        NON_CONTENT_WORDS.has(word) ||
-        ["or", "and", "o", "y"].includes(word)
-      ) {
-        break;
+        NON_CONTENT_WORDS.has(word) &&
+        !["de", "del", "the", "el", "la", "los", "las", "un", "una"].includes(
+          word,
+        )
+      ) break;
+      if (["de", "del", "the", "el", "la", "los", "las", "un", "una"].includes(word)) {
+        continue;
       }
       methodWords.push(word);
     }
-    if (methodWords.length > 0) methods.push(methodWords.join(" "));
+    if (
+      methodWords.length > 0 &&
+      !["example", "ejemplo"].includes(methodWords[0]!)
+    ) {
+      methods.push(methodWords.join(" "));
+    }
   }
   return methods;
 }
@@ -438,24 +529,32 @@ function includesNormalizedPhrase(text: string, phrase: string): boolean {
 function resolveSupportedClaims(
   claims: GroundedAnswerClaim[],
   chunks: RetrievedChunk[],
-): GroundedAnswerClaim[] {
-  const resolved: GroundedAnswerClaim[] = [];
+): { supportedClaims: GroundedAnswerClaim[]; rejectionReasons: string[] } {
+  const supportedClaims: GroundedAnswerClaim[] = [];
+  const rejectionReasons: string[] = [];
   for (const claim of claims) {
-    if (!isClaimSupportedByEvidence(claim, chunks)) continue;
+    const claimRejectionReasons: string[] = [];
+    if (!isClaimSupportedByEvidence(claim, chunks, claimRejectionReasons)) {
+      rejectionReasons.push(...claimRejectionReasons);
+      continue;
+    }
     if (areActionsSupportedByEvidence(claim.text, claim.evidenceQuote)) {
-      resolved.push(claim);
+      supportedClaims.push(claim);
       continue;
     }
     const sourceAnswer = extractSourceAnswerSentence(claim.evidenceQuote);
     if (sourceAnswer) {
-      resolved.push({
+      supportedClaims.push({
         ...claim,
         text: sourceAnswer,
         format: "paragraph",
       });
+      rejectionReasons.push("unsupported_action_replaced_with_source");
+    } else {
+      rejectionReasons.push("unsupported_action_without_source_answer");
     }
   }
-  return resolved;
+  return { supportedClaims, rejectionReasons };
 }
 
 function areActionsSupportedByEvidence(text: string, evidence: string): boolean {
