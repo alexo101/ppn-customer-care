@@ -3,3 +3,4 @@
 - [Drizzle snapshot gaps](drizzle-snapshot-gaps.md) — migration generation is currently blocked by incomplete historical snapshots; preserve the ordered SQL journal.
 - [Live client lookups](live-client-lookups.md) — chat users supply client names because they do not know or have access to client IDs.
 - [Knowledge chunk boundaries](knowledge-chunk-boundaries.md) — a matched FAQ question can be separated from its answer across adjacent indexed chunks.
+- [Structured answer token budget](structured-answer-token-budget.md) — GPT-5 can exhaust its completion cap on reasoning before returning a larger grounded JSON answer.

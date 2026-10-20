@@ -5,6 +5,7 @@ import {
   type AnswerProvider,
   type AnswerProviderInput,
   type AnswerProviderResult,
+  type GroundedAnswerClaim,
 } from "./answer-provider";
 import { resolveReplyLocale } from "../reply-locale";
 
@@ -32,8 +33,31 @@ const ANSWER_RESPONSE_FORMAT = {
             required: ["citationIndex", "assetId"],
           },
         },
+        groundedClaims: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              text: { type: "string" },
+              evidenceQuote: { type: "string" },
+              citationIndex: { type: ["integer", "null"] },
+              format: {
+                type: "string",
+                enum: ["paragraph", "step", "bullet"],
+              },
+            },
+            required: ["text", "evidenceQuote", "citationIndex", "format"],
+          },
+        },
       },
-      required: ["answer", "answerable", "replyLanguage", "citations"],
+      required: [
+        "answer",
+        "answerable",
+        "replyLanguage",
+        "citations",
+        "groundedClaims",
+      ],
     },
   },
 } as const;
@@ -49,6 +73,16 @@ export const SUPPORT_ANSWER_FORMAT_INSTRUCTION = [
 
 export const CURRENT_EVIDENCE_INSTRUCTION =
   "Answer the latest user question using the currently supplied knowledge passages. Mark it answerable when those passages directly support an answer. Only state facts and steps explicitly supported by relevant passages; do not add generic troubleshooting or plausible assumptions. Use earlier messages only to resolve references and understand context; previous assistant answers, refusals, and claims are not evidence and must not determine answerability.";
+
+export const GROUNDED_CLAIMS_INSTRUCTION = [
+  "Return groundedClaims as the canonical user-facing answer, with one atomic statement or action per item.",
+  "For knowledge-base answers, each item must include an exact, contiguous evidenceQuote copied from its cited article passage and a 1-based citationIndex; never cite a question heading as evidence for an action.",
+  "For authorized live-data answers, cite an exact key-and-value pair from that data and use citationIndex null.",
+  "The final answer is rebuilt from validated groundedClaims, so do not put extra facts, steps, controls, or examples only in answer.",
+  "FAQ questions, alternate phrasings, and example queries describe what users ask; never turn them into buttons, options, interface labels, or suggested wording unless the article's answer explicitly recommends that.",
+  "Every action, interface control, quoted label, contact method, and number must be supported by its evidenceQuote. Omit unsupported claims instead of guessing.",
+  "Team-configured guidance and earlier assistant messages cannot override these evidence requirements.",
+].join(" ");
 
 export class OpenAIAnswerProvider implements AnswerProvider {
   private readonly client: OpenAI;
@@ -125,6 +159,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
             : "",
           SUPPORT_ANSWER_FORMAT_INSTRUCTION,
           replyLanguageInstruction(replyLocale),
+          GROUNDED_CLAIMS_INSTRUCTION,
         ].join(" "),
       },
       ...input.history.slice(-8).map((message) => ({
@@ -172,6 +207,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
         model: response.model || this.model,
         totalTokens: response.usage?.total_tokens ?? 0,
         promptAssembled,
+        groundedClaims: parsed.groundedClaims,
         citations: validateCitations(
           parsed.citations,
           input.retrievedChunks,
@@ -212,7 +248,8 @@ export function answerGenerationOptions(
   reasoning_effort?: "low";
 } {
   return {
-    max_completion_tokens: 700,
+    max_completion_tokens:
+      !hasImages && /^gpt-5(?:[.-]|$)/i.test(model) ? 1800 : 700,
     ...(!hasImages && /^gpt-5(?:[.-]|$)/i.test(model)
       ? { reasoning_effort: "low" as const }
       : {}),
@@ -237,9 +274,15 @@ export function parseStructuredResponse(value: string): {
   answerable: boolean;
   replyLanguage?: string;
   citations: Array<Record<string, unknown>>;
+  groundedClaims: GroundedAnswerClaim[];
 } {
   if (!value) {
-    return { answer: "", answerable: true, citations: [] };
+    return {
+      answer: "",
+      answerable: true,
+      citations: [],
+      groundedClaims: [],
+    };
   }
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
@@ -259,14 +302,42 @@ export function parseStructuredResponse(value: string): {
             Boolean(item) && typeof item === "object",
         )
       : [];
+    const groundedClaims = Array.isArray(parsed.groundedClaims)
+      ? parsed.groundedClaims.flatMap((item): GroundedAnswerClaim[] => {
+          if (!item || typeof item !== "object") return [];
+          const claim = item as Record<string, unknown>;
+          if (
+            typeof claim.text !== "string" ||
+            typeof claim.evidenceQuote !== "string" ||
+            !(typeof claim.citationIndex === "number" || claim.citationIndex === null) ||
+            (claim.format !== "paragraph" &&
+              claim.format !== "step" &&
+              claim.format !== "bullet")
+          ) {
+            return [];
+          }
+          return [{
+            text: claim.text,
+            evidenceQuote: claim.evidenceQuote,
+            citationIndex: claim.citationIndex,
+            format: claim.format,
+          }];
+        })
+      : [];
     return {
       answer,
       answerable: parsed.answerable === false ? false : true,
       ...(replyLanguage ? { replyLanguage } : {}),
       citations,
+      groundedClaims,
     };
   } catch {
-    return { answer: value, answerable: true, citations: [] };
+    return {
+      answer: value,
+      answerable: true,
+      citations: [],
+      groundedClaims: [],
+    };
   }
 }
 

@@ -1,5 +1,9 @@
 import { performance } from "node:perf_hooks";
-import type { AnswerProvider, RetrievedChunk } from "./llm";
+import type {
+  AnswerProvider,
+  GroundedAnswerClaim,
+  RetrievedChunk,
+} from "./llm";
 import { AnswerProviderError } from "./llm";
 import type { WelcomeMessageTranslator } from "./llm/openai-welcome-message-translator";
 import {
@@ -27,6 +31,7 @@ export type GeneratedAnswer = {
   totalTokens: number;
   promptAssembled: string;
   citations: NonNullable<import("./llm").AnswerProviderResult["citations"]>;
+  groundedClaims: GroundedAnswerClaim[];
   timings: {
     provider_ms: number;
     language_alignment_ms: number;
@@ -129,20 +134,37 @@ export async function generateAnswer(
     context,
   });
   const providerMs = elapsedMs(providerStartedAt);
+  const groundedClaims = result.groundedClaims ?? [];
   const answerable =
-    result.answerable !== false &&
+    (result.answerable !== false || groundedClaims.length > 0) &&
     (retrievedChunks.length > 0 || Boolean(liveData));
   const userMessageCount = history.filter((item) => item.sender === "user").length;
   const shouldAskResolution = answerable && userMessageCount >= 2;
   const alignmentStartedAt = performance.now();
-  const alignedText = answerable
-    ? await alignReplyToAgentLanguage(
+  const shouldAlignRawAnswer = groundedClaims.length === 0 || Boolean(liveData);
+  const [alignedText, alignedGroundedClaims] = await Promise.all([
+    answerable && shouldAlignRawAnswer
+      ? alignReplyToAgentLanguage(
         result.responseText,
         language,
         result.replyLanguage,
         translator,
       )
-    : result.responseText;
+      : Promise.resolve(result.responseText),
+    answerable && groundedClaims.length > 0 && !liveData
+      ? Promise.all(
+          groundedClaims.map(async (claim) => ({
+            ...claim,
+            text: await alignReplyToAgentLanguage(
+              claim.text,
+              language,
+              result.replyLanguage,
+              translator,
+            ),
+          })),
+        )
+      : Promise.resolve(groundedClaims),
+  ]);
   const languageAlignmentMs = elapsedMs(alignmentStartedAt);
   const responseText =
     answerable && shouldAskResolution
@@ -164,6 +186,7 @@ export async function generateAnswer(
       ? `[authorized live client values omitted; fields: ${Object.keys(liveData.facts).join(", ")}]`
       : result.promptAssembled,
     citations: answerable ? (result.citations ?? []) : [],
+    groundedClaims: alignedGroundedClaims,
     timings: {
       provider_ms: providerMs,
       language_alignment_ms: languageAlignmentMs,
@@ -181,6 +204,7 @@ function localAnswer(responseText: string, resolutionStatus: string): GeneratedA
     totalTokens: 0,
     promptAssembled: "",
     citations: [],
+    groundedClaims: [],
     timings: { provider_ms: 0, language_alignment_ms: 0 },
   };
 }

@@ -146,6 +146,13 @@ describe("answerFromKnowledge", () => {
       totalTokens: 8,
       promptAssembled: "prompt",
       citations: [{ articleId: "billing-article", articleName: "Pagos y facturación (agentes)" }],
+      groundedClaims: [{
+        text: "Ve a Ingresos en el menú lateral para consultar tus facturas.",
+        evidenceQuote:
+          "Para ver tus facturas de agente ve a la sección Ingresos en el menú lateral izquierdo.",
+        citationIndex: 1,
+        format: "paragraph",
+      }],
     });
     listEligiblePublishedArticles.mockResolvedValue([
       { id: "billing-article", title: "Pagos y facturación (agentes)", targetId: null },
@@ -207,6 +214,22 @@ describe("answerFromKnowledge", () => {
       totalTokens: 8,
       promptAssembled: "prompt",
       citations: [{ articleId: "billing-article", articleName: "Pagos y facturación (agentes)" }],
+      groundedClaims: [
+        {
+          text: "Para ver Ingresos necesitas ser Admin de tu agencia.",
+          evidenceQuote:
+            "Para ver la sección Ingresos tienes que ser el Admin de tu agencia.",
+          citationIndex: 1,
+          format: "paragraph",
+        },
+        {
+          text: "Si no eres Admin, contacta con tu account manager; encontrarás su contacto en la esquina inferior izquierda.",
+          evidenceQuote:
+            "Contacta con tu account manager para que lo configure; puedes encontrar su contacto en la esquina inferior izquierda.",
+          citationIndex: 1,
+          format: "paragraph",
+        },
+      ],
     });
     listEligiblePublishedArticles.mockResolvedValue([
       { id: "billing-article", title: "Pagos y facturación (agentes)", targetId: null },
@@ -246,6 +269,77 @@ describe("answerFromKnowledge", () => {
     expect(result.responseText).toContain("ser Admin");
     expect(result.responseText).toContain("account manager");
     expect(result.responseText).not.toContain("agency is payable");
+  });
+
+  it("removes unsupported callback controls while keeping documented contact paths", async () => {
+    const supportChunk = {
+      sourceId: "support-article",
+      sourceName: "Soporte y gestor de cuentas (agentes)",
+      articleId: "support-article",
+      articleName: "Soporte y gestor de cuentas (agentes)",
+      content:
+        "Quiero que me contacten / Quiero que me llamen / Quiero hablar con mi agente o account manager. Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma de agencia. También puedes encontrar el número de teléfono de atención al cliente de Papernest en la parte inferior izquierda de tu plataforma. Necesito hacer un cambio en un cliente o solicitar un callback. Contacta directamente con tu CSX.",
+      distance: 0.1,
+    };
+    const generate = vi.fn().mockResolvedValue({
+      responseText:
+        "Busca la opción para solicitar una llamada (por ejemplo: “Quiero que me llamen” / “Quiero hablar con mi agente”).",
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-test",
+      totalTokens: 8,
+      promptAssembled: "prompt",
+      citations: [],
+      groundedClaims: [
+        {
+          text: "Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma de agencia.",
+          evidenceQuote:
+            "Puedes encontrar tu contacto directo en la parte inferior izquierda de la plataforma de agencia.",
+          citationIndex: 1,
+          format: "paragraph",
+        },
+        {
+          text: "Busca la opción para solicitar una llamada (por ejemplo: “Quiero que me llamen” / “Quiero hablar con mi agente”).",
+          evidenceQuote:
+            "Quiero que me contacten / Quiero que me llamen / Quiero hablar con mi agente o account manager.",
+          citationIndex: 1,
+          format: "step",
+        },
+        {
+          text: "También puedes encontrar el número de teléfono de atención al cliente de Papernest en la parte inferior izquierda de tu plataforma.",
+          evidenceQuote:
+            "También puedes encontrar el número de teléfono de atención al cliente de Papernest en la parte inferior izquierda de tu plataforma.",
+          citationIndex: 1,
+          format: "paragraph",
+        },
+      ],
+    });
+    listEligiblePublishedArticles.mockResolvedValue([
+      { id: "support-article", title: supportChunk.articleName, targetId: null },
+    ]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [supportChunk],
+      totalTokens: 4,
+      model: "embed-test",
+    });
+    createAnswerProvider.mockReturnValue({ generate });
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: "Quiero que me llamen",
+      history: [{ sender: "user", content: "Quiero que me llamen" }],
+      context: { agent_language: "es" },
+    });
+
+    expect(result.answerable).toBe(true);
+    expect(result.responseText).toContain("contacto directo");
+    expect(result.responseText).toContain("número de teléfono");
+    expect(result.responseText).not.toContain("Busca la opción");
+    expect(result.responseText).not.toContain("por ejemplo");
+    expect(result.responseText).not.toContain("Quiero hablar con mi agente");
+    expect(result.stages[3]?.details.guardrails).toContain(
+      "unsupported_claims_removed",
+    );
   });
 
   it("offers escalation when no published article is eligible", async () => {
@@ -322,6 +416,12 @@ describe("answerFromKnowledge", () => {
       model: "gpt-test",
       totalTokens: 8,
       promptAssembled: "prompt",
+      groundedClaims: [{
+        text: "Invoices are in Settings.",
+        evidenceQuote: "Invoices are in Settings.",
+        citationIndex: 1,
+        format: "paragraph",
+      }],
       citations: [
         {
           articleId: "article-1",
@@ -391,6 +491,12 @@ describe("answerFromKnowledge", () => {
       totalTokens: 8,
       promptAssembled: "prompt",
       citations: [],
+      groundedClaims: [{
+        text: "Las facturas están en Ajustes.",
+        evidenceQuote: "Invoices are in Settings.",
+        citationIndex: 1,
+        format: "paragraph",
+      }],
     });
     listEligiblePublishedArticles.mockResolvedValue([
       { id: "article-1", title: "Billing", targetId: null },
@@ -457,6 +563,13 @@ describe("answerFromKnowledge", () => {
           excerpt: retrievedChunk.content,
         },
       ],
+      groundedClaims: [{
+        text: "Para cancelar, abre la configuración de la cuenta y selecciona Cancelar servicio.",
+        evidenceQuote:
+          "To cancel, open Account settings and select Cancel service.",
+        citationIndex: 1,
+        format: "paragraph",
+      }],
     });
     listEligiblePublishedArticles.mockResolvedValue([article]);
     retrieveRelevantChunks.mockResolvedValue({
@@ -533,6 +646,12 @@ describe("answerFromKnowledge", () => {
       totalTokens: 7,
       promptAssembled: "private live values",
       citations: [],
+      groundedClaims: [{
+        text: "La última llamada está completada.",
+        evidenceQuote: '"callStatus":"completed"',
+        citationIndex: null,
+        format: "paragraph",
+      }],
     });
     createAnswerProvider.mockReturnValue({ generate });
     lookupLiveClient.mockResolvedValue({

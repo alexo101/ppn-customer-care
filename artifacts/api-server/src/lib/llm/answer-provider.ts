@@ -28,6 +28,13 @@ export type AnswerProviderInput = {
   context?: Record<string, unknown>;
 };
 
+export type GroundedAnswerClaim = {
+  text: string;
+  evidenceQuote: string;
+  citationIndex: number | null;
+  format: "paragraph" | "step" | "bullet";
+};
+
 export type AnswerCitation = {
   articleId: string;
   articleName: string;
@@ -46,6 +53,7 @@ export type AnswerProviderResult = {
   totalTokens: number;
   promptAssembled: string;
   citations?: AnswerCitation[];
+  groundedClaims?: GroundedAnswerClaim[];
 };
 
 export interface AnswerProvider {

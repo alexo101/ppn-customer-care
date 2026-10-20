@@ -18,7 +18,11 @@ import {
   scoreLexicalMatch,
 } from "./retrieval";
 import type { PersonAttributes } from "./targets";
-import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
+import {
+  localizedCommunicationMessage,
+  resolutionFollowUp,
+  resolveReplyLocale,
+} from "./reply-locale";
 import {
   detectLiveClientIntent,
   lookupLiveClient,
@@ -250,7 +254,22 @@ export async function answerFromKnowledge(input: {
           retrievedChunks: [],
           personAttributes: input.person.attributes,
           hasAuthorizedLiveData: true,
+          authorizedLiveData: liveData,
+          groundedClaims: answer.groundedClaims,
         });
+        if (guarded.blocked) {
+          return buildLiveControlAnswer(
+            localizedCommunicationMessage("liveClientUnavailable", agentLanguage),
+            stages,
+            "live_data_unavailable",
+            false,
+            {
+              lookup_duration_ms: lookupMs,
+              guardrails: guarded.actions,
+              ...answerTimings,
+            },
+          );
+        }
         stages[1].status = "completed";
         stages[1].details = {
           eligible_articles: 0,
@@ -431,7 +450,12 @@ export async function answerFromKnowledge(input: {
     language_alignment_ms: answer.timings.language_alignment_ms,
   };
 
-  if (!answer.answerable) {
+  const guardrailResult = applyGuardrails(answer.responseText, {
+    retrievedChunks,
+    personAttributes: input.person.attributes,
+    groundedClaims: answer.groundedClaims,
+  });
+  if (!answer.answerable || guardrailResult.blocked) {
     const insufficient = await insufficientAnswer(
       input.escalationTemplate,
       input.userName,
@@ -443,36 +467,6 @@ export async function answerFromKnowledge(input: {
       model: answer.model,
       answerable: false,
       chunks_used: retrievedChunks.length,
-      ...answerTimings,
-    };
-    return {
-      ...insufficient,
-      answerable: false,
-      articlesUsed,
-      articleIds,
-      retrievedChunks,
-      model: answer.model,
-      totalTokens: retrievalTokens + answer.totalTokens,
-      promptAssembled: answer.promptAssembled,
-      stages,
-    };
-  }
-
-  const guardrailResult = applyGuardrails(answer.responseText, {
-    retrievedChunks,
-    personAttributes: input.person.attributes,
-  });
-  if (guardrailResult.blocked) {
-    const insufficient = await insufficientAnswer(
-      input.escalationTemplate,
-      input.userName,
-      [agentLanguage],
-    );
-    stages[3].status = "completed";
-    stages[3].details = {
-      resolution_status: insufficient.resolutionStatus,
-      model: answer.model,
-      answerable: false,
       guardrails: guardrailResult.actions,
       ...answerTimings,
     };
@@ -499,7 +493,9 @@ export async function answerFromKnowledge(input: {
     ...answerTimings,
   };
   return {
-    responseText: guardrailResult.responseText,
+    responseText: answer.shouldAskResolution
+      ? `${guardrailResult.responseText}\n\n${resolutionFollowUp(agentLanguage)}`
+      : guardrailResult.responseText,
     resolutionStatus: answer.resolutionStatus,
     shouldAskResolution: answer.shouldAskResolution,
     answerable: true,
