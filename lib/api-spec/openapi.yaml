@@ -1804,23 +1804,38 @@ components:
         temperature: { type: string }
         configuration: { type: object, additionalProperties: true }
 
+    QueryLiveDataEndpoint:
+      type: object
+      required: [method, endpointUrl]
+      properties:
+        method:
+          type: string
+          enum: [GET]
+        endpointUrl: { type: string, maxLength: 2048 }
     QueryLiveDataSettings:
       type: object
       required:
-        [agentId, method, endpointUrl, enabled]
+        [agentId, method, endpointUrl, endpoints, enabled]
       properties:
         agentId: { type: string }
         method:
           type: string
           enum: [GET]
         endpointUrl: { type: string }
+        endpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryLiveDataEndpoint"
         enabled: { type: boolean }
     QueryLiveDataSettingsInput:
       type: object
-      required:
-        [endpointUrl]
+      required: [endpoints]
       properties:
-        endpointUrl: { type: string, maxLength: 2048 }
+        endpoints:
+          type: array
+          maxItems: 12
+          items:
+            $ref: "#/components/schemas/QueryLiveDataEndpoint"
     DeploymentToken:
       type: object
       required: [id, token, tokenPrefix]

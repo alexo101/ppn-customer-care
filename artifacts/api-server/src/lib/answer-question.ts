@@ -17,6 +17,7 @@ import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-local
 import {
   detectLiveClientIntent,
   lookupLiveClient,
+  queryLiveDataEndpoints,
   readQueryLiveDataSettings,
   type LiveClientHistoryMessage,
   type LiveLookupCaller,
@@ -129,7 +130,8 @@ export async function answerFromKnowledge(input: {
       .where(eq(agentSettingsTable.agentId, input.agentId))
       .limit(1);
     const queryLiveData = readQueryLiveDataSettings(settingsRow?.configuration);
-    if (queryLiveData.endpointUrl) {
+    const liveEndpoints = queryLiveDataEndpoints(queryLiveData);
+    if (liveEndpoints.length > 0) {
       if (liveIntent.kind === "ask_name") {
         return buildLiveControlAnswer(
           localizedCommunicationMessage("liveClientNameRequired", agentLanguage),
@@ -150,11 +152,25 @@ export async function answerFromKnowledge(input: {
       }
 
       const lookupStartedAt = performance.now();
-      const lookup = await lookupLiveClient(
-        queryLiveData,
+      let lookup = await lookupLiveClient(
+        { ...queryLiveData, endpointUrl: liveEndpoints[0].endpointUrl, endpoints: liveEndpoints },
         input.caller,
         liveIntent.clientName,
       );
+      for (const endpoint of liveEndpoints.slice(1)) {
+        if (
+          lookup.status === "matched" ||
+          lookup.status === "ambiguous" ||
+          lookup.status === "unauthorized"
+        ) {
+          break;
+        }
+        lookup = await lookupLiveClient(
+          { ...queryLiveData, endpointUrl: endpoint.endpointUrl, endpoints: liveEndpoints },
+          input.caller,
+          liveIntent.clientName,
+        );
+      }
       const lookupMs = elapsedMs(lookupStartedAt);
       if (lookup.status === "matched") {
         const generationStartedAt = performance.now();

@@ -260,12 +260,18 @@ export const GetAgentQueryLiveDataParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const getAgentQueryLiveDataResponseEndpointsItemEndpointUrlMax = 2048;
+
+
+
 export const GetAgentQueryLiveDataResponse = zod.object({
   "agentId": zod.string(),
   "method": zod.enum(['GET']),
   "endpointUrl": zod.string(),
-  "authorizationSecretName": zod.string(),
-  "allowedFields": zod.array(zod.string()),
+  "endpoints": zod.array(zod.object({
+  "method": zod.enum(['GET']),
+  "endpointUrl": zod.string().max(getAgentQueryLiveDataResponseEndpointsItemEndpointUrlMax)
+})),
   "enabled": zod.boolean()
 })
 
@@ -277,28 +283,31 @@ export const UpdateAgentQueryLiveDataParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const updateAgentQueryLiveDataBodyEndpointUrlMax = 2048;
+export const updateAgentQueryLiveDataBodyEndpointsItemEndpointUrlMax = 2048;
 
-export const updateAgentQueryLiveDataBodyAuthorizationSecretNameMax = 64;
-
-export const updateAgentQueryLiveDataBodyAllowedFieldsItemMax = 64;
-
-export const updateAgentQueryLiveDataBodyAllowedFieldsMax = 12;
+export const updateAgentQueryLiveDataBodyEndpointsMax = 12;
 
 
 
 export const UpdateAgentQueryLiveDataBody = zod.object({
-  "endpointUrl": zod.string().max(updateAgentQueryLiveDataBodyEndpointUrlMax),
-  "authorizationSecretName": zod.string().max(updateAgentQueryLiveDataBodyAuthorizationSecretNameMax),
-  "allowedFields": zod.array(zod.string().max(updateAgentQueryLiveDataBodyAllowedFieldsItemMax)).max(updateAgentQueryLiveDataBodyAllowedFieldsMax)
+  "endpoints": zod.array(zod.object({
+  "method": zod.enum(['GET']),
+  "endpointUrl": zod.string().max(updateAgentQueryLiveDataBodyEndpointsItemEndpointUrlMax)
+})).max(updateAgentQueryLiveDataBodyEndpointsMax)
 })
+
+export const updateAgentQueryLiveDataResponseEndpointsItemEndpointUrlMax = 2048;
+
+
 
 export const UpdateAgentQueryLiveDataResponse = zod.object({
   "agentId": zod.string(),
   "method": zod.enum(['GET']),
   "endpointUrl": zod.string(),
-  "authorizationSecretName": zod.string(),
-  "allowedFields": zod.array(zod.string()),
+  "endpoints": zod.array(zod.object({
+  "method": zod.enum(['GET']),
+  "endpointUrl": zod.string().max(updateAgentQueryLiveDataResponseEndpointsItemEndpointUrlMax)
+})),
   "enabled": zod.boolean()
 })
 

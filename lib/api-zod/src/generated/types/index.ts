@@ -88,6 +88,8 @@ export * from './npsInput';
 export * from './orchestratorLog';
 export * from './orchestratorStage';
 export * from './orchestratorStageDetails';
+export * from './queryLiveDataEndpoint';
+export * from './queryLiveDataEndpointMethod';
 export * from './queryLiveDataSettings';
 export * from './queryLiveDataSettingsInput';
 export * from './queryLiveDataSettingsMethod';

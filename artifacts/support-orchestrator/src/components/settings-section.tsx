@@ -17,11 +17,24 @@ export function SettingsSection({
   title,
   children,
   defaultOpen = true,
+  collapsible = true,
 }: {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  collapsible?: boolean;
 }) {
+  if (!collapsible) {
+    return (
+      <Card className="shadow-none border-border">
+        <CardHeader className="py-4">
+          <CardTitle className="text-base">{title}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">{children}</CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Collapsible defaultOpen={defaultOpen}>
       <Card className="shadow-none border-border">

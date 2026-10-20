@@ -5,13 +5,13 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { QueryLiveDataEndpoint } from './queryLiveDataEndpoint';
 import type { QueryLiveDataSettingsMethod } from './queryLiveDataSettingsMethod';
 
 export interface QueryLiveDataSettings {
   agentId: string;
   method: QueryLiveDataSettingsMethod;
   endpointUrl: string;
-  authorizationSecretName: string;
-  allowedFields: string[];
+  endpoints: QueryLiveDataEndpoint[];
   enabled: boolean;
 }

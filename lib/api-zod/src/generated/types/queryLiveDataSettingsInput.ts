@@ -5,15 +5,9 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { QueryLiveDataEndpoint } from './queryLiveDataEndpoint';
 
 export interface QueryLiveDataSettingsInput {
-  /** @maxLength 2048 */
-  endpointUrl: string;
-  /** @maxLength 64 */
-  authorizationSecretName: string;
-  /**
-     * @maxItems 12
-     * @items.maxLength 64
-     */
-  allowedFields: string[];
+  /** @maxItems 12 */
+  endpoints: QueryLiveDataEndpoint[];
 }

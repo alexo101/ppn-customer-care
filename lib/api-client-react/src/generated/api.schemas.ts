@@ -28,6 +28,19 @@ export interface AgentSettingsInput {
   configuration?: AgentSettingsInputConfiguration;
 }
 
+export type QueryLiveDataEndpointMethod = typeof QueryLiveDataEndpointMethod[keyof typeof QueryLiveDataEndpointMethod];
+
+
+export const QueryLiveDataEndpointMethod = {
+  GET: 'GET',
+} as const;
+
+export interface QueryLiveDataEndpoint {
+  method: QueryLiveDataEndpointMethod;
+  /** @maxLength 2048 */
+  endpointUrl: string;
+}
+
 export type QueryLiveDataSettingsMethod = typeof QueryLiveDataSettingsMethod[keyof typeof QueryLiveDataSettingsMethod];
 
 
@@ -39,21 +52,13 @@ export interface QueryLiveDataSettings {
   agentId: string;
   method: QueryLiveDataSettingsMethod;
   endpointUrl: string;
-  authorizationSecretName: string;
-  allowedFields: string[];
+  endpoints: QueryLiveDataEndpoint[];
   enabled: boolean;
 }
 
 export interface QueryLiveDataSettingsInput {
-  /** @maxLength 2048 */
-  endpointUrl: string;
-  /** @maxLength 64 */
-  authorizationSecretName: string;
-  /**
-     * @maxItems 12
-     * @items.maxLength 64
-     */
-  allowedFields: string[];
+  /** @maxItems 12 */
+  endpoints: QueryLiveDataEndpoint[];
 }
 
 export interface DeploymentToken {

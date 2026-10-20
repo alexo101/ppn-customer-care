@@ -18,7 +18,7 @@ import { ensureAgentEscalationInbox, syncEscalationTeamNameWithAgent } from "../
 import { ensureAgentConversationSettings } from "../lib/conversation-settings";
 import { hashDeploymentToken, newDeploymentToken } from "../lib/connection-secrets";
 import {
-  EMPTY_QUERY_LIVE_DATA_SETTINGS,
+  normalizeQueryLiveDataSettings,
   readQueryLiveDataSettings,
   validateQueryLiveDataSettings,
 } from "../lib/query-live-data";
@@ -217,12 +217,7 @@ router.get("/agents/:id/query-live-data", requireAuth, async (req, res): Promise
     .where(eq(agentSettingsTable.agentId, agent.id))
     .limit(1);
   const queryLiveData = readQueryLiveDataSettings(settings?.configuration);
-  res.json({
-    agentId: agent.id,
-    method: "GET",
-    ...queryLiveData,
-    enabled: Boolean(queryLiveData.endpointUrl),
-  });
+  res.json(toQueryLiveDataResponse(agent.id, queryLiveData));
 });
 
 router.patch(
@@ -247,11 +242,12 @@ router.patch(
       return;
     }
 
-    const settings = parsed.data.endpointUrl.trim()
-      ? {
-          endpointUrl: parsed.data.endpointUrl.trim(),
-        }
-      : { ...EMPTY_QUERY_LIVE_DATA_SETTINGS };
+    const settings = normalizeQueryLiveDataSettings({
+      endpoints: parsed.data.endpoints.map((endpoint) => ({
+        method: "GET",
+        endpointUrl: endpoint.endpointUrl,
+      })),
+    });
     const validationError = validateQueryLiveDataSettings(settings);
     if (validationError) {
       res.status(400).json({ error: validationError });
@@ -281,13 +277,21 @@ router.patch(
         set: { configuration, updatedAt: new Date() },
       });
 
-    res.json({
-      agentId: agent.id,
-      method: "GET",
-      ...settings,
-      enabled: Boolean(settings.endpointUrl),
-    });
+    res.json(toQueryLiveDataResponse(agent.id, settings));
   },
 );
+
+function toQueryLiveDataResponse(
+  agentId: string,
+  settings: ReturnType<typeof readQueryLiveDataSettings>,
+) {
+  return {
+    agentId,
+    method: "GET" as const,
+    endpointUrl: settings.endpointUrl,
+    endpoints: settings.endpoints,
+    enabled: Boolean(settings.endpointUrl),
+  };
+}
 
 export default router;

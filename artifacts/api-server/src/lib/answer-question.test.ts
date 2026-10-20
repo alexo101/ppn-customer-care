@@ -396,7 +396,9 @@ describe("answerFromKnowledge", () => {
     });
 
     expect(lookupLiveClient).toHaveBeenCalledWith(
-      configuration.queryLiveData,
+      expect.objectContaining({
+        endpointUrl: "https://api.example.com/clients?name={clientName}",
+      }),
       { userId: "user_123", agentId: "agent-1" },
       "Ana García",
     );

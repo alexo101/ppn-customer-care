@@ -2,8 +2,14 @@ import { lookup as dnsLookup } from "node:dns";
 import { isIP } from "node:net";
 import { Agent, request, type AgentOptions } from "node:https";
 
+export type QueryLiveDataEndpoint = {
+  method: "GET";
+  endpointUrl: string;
+};
+
 export type QueryLiveDataSettings = {
   endpointUrl: string;
+  endpoints: QueryLiveDataEndpoint[];
 };
 
 export type LiveClientFacts = Record<string, string | number | boolean>;
@@ -48,30 +54,84 @@ const rateLimitWindows = new Map<string, { startedAt: number; count: number }>()
 
 export const EMPTY_QUERY_LIVE_DATA_SETTINGS: QueryLiveDataSettings = {
   endpointUrl: "",
+  endpoints: [],
 };
+
+export function queryLiveDataEndpoints(
+  settings: Pick<QueryLiveDataSettings, "endpointUrl" | "endpoints">,
+): QueryLiveDataEndpoint[] {
+  const listed = settings.endpoints
+    .map((endpoint) => ({
+      method: "GET" as const,
+      endpointUrl: endpoint.endpointUrl.trim(),
+    }))
+    .filter((endpoint) => endpoint.endpointUrl);
+  if (listed.length > 0) return listed;
+  const endpointUrl = settings.endpointUrl.trim();
+  return endpointUrl ? [{ method: "GET", endpointUrl }] : [];
+}
 
 export function readQueryLiveDataSettings(value: unknown): QueryLiveDataSettings {
   if (!isRecord(value) || !isRecord(value.queryLiveData)) {
     return { ...EMPTY_QUERY_LIVE_DATA_SETTINGS };
   }
   const config = value.queryLiveData;
-  const settings: QueryLiveDataSettings = {
+  const rawEndpoints = Array.isArray(config.endpoints) ? config.endpoints : [];
+  const endpoints = rawEndpoints.flatMap((endpoint) => {
+    if (!isRecord(endpoint) || typeof endpoint.endpointUrl !== "string") return [];
+    return [{ method: "GET" as const, endpointUrl: endpoint.endpointUrl }];
+  });
+  const settings = normalizeQueryLiveDataSettings({
     endpointUrl: typeof config.endpointUrl === "string" ? config.endpointUrl : "",
-  };
+    endpoints,
+  });
   return validateQueryLiveDataSettings(settings) === null
     ? settings
     : { ...EMPTY_QUERY_LIVE_DATA_SETTINGS };
 }
 
+export function normalizeQueryLiveDataSettings(input: {
+  endpointUrl?: string;
+  endpoints?: QueryLiveDataEndpoint[];
+}): QueryLiveDataSettings {
+  const endpoints = (input.endpoints ?? [])
+    .map((endpoint) => ({
+      method: "GET" as const,
+      endpointUrl: endpoint.endpointUrl.trim(),
+    }))
+    .filter((endpoint) => endpoint.endpointUrl);
+  const endpointUrl = endpoints[0]?.endpointUrl ?? input.endpointUrl?.trim() ?? "";
+  const normalizedEndpoints =
+    endpoints.length > 0
+      ? endpoints
+      : endpointUrl
+        ? [{ method: "GET" as const, endpointUrl }]
+        : [];
+  return {
+    endpointUrl: normalizedEndpoints[0]?.endpointUrl ?? "",
+    endpoints: normalizedEndpoints,
+  };
+}
+
 export function validateQueryLiveDataSettings(
   settings: QueryLiveDataSettings,
 ): string | null {
-  if (!settings.endpointUrl.trim()) return null;
-  if (settings.endpointUrl.length > 2048) {
+  if (settings.endpoints.length > 12) return "Add no more than 12 endpoints.";
+  for (const endpoint of settings.endpoints) {
+    const error = validateEndpointUrl(endpoint.endpointUrl);
+    if (error) return error;
+  }
+  if (settings.endpoints.length === 0) return validateEndpointUrl(settings.endpointUrl);
+  return null;
+}
+
+function validateEndpointUrl(endpointUrl: string): string | null {
+  if (!endpointUrl.trim()) return null;
+  if (endpointUrl.length > 2048) {
     return "The endpoint URL must be 2,048 characters or fewer.";
   }
 
-  const template = settings.endpointUrl.trim();
+  const template = endpointUrl.trim();
   if (template.split(CLIENT_NAME_PLACEHOLDER).length !== 2) {
     return "Include {clientName} exactly once in the URL path or query string.";
   }
@@ -314,14 +374,14 @@ function toCandidate(
 function readFacts(value: unknown): LiveClientFacts {
   if (!isRecord(value)) return {};
   const facts: LiveClientFacts = {};
-  for (const [field, value] of Object.entries(value).slice(0, MAX_FACT_FIELDS)) {
+  for (const [field, fieldValue] of Object.entries(value).slice(0, MAX_FACT_FIELDS)) {
     if (
       !FIELD_KEY_PATTERN.test(field) ||
       /(?:password|secret|token|credential|api.?key)/i.test(field)
     ) {
       continue;
     }
-    const safeValue = safeFact(value);
+    const safeValue = safeFact(fieldValue);
     if (safeValue !== null) facts[field] = safeValue;
   }
   return facts;

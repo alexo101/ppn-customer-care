@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   detectLiveClientIntent,
   lookupLiveClient,
+  normalizeQueryLiveDataSettings,
   readQueryLiveDataSettings,
   validateQueryLiveDataSettings,
   type QueryLiveDataSettings,
@@ -10,6 +11,7 @@ import {
 const secretName = "LIVE_QUERY_CLIENT_API_TOKEN";
 const settings: QueryLiveDataSettings = {
   endpointUrl: "https://api.example.com/clients?name={clientName}",
+  endpoints: [],
 };
 
 afterEach(() => {
@@ -17,6 +19,35 @@ afterEach(() => {
 });
 
 describe("query live client data", () => {
+  it("keeps a saved endpoint and accepts a list of endpoints", () => {
+    expect(
+      readQueryLiveDataSettings({
+        queryLiveData: {
+          endpointUrl: "https://api.example.com/clients?name={clientName}",
+        },
+      }).endpoints,
+    ).toEqual([
+      {
+        method: "GET",
+        endpointUrl: "https://api.example.com/clients?name={clientName}",
+      },
+    ]);
+    expect(
+      normalizeQueryLiveDataSettings({
+        endpoints: [
+          { method: "GET", endpointUrl: " https://api.example.com/a?name={clientName} " },
+          { method: "GET", endpointUrl: "https://api.example.com/b?name={clientName}" },
+        ],
+      }),
+    ).toEqual({
+      endpointUrl: "https://api.example.com/a?name={clientName}",
+      endpoints: [
+        { method: "GET", endpointUrl: "https://api.example.com/a?name={clientName}" },
+        { method: "GET", endpointUrl: "https://api.example.com/b?name={clientName}" },
+      ],
+    });
+  });
+
   it("accepts only an HTTPS URL with one client-name placeholder", () => {
     expect(validateQueryLiveDataSettings(settings)).toBeNull();
     expect(
@@ -111,7 +142,10 @@ describe("query live client data", () => {
     const loadedSettings = readQueryLiveDataSettings({
       queryLiveData: settings,
     });
-    expect(loadedSettings).toEqual(settings);
+    expect(loadedSettings).toEqual({
+      endpointUrl: settings.endpointUrl,
+      endpoints: [{ method: "GET", endpointUrl: settings.endpointUrl }],
+    });
     let requestedUrl = "";
     let callerHeader = "";
     const result = await lookupLiveClient(
