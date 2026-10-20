@@ -24,6 +24,11 @@ import { SettingsSection } from "@/components/settings-section";
 import { TemplatedMessageField } from "@/components/templated-message-field";
 import { toast } from "@/hooks/use-toast";
 import {
+  MAX_AUTO_CLOSE_MINUTES,
+  splitAutoCloseTotalMinutes,
+  toAutoCloseTotalMinutes,
+} from "@/lib/conversation-settings";
+import {
   DEFAULT_ESCALATION_MESSAGE,
   DEFAULT_WELCOME_MESSAGE,
   ESCALATION_MESSAGE_MAX,
@@ -113,9 +118,7 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
     },
   });
   const updateSettings = useUpdateAgentConversationSettings();
-  const [days, setDays] = useState(0);
-  const [hours, setHours] = useState(1);
-  const [minutes, setMinutes] = useState(0);
+  const [minutes, setMinutes] = useState(60);
   const [closingMessage, setClosingMessage] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
   const [escalationMessage, setEscalationMessage] = useState(
@@ -130,9 +133,13 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     if (!data) return;
-    setDays(data.autoCloseDays);
-    setHours(data.autoCloseHours);
-    setMinutes(data.autoCloseMinutes);
+    setMinutes(
+      toAutoCloseTotalMinutes(
+        data.autoCloseDays,
+        data.autoCloseHours,
+        data.autoCloseMinutes,
+      ),
+    );
     setClosingMessage(data.closingMessage);
     setWelcomeMessage(
       hasRequiredWelcomeTokens(data.welcomeMessage)
@@ -151,7 +158,7 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
   }, [data]);
 
   const saving = updateSettings.isPending;
-  const autoCloseDisabled = days + hours + minutes === 0;
+  const autoCloseDisabled = minutes === 0;
 
   const rememberSelection = () => {
     const field = textareaRef.current;
@@ -199,9 +206,7 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
       return;
     }
     const input: AgentConversationSettingsInput = {
-      autoCloseDays: days,
-      autoCloseHours: hours,
-      autoCloseMinutes: minutes,
+      ...splitAutoCloseTotalMinutes(minutes),
       closingMessage: closingMessage.slice(0, CLOSING_MESSAGE_MAX),
       welcomeMessage: welcomeMessage.slice(0, WELCOME_MESSAGE_MAX),
       escalationMessage: escalationMessage.slice(0, ESCALATION_MESSAGE_MAX),
@@ -269,31 +274,13 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
       <SettingsSection title="Auto-close conversations">
         <div className="space-y-2">
           <Label>Close after inactivity</Label>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <DurationField
-              id="auto-close-days"
-              label="Days"
-              value={days}
-              min={0}
-              max={365}
-              disabled={!canEdit}
-              onChange={setDays}
-            />
-            <DurationField
-              id="auto-close-hours"
-              label="Hours"
-              value={hours}
-              min={0}
-              max={23}
-              disabled={!canEdit}
-              onChange={setHours}
-            />
+          <div className="flex max-w-xs gap-3">
             <DurationField
               id="auto-close-minutes"
               label="Minutes"
               value={minutes}
               min={0}
-              max={59}
+              max={MAX_AUTO_CLOSE_MINUTES}
               disabled={!canEdit}
               onChange={setMinutes}
             />
