@@ -38,6 +38,15 @@ const ANSWER_RESPONSE_FORMAT = {
   },
 } as const;
 
+export const SUPPORT_ANSWER_FORMAT_INSTRUCTION = [
+  "Choose a format that fits the question instead of forcing every reply into prose.",
+  "For how-to or process questions, start with a brief direct introduction and give each documented action as a separate numbered step on its own line.",
+  "For distinct alternatives, use short bullets; for a simple factual question, answer in one or two concise sentences.",
+  "Answer only what the user asked. Omit related facts and secondary policies that do not help answer that question.",
+  "Keep necessary prerequisites when the supplied source documents them, such as an Admin-only requirement, but never assume the user's role.",
+  "Use plain text with line breaks; do not add Markdown headings or decorative formatting.",
+].join(" ");
+
 export class OpenAIAnswerProvider implements AnswerProvider {
   private readonly client: OpenAI;
   private readonly model: string;
@@ -91,7 +100,6 @@ export class OpenAIAnswerProvider implements AnswerProvider {
         content: [
           "You are a customer support assistant.",
           "Answer the user's question clearly and directly.",
-          "Keep answers concise: use one to three short sentences unless the documented steps require more.",
           input.liveData
             ? "Use only the supplied authorized live client data to answer this client-specific question. The live data is a separate source from the knowledge base and is not an article citation."
             : "Use only the supplied knowledge-base passages as the source of truth.",
@@ -111,6 +119,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
           input.context.agentPrompt.trim()
             ? `Team-configured agent guidance: ${input.context.agentPrompt.trim()}`
             : "",
+          SUPPORT_ANSWER_FORMAT_INSTRUCTION,
           replyLanguageInstruction(replyLocale),
         ].join(" "),
       },

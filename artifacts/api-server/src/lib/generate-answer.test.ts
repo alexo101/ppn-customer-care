@@ -146,6 +146,34 @@ describe("generateAnswer", () => {
     ).toBe("Tu factura está lista.");
   });
 
+  it("preserves a structured Spanish procedure without another translation call", async () => {
+    const structuredAnswer =
+      "Puedes consultar tus facturas así:\n1. Abre la sección Ingresos del menú lateral izquierdo.";
+    const generate = vi.fn().mockResolvedValue({
+      responseText: structuredAnswer,
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-test",
+      totalTokens: 12,
+      promptAssembled: "assembled",
+    });
+    const translator = { translate: vi.fn() };
+
+    const result = await generateAnswer(
+      "¿Cómo encuentro mis facturas?",
+      [{ sender: "user", content: "¿Cómo encuentro mis facturas?" }],
+      {},
+      [chunk],
+      { generate } as AnswerProvider,
+      { agent_language: "es" },
+      translator,
+    );
+
+    expect(result.responseText).toBe(structuredAnswer);
+    expect(result.responseText.split("\n")).toHaveLength(2);
+    expect(translator.translate).not.toHaveBeenCalled();
+  });
+
   it("treats an unanswerable model response as insufficient", async () => {
     const generate = vi.fn().mockResolvedValue({
       responseText: "No encontré esa información.",

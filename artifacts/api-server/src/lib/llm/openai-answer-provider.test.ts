@@ -4,7 +4,28 @@ import {
   answerModelContext,
   parseStructuredResponse,
   replyLanguageInstruction,
+  SUPPORT_ANSWER_FORMAT_INSTRUCTION,
 } from "./openai-answer-provider";
+
+describe("support answer formatting guidance", () => {
+  it("formats procedures as steps while keeping answers grounded and relevant", () => {
+    expect(SUPPORT_ANSWER_FORMAT_INSTRUCTION).toContain(
+      "each documented action as a separate numbered step on its own line",
+    );
+    expect(SUPPORT_ANSWER_FORMAT_INSTRUCTION).toContain(
+      "Omit related facts and secondary policies",
+    );
+    expect(SUPPORT_ANSWER_FORMAT_INSTRUCTION).toContain(
+      "Keep necessary prerequisites",
+    );
+    expect(SUPPORT_ANSWER_FORMAT_INSTRUCTION).toContain(
+      "never assume the user's role",
+    );
+    expect(SUPPORT_ANSWER_FORMAT_INSTRUCTION).toContain(
+      "for a simple factual question, answer in one or two concise sentences",
+    );
+  });
+});
 
 describe("replyLanguageInstruction", () => {
   it("pins the response and reported language to the configured agent language", () => {
