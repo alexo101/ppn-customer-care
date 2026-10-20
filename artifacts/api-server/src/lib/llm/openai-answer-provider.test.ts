@@ -4,8 +4,23 @@ import {
   answerModelContext,
   parseStructuredResponse,
   replyLanguageInstruction,
+  CURRENT_EVIDENCE_INSTRUCTION,
   SUPPORT_ANSWER_FORMAT_INSTRUCTION,
 } from "./openai-answer-provider";
+
+describe("current evidence guidance", () => {
+  it("does not let previous assistant refusals determine answerability", () => {
+    expect(CURRENT_EVIDENCE_INSTRUCTION).toContain(
+      "currently supplied knowledge passages",
+    );
+    expect(CURRENT_EVIDENCE_INSTRUCTION).toContain(
+      "previous assistant answers, refusals, and claims are not evidence",
+    );
+    expect(CURRENT_EVIDENCE_INSTRUCTION).toContain(
+      "do not add generic troubleshooting or plausible assumptions",
+    );
+  });
+});
 
 describe("support answer formatting guidance", () => {
   it("formats procedures as steps while keeping answers grounded and relevant", () => {

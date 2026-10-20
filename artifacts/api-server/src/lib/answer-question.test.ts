@@ -29,10 +29,15 @@ vi.mock("@workspace/db", () => ({
   agentSettingsTable: { agentId: "agentId" },
 }));
 
-vi.mock("./retrieval", () => ({
-  listEligiblePublishedArticles,
-  retrieveRelevantChunks,
-}));
+vi.mock("./retrieval", async () => {
+  const actual =
+    await vi.importActual<typeof import("./retrieval")>("./retrieval");
+  return {
+    ...actual,
+    listEligiblePublishedArticles,
+    retrieveRelevantChunks,
+  };
+});
 
 vi.mock("./query-live-data", async () => {
   const actual =
@@ -59,7 +64,10 @@ vi.mock("./llm", async () => {
   };
 });
 
-import { answerFromKnowledge } from "./answer-question";
+import {
+  answerFromKnowledge,
+  buildKnowledgeRetrievalQuery,
+} from "./answer-question";
 
 const person = { personType: "user" as const, attributes: {} };
 const baseInput = {
@@ -83,6 +91,161 @@ describe("answerFromKnowledge", () => {
     selectLimit.mockReset();
     selectLimit.mockResolvedValue([]);
     createEmbeddingProvider.mockReturnValue({ embed: vi.fn() });
+  });
+
+  it("adds a strongly related earlier user question to retrieval but not an unrelated topic", () => {
+    const history = [
+      { sender: "user", content: "Cómo encuentro mis facturas?" },
+      { sender: "assistant", content: "Go to Ingresos." },
+      {
+        sender: "assistant",
+        content: "I could not answer that.",
+        metadata: { kind: "unable_to_answer", actions: ["escalate"] },
+      },
+      { sender: "user", content: "Como encuentro las facturas?" },
+    ];
+    expect(
+      buildKnowledgeRetrievalQuery("Como encuentro las facturas?", history),
+    ).toBe("Cómo encuentro mis facturas?");
+
+    expect(
+      buildKnowledgeRetrievalQuery("¿Cómo añado un cliente?", [
+        { sender: "user", content: "Cómo encuentro mis facturas?" },
+        { sender: "user", content: "¿Cómo añado un cliente?" },
+      ]),
+    ).toBe("¿Cómo añado un cliente?");
+  });
+
+  it("answers a repeated invoice question from retrieval without carrying an earlier refusal", async () => {
+    const invoiceChunk = {
+      sourceId: "billing-article",
+      sourceName: "Pagos y facturación (agentes)",
+      articleId: "billing-article",
+      articleName: "Pagos y facturación (agentes)",
+      content:
+        "¿Cómo puedo ver mis facturas? Para ver tus facturas de agente ve a la sección Ingresos en el menú lateral izquierdo.",
+      distance: 0.1,
+    };
+    const question = "Como encuentro las facturas?";
+    const history = [
+      { sender: "user", content: "Cómo encuentro mis facturas?" },
+      { sender: "assistant", content: "Ve a la sección Ingresos." },
+      { sender: "user", content: "No veo la sección Ingresos." },
+      {
+        sender: "assistant",
+        content: "No he encontrado suficiente información.",
+        metadata: { kind: "unable_to_answer", actions: ["escalate"] },
+      },
+      { sender: "user", content: question },
+    ];
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "Ve a Ingresos en el menú lateral para consultar tus facturas.",
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-test",
+      totalTokens: 8,
+      promptAssembled: "prompt",
+      citations: [{ articleId: "billing-article", articleName: "Pagos y facturación (agentes)" }],
+    });
+    listEligiblePublishedArticles.mockResolvedValue([
+      { id: "billing-article", title: "Pagos y facturación (agentes)", targetId: null },
+    ]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [invoiceChunk],
+      totalTokens: 4,
+      model: "embed-test",
+    });
+    createAnswerProvider.mockReturnValue({ generate });
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: question,
+      history,
+      context: { agent_language: "es" },
+    });
+
+    expect(retrieveRelevantChunks).toHaveBeenCalledWith(
+      ["billing-article"],
+      "Cómo encuentro mis facturas?",
+      expect.anything(),
+      5,
+      { agentId: "agent-1" },
+    );
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: question,
+        retrievedChunks: [invoiceChunk],
+        history: [
+          { role: "user", content: "Cómo encuentro mis facturas?" },
+          { role: "assistant", content: "Ve a la sección Ingresos." },
+          { role: "user", content: "No veo la sección Ingresos." },
+        ],
+      }),
+    );
+    expect(result.answerable).toBe(true);
+    expect(result.responseText).toContain("Ve a Ingresos");
+    expect(result.articleIds).toEqual(["billing-article"]);
+  });
+
+  it("answers a documented missing-menu question with the access requirement", async () => {
+    const question = "No veo la sección Ingresos.";
+    const billingChunk = {
+      sourceId: "billing-article",
+      sourceName: "Pagos y facturación (agentes)",
+      articleId: "billing-article",
+      articleName: "Pagos y facturación (agentes)",
+      content:
+        "No veo la sección Ingresos en mi agencia. Para ver la sección Ingresos tienes que ser el Admin de tu agencia. Contacta con tu account manager para que lo configure; puedes encontrar su contacto en la esquina inferior izquierda.",
+      distance: 0.1,
+    };
+    const generate = vi.fn().mockResolvedValue({
+      responseText:
+        "Para ver Ingresos necesitas ser Admin de tu agencia. Si no eres Admin, contacta con tu account manager; encontrarás su contacto en la esquina inferior izquierda.",
+      answerable: true,
+      replyLanguage: "es",
+      model: "gpt-test",
+      totalTokens: 8,
+      promptAssembled: "prompt",
+      citations: [{ articleId: "billing-article", articleName: "Pagos y facturación (agentes)" }],
+    });
+    listEligiblePublishedArticles.mockResolvedValue([
+      { id: "billing-article", title: "Pagos y facturación (agentes)", targetId: null },
+    ]);
+    retrieveRelevantChunks.mockResolvedValue({
+      chunks: [billingChunk],
+      totalTokens: 4,
+      model: "embed-test",
+    });
+    createAnswerProvider.mockReturnValue({ generate });
+
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message: question,
+      history: [
+        { sender: "user", content: "Cómo encuentro mis facturas?" },
+        { sender: "assistant", content: "Ve a Ingresos en el menú lateral." },
+        { sender: "user", content: question },
+      ],
+      context: { agent_language: "es" },
+    });
+
+    expect(retrieveRelevantChunks).toHaveBeenCalledWith(
+      ["billing-article"],
+      question,
+      expect.anything(),
+      5,
+      { agentId: "agent-1" },
+    );
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: question,
+        retrievedChunks: [billingChunk],
+      }),
+    );
+    expect(result.answerable).toBe(true);
+    expect(result.responseText).toContain("ser Admin");
+    expect(result.responseText).toContain("account manager");
+    expect(result.responseText).not.toContain("agency is payable");
   });
 
   it("offers escalation when no published article is eligible", async () => {

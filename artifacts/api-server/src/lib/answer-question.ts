@@ -11,7 +11,12 @@ import {
   createEmbeddingProvider,
   type RetrievedChunk,
 } from "./llm";
-import { listEligiblePublishedArticles, retrieveRelevantChunks } from "./retrieval";
+import {
+  areNearDuplicateSearchQueries,
+  listEligiblePublishedArticles,
+  retrieveRelevantChunks,
+  scoreLexicalMatch,
+} from "./retrieval";
 import type { PersonAttributes } from "./targets";
 import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
 import {
@@ -46,6 +51,38 @@ export type AnswerWorkflowResult = {
     details: Record<string, unknown>;
   }>;
 };
+
+export function buildKnowledgeRetrievalQuery(
+  message: string,
+  history: LiveClientHistoryMessage[],
+): string {
+  let currentMessageIndex = -1;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (
+      history[index]?.sender === "user" &&
+      history[index]?.content.trim() === message.trim()
+    ) {
+      currentMessageIndex = index;
+      break;
+    }
+  }
+  const priorMessages = currentMessageIndex >= 0
+    ? history.slice(0, currentMessageIndex)
+    : history;
+  const relatedQuestion = [...priorMessages]
+    .reverse()
+    .find(
+      (item) =>
+        item.sender === "user" &&
+        item.content.trim().length <= 300 &&
+        scoreLexicalMatch(message, item.content).accepted &&
+        areNearDuplicateSearchQueries(message, item.content),
+    );
+
+  return relatedQuestion
+    ? relatedQuestion.content.trim()
+    : message;
+}
 
 export async function answerFromKnowledge(input: {
   message: string;
@@ -302,11 +339,12 @@ export async function answerFromKnowledge(input: {
 
   stages[2].status = "running";
   const retrievalStartedAt = performance.now();
+  const retrievalQuery = buildKnowledgeRetrievalQuery(input.message, input.history);
   const [retrieval, agentSettingsRows] = eligible.length
     ? await Promise.all([
         retrieveRelevantChunks(
           eligible.map((article) => article.id),
-          input.message,
+          retrievalQuery,
           createEmbeddingProvider(),
           5,
           { agentId: input.agentId },

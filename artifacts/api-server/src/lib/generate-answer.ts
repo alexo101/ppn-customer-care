@@ -9,8 +9,13 @@ import {
   type ReplyLocale,
 } from "./reply-locale";
 import { translateCustomerTemplate } from "./welcome-message";
+import { isUnableToAnswerMessageMetadata } from "./unanswered-message";
 
-type HistoryMessage = { sender: string; content: string };
+type HistoryMessage = {
+  sender: string;
+  content: string;
+  metadata?: unknown;
+};
 
 export type GeneratedAnswer = {
   responseText: string;
@@ -97,12 +102,27 @@ export async function generateAnswer(
     );
   }
   const providerStartedAt = performance.now();
+  const providerHistory = history
+    .filter((item, index) => {
+      if (
+        item.sender === "assistant" &&
+        isUnableToAnswerMessageMetadata(item.metadata)
+      ) {
+        return false;
+      }
+      return !(
+        index === history.length - 1 &&
+        item.sender === "user" &&
+        item.content.trim() === message.trim()
+      );
+    })
+    .map((item) => ({
+      role: item.sender === "assistant" ? "assistant" as const : "user" as const,
+      content: item.content,
+    }));
   const result = await provider.generate({
     message,
-    history: history.map((item) => ({
-      role: item.sender === "assistant" ? "assistant" : "user",
-      content: item.content,
-    })),
+    history: providerHistory,
     retrievedChunks,
     liveData,
     personAttributes,

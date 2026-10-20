@@ -2,3 +2,4 @@
 - [Development database migrations](development-database-migrations.md) — new API schema fields need their migration applied to the development database before startup checks use them.
 - [Drizzle snapshot gaps](drizzle-snapshot-gaps.md) — migration generation is currently blocked by incomplete historical snapshots; preserve the ordered SQL journal.
 - [Live client lookups](live-client-lookups.md) — chat users supply client names because they do not know or have access to client IDs.
+- [Knowledge chunk boundaries](knowledge-chunk-boundaries.md) — a matched FAQ question can be separated from its answer across adjacent indexed chunks.

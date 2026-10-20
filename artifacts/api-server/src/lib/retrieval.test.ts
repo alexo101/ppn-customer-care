@@ -51,6 +51,7 @@ vi.mock("@workspace/db", () => ({
 }));
 
 import {
+  areNearDuplicateSearchQueries,
   isArticleRetrievalEligible,
   listEligiblePublishedArticles,
   retrieveRelevantChunks,
@@ -58,6 +59,27 @@ import {
 } from "./retrieval";
 
 describe("knowledge retrieval", () => {
+  it("recognizes close rephrases without treating added topics as repeats", () => {
+    expect(
+      areNearDuplicateSearchQueries(
+        "Como encuentro las facturas?",
+        "Cómo encuentro mis facturas?",
+      ),
+    ).toBe(true);
+    expect(
+      areNearDuplicateSearchQueries(
+        "Cómo encuentro las facturas de mi agencia?",
+        "Cómo encuentro mis facturas?",
+      ),
+    ).toBe(false);
+    expect(
+      areNearDuplicateSearchQueries(
+        "No veo la sección Ingresos",
+        "Cómo encuentro mis facturas?",
+      ),
+    ).toBe(false);
+  });
+
   beforeEach(() => {
     selectResults.length = 0;
     select.mockImplementation(() => {
@@ -193,6 +215,59 @@ describe("knowledge retrieval", () => {
       lexicalCandidates: 0,
       lexicalAccepted: 0,
     });
+  });
+
+  it("includes the next article chunk when a matching FAQ question is split at the boundary", async () => {
+    const question = "No veo la sección Ingresos";
+    const questionChunk = {
+      articleId: "billing-article",
+      chunkId: "billing-chunk-0",
+      chunkIndex: 0,
+      articleTitle: "Pagos y facturación (agentes)",
+      content:
+        "No veo la sección Ingresos en mi agencia / No me aparece la sección Ingresos",
+      distance: 0.1,
+    };
+    const answerChunk = {
+      articleId: "billing-article",
+      chunkId: "billing-chunk-1",
+      chunkIndex: 1,
+      articleTitle: "Pagos y facturación (agentes)",
+      content:
+        "Para ver la sección Ingresos tienes que ser el Admin de tu agencia. Contacta con tu account manager para que lo configure.",
+    };
+    const embeddingProvider = {
+      embed: vi.fn().mockResolvedValue({
+        embeddings: [[0.1, 0.2, 0.3]],
+        model: "test-embedding-model",
+        totalTokens: 6,
+      }),
+      resolveModel: vi.fn().mockResolvedValue("test-embedding-model"),
+    };
+    selectResults.push(
+      { rows: [questionChunk], resolveAtWhere: false },
+      { rows: [answerChunk], resolveAtWhere: true },
+      { rows: [], resolveAtWhere: true },
+    );
+
+    const retrieval = await retrieveRelevantChunks(
+      ["billing-article"],
+      question,
+      embeddingProvider,
+      5,
+      { agentId: "agent-1" },
+    );
+
+    expect(retrieval.chunks).toMatchObject([
+      {
+        chunkId: "billing-chunk-0",
+        content: questionChunk.content,
+      },
+      {
+        chunkId: "billing-chunk-1",
+        content: answerChunk.content,
+      },
+    ]);
   });
 
   it.each([

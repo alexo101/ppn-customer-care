@@ -244,7 +244,7 @@ export async function retrieveRelevantChunks(
     }
   }
 
-  const rows = [...candidates.values()]
+  const selectedRows = [...candidates.values()]
     .sort((left, right) => {
       const leftScore =
         left.lexicalScore * 0.6 +
@@ -259,6 +259,64 @@ export async function retrieveRelevantChunks(
       );
     })
     .slice(0, Math.max(1, Math.min(limit, 20)));
+
+  const questionFragments = selectedRows.filter((row) =>
+    hasUnansweredQuestionAtChunkEnd(queryText, row.content),
+  );
+  let rows = selectedRows;
+  if (questionFragments.length > 0) {
+    const neighborRelations = questionFragments.map((row) =>
+      and(
+        eq(knowledgeChunksTable.articleId, row.articleId),
+        eq(knowledgeChunksTable.chunkIndex, row.chunkIndex + 1),
+      ),
+    );
+    const adjacentRows = await db
+      .select({
+        articleId: knowledgeChunksTable.articleId,
+        chunkId: knowledgeChunksTable.id,
+        chunkIndex: knowledgeChunksTable.chunkIndex,
+        articleTitle: knowledgeArticlesTable.title,
+        content: knowledgeChunksTable.content,
+      })
+      .from(knowledgeChunksTable)
+      .innerJoin(
+        knowledgeArticlesTable,
+        eq(knowledgeChunksTable.articleId, knowledgeArticlesTable.id),
+      )
+      .where(
+        and(
+          inArray(knowledgeChunksTable.articleId, articleIds),
+          eq(knowledgeArticlesTable.status, "published"),
+          options.agentId ? eq(knowledgeArticlesTable.agentId, options.agentId) : undefined,
+          or(...neighborRelations),
+        ),
+      );
+    const adjacentByPosition = new Map(
+      adjacentRows.map((row) => [`${row.articleId}:${row.chunkIndex}`, row]),
+    );
+    const selectedChunkIds = new Set(selectedRows.map((row) => row.chunkId));
+    rows = [];
+    let adjacentCount = 0;
+    for (const row of selectedRows) {
+      rows.push(row);
+      const adjacent = adjacentByPosition.get(`${row.articleId}:${row.chunkIndex + 1}`);
+      if (
+        hasUnansweredQuestionAtChunkEnd(queryText, row.content) &&
+        adjacent &&
+        !selectedChunkIds.has(adjacent.chunkId) &&
+        adjacentCount < 2
+      ) {
+        rows.push({
+          ...adjacent,
+          distance: row.distance + 0.001,
+          lexicalScore: 0,
+          exactPhraseMatch: false,
+        });
+        adjacentCount += 1;
+      }
+    }
+  }
 
   const chunkIds = rows.map((row) => row.chunkId);
   const assetLinks = chunkIds.length
@@ -342,6 +400,39 @@ export function scoreLexicalMatch(
     accepted:
       exactPhraseMatch || (matches.length >= 2 && score >= 0.67),
   };
+}
+
+function hasUnansweredQuestionAtChunkEnd(query: string, content: string): boolean {
+  const finalSegment = content
+    .trim()
+    .slice(-180)
+    .split("/")
+    .at(-1)
+    ?.trim();
+  if (
+    !finalSegment ||
+    finalSegment.length > 120 ||
+    /[.!]["'”)]?$/.test(finalSegment)
+  ) {
+    return false;
+  }
+  const match = scoreLexicalMatch(query, finalSegment);
+  return (
+    match.accepted ||
+    (lexicalSearchTerms(query).length >= 3 && match.score >= 0.6)
+  );
+}
+
+export function areNearDuplicateSearchQueries(
+  first: string,
+  second: string,
+): boolean {
+  const firstTerms = new Set(lexicalSearchTerms(first).filter((term) => term !== "mis"));
+  const secondTerms = new Set(lexicalSearchTerms(second).filter((term) => term !== "mis"));
+  if (firstTerms.size < 2 || secondTerms.size < 2) return false;
+  const intersection = [...firstTerms].filter((term) => secondTerms.has(term)).length;
+  const union = new Set([...firstTerms, ...secondTerms]).size;
+  return intersection >= 2 && intersection / union >= 0.8;
 }
 
 function lexicalSearchTerms(text: string): string[] {

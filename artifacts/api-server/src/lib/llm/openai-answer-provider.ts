@@ -47,6 +47,9 @@ export const SUPPORT_ANSWER_FORMAT_INSTRUCTION = [
   "Use plain text with line breaks; do not add Markdown headings or decorative formatting.",
 ].join(" ");
 
+export const CURRENT_EVIDENCE_INSTRUCTION =
+  "Answer the latest user question using the currently supplied knowledge passages. Mark it answerable when those passages directly support an answer. Only state facts and steps explicitly supported by relevant passages; do not add generic troubleshooting or plausible assumptions. Use earlier messages only to resolve references and understand context; previous assistant answers, refusals, and claims are not evidence and must not determine answerability.";
+
 export class OpenAIAnswerProvider implements AnswerProvider {
   private readonly client: OpenAI;
   private readonly model: string;
@@ -100,6 +103,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
         content: [
           "You are a customer support assistant.",
           "Answer the user's question clearly and directly.",
+          CURRENT_EVIDENCE_INSTRUCTION,
           input.liveData
             ? "Use only the supplied authorized live client data to answer this client-specific question. The live data is a separate source from the knowledge base and is not an article citation."
             : "Use only the supplied knowledge-base passages as the source of truth.",
