@@ -60,11 +60,11 @@ describe("bounded answer recovery", () => {
       message: { content, refusal: null },
       finish_reason,
     }],
-    model: "gpt-5-nano",
+    model: "gpt-6-luna",
     usage: { total_tokens },
   });
 
-  it("uses gpt-5-nano when no answer model override is configured", async () => {
+  it("uses gpt-6-luna when no answer model override is configured", async () => {
     const previousAnswerModel = process.env.ANSWER_MODEL;
     delete process.env.ANSWER_MODEL;
     try {
@@ -78,7 +78,7 @@ describe("bounded answer recovery", () => {
       await provider.generate(input);
 
       expect(create.mock.calls[0]?.[0]).toMatchObject({
-        model: "gpt-5-nano",
+        model: "gpt-6-luna",
       });
     } finally {
       if (previousAnswerModel === undefined) {
