@@ -99,7 +99,7 @@ export class OpenAIAnswerProvider implements AnswerProvider {
     }
     this.client = options?.client ?? new OpenAI({ apiKey: apiKey! });
     this.model =
-      options?.model ?? (process.env.ANSWER_MODEL?.trim() || "gpt-6-luna");
+      options?.model ?? (process.env.ANSWER_MODEL?.trim() || "gpt-5-nano");
   }
 
   async generate(input: AnswerProviderInput): Promise<AnswerProviderResult> {
