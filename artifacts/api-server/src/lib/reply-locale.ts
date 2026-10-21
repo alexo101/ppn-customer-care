@@ -32,10 +32,10 @@ const FALLBACK_MESSAGES = {
     fr: "Bonjour ! Je suis votre assistant d’assistance. Comment puis-je vous aider aujourd’hui ?",
   },
   resolved: {
-    en: "Great to hear! If you need anything else, don't hesitate to reach out. Have a great day!\n\nWas this helpful? You can rate this answer below.",
-    es: "¡Me alegra saberlo! Si necesitas algo más, no dudes en escribirnos. ¡Que tengas un buen día!\n\n¿Te ha resultado útil? Puedes valorar esta respuesta a continuación.",
-    it: "Mi fa piacere! Se hai bisogno di altro, non esitare a contattarci. Buona giornata!\n\nTi è stato utile? Puoi valutare questa risposta qui sotto.",
-    fr: "Ravi de l’apprendre ! N’hésitez pas à nous recontacter si vous avez besoin d’autre chose. Bonne journée !\n\nCette réponse vous a-t-elle aidé ? Vous pouvez l’évaluer ci-dessous.",
+    en: "I'm glad I could help. If you need anything else, just let me know.",
+    es: "Me alegra haber podido ayudarte. Si necesitas algo más, aquí estoy.",
+    it: "Mi fa piacere averti aiutato. Se hai bisogno di altro, sono qui.",
+    fr: "Je suis ravi d’avoir pu vous aider. Si vous avez besoin d’autre chose, je suis là.",
   },
   unableToAnswer: {
     en: "{user_name}, I couldn't find enough information in the knowledge base to answer that.",

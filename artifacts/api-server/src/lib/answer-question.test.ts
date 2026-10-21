@@ -116,6 +116,54 @@ describe("answerFromKnowledge", () => {
     ).toBe("¿Cómo añado un cliente?");
   });
 
+  it("handles an acknowledged account-manager instruction before searching the knowledge base", async () => {
+    const message = "todo ok le he pedido a mi gestor que me ponga de admin";
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message,
+      history: [
+        { sender: "user", content: "No veo la sección Ingresos." },
+        {
+          sender: "assistant",
+          content: "Contacta con tu account manager para que te dé acceso.",
+        },
+        { sender: "user", content: message },
+      ],
+      context: { agent_language: "es" },
+    });
+
+    expect(listEligiblePublishedArticles).not.toHaveBeenCalled();
+    expect(retrieveRelevantChunks).not.toHaveBeenCalled();
+    expect(createAnswerProvider).not.toHaveBeenCalled();
+    expect(result.responseText).toBe(
+      "Me alegra haber podido ayudarte. Si necesitas algo más, aquí estoy.",
+    );
+    expect(result.resolutionStatus).toBe("resolved");
+    expect(result.shouldAskResolution).toBe(false);
+    expect(result.assistantMetadata).toEqual({ citations: [] });
+  });
+
+  it("resolves a standalone thank-you without searching or offering escalation", async () => {
+    const message = "Thanks for your help!";
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message,
+      history: [
+        { sender: "assistant", content: "You can find your invoices in Income." },
+        { sender: "user", content: message },
+      ],
+      context: { agent_language: "en" },
+    });
+
+    expect(listEligiblePublishedArticles).not.toHaveBeenCalled();
+    expect(retrieveRelevantChunks).not.toHaveBeenCalled();
+    expect(createAnswerProvider).not.toHaveBeenCalled();
+    expect(result.resolutionStatus).toBe("resolved");
+    expect(result.responseText).toContain("I'm glad I could help.");
+    expect(result.responseText).not.toContain("couldn't find enough information");
+    expect(result.responseText).not.toContain("connect you with a person");
+  });
+
   it("answers a repeated invoice question from retrieval without carrying an earlier refusal", async () => {
     const invoiceChunk = {
       sourceId: "billing-article",

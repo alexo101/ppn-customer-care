@@ -40,27 +40,22 @@ export type GeneratedAnswer = {
   };
 };
 
-const RESOLUTION_PHRASES = [
-  "thanks",
-  "thank you",
-  "solved",
-  "that works",
-  "perfect",
-  "got it",
-  "great",
-  "resolved",
-];
-
 const GREETING_PHRASES = ["hello", "hi", "hey", "good morning", "good afternoon"];
 const LOCALIZED_GREETING_PHRASES = ["hola", "ciao", "bonjour", "bonsoir"];
 
-export function isDeterministicReply(message: string): boolean {
-  const lower = message.toLowerCase().trim();
-  return isResolution(lower) || isGreeting(lower);
+export function isDeterministicReply(
+  message: string,
+  history: HistoryMessage[] = [],
+): boolean {
+  const normalized = normalizeIntentText(message);
+  return isResolution(normalized, history) || isGreeting(normalized);
 }
 
-export function requiresAnswerProvider(message: string): boolean {
-  return !isDeterministicReply(message);
+export function requiresAnswerProvider(
+  message: string,
+  history: HistoryMessage[] = [],
+): boolean {
+  return !isDeterministicReply(message, history);
 }
 
 export async function alignReplyToAgentLanguage(
@@ -88,15 +83,15 @@ export async function generateAnswer(
     facts: Record<string, string | number | boolean>;
   },
 ): Promise<GeneratedAnswer> {
-  const lower = message.toLowerCase().trim();
+  const normalized = normalizeIntentText(message);
   const language = resolveReplyLocale(context.agent_language);
-  if (isResolution(lower)) {
+  if (isResolution(normalized, history)) {
     return localAnswer(
       localizedCommunicationMessage("resolved", language),
       "resolved",
     );
   }
-  if (isGreeting(lower)) {
+  if (isGreeting(normalized)) {
     return localAnswer(
       localizedCommunicationMessage("greeting", language),
       "active",
@@ -212,9 +207,49 @@ function localAnswer(responseText: string, resolutionStatus: string): GeneratedA
   };
 }
 
-function isResolution(message: string): boolean {
-  return RESOLUTION_PHRASES.some((keyword) => message.includes(keyword)) ||
-    ["gracias", "ya está", "risolto", "grazie", "résolu", "merci"].some((keyword) => message.includes(keyword));
+function normalizeIntentText(message: string): string {
+  return message
+    .toLocaleLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’‘]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isResolution(message: string, history: HistoryMessage[]): boolean {
+  if (!message || /[?¿]/.test(message)) return false;
+
+  const unresolvedOrContrasting = [
+    /\b(?:pero|aunque|sin embargo|but|however|although|mais|pourtant|tuttavia|pero)\b/,
+    /\b(?:no veo|no encuentro|no aparece|no funciona|no esta resuelto|sigo sin|todavia no|aun no|not resolved|not fixed|not working|still need|still can't|still cannot|i still|pas resolu|ne fonctionne pas|non risolto|non funziona|ancora non)\b/,
+    /\b(?:como puedo|como se|donde puedo|que hago|me puedes decir|podrias|puedes ayudarme|quiero saber|necesito|dime|por favor|como hago|how can i|what should i|where can i|can you|could you|tell me|i need|please|comment faire|que dois-je|come posso|cosa devo fare|puoi dirmi)\b/,
+  ];
+  if (unresolvedOrContrasting.some((pattern) => pattern.test(message))) {
+    return false;
+  }
+
+  const standaloneAcknowledgment =
+    /^(?:muchas gracias|mil gracias|gracias(?: por (?:la ayuda|tu ayuda|ayudarme|responder|la respuesta))?|thank you(?: so much| for (?:your help|helping me|the help|the answer|your assistance))?|thanks(?: again| a lot| for (?:your help|helping me|the help|your assistance))?|merci(?: beaucoup| pour (?:votre aide|m'avoir aide|l'aide))?|grazie(?: mille| per (?:l'aiuto|avermi aiutato|la risposta))?|todo (?:esta|va|bien|ok)|perfecto|genial|vale|de acuerdo|ya esta|listo|resuelto|solucionado|me sirve|me ha servido|great|perfect|got it|that works|all good|sounds good|okay|ok|that's great|resolved|solved|c'est bon|d'accord|parfait|tres bien|va bene|perfetto|risolto|thanks, that works|thank you, that works|perfecto, me sirve|perfecto, eso funciona|genial, me sirve)[!.…]*$/;
+  if (standaloneAcknowledgment.test(message)) return true;
+
+  const nextStepReported =
+    /\b(?:he pedido|le he pedido|ya pedi|ya he pedido|he contactado|he escrito|ya contacte|ya he contactado|me he puesto en contacto|i asked|i have asked|i've asked|i contacted|i have contacted|i've contacted|i reached out|j'ai demande|j'ai contacte|je l'ai contacte|ho chiesto|ho contattato|ho scritto)\b/;
+  const explicitPositiveLead =
+    /^(?:todo (?:esta|va|bien|ok)|perfecto|genial|vale|de acuerdo|great|perfect|got it|that works|all good|sounds good|okay|ok|gracias|thanks|thank you|merci|grazie)(?=$|[\s,!.…])/;
+  if (explicitPositiveLead.test(message) && nextStepReported.test(message)) {
+    return true;
+  }
+
+  const lastAssistantMessage = [...history]
+    .reverse()
+    .find((item) => item.sender === "assistant" && item.content.trim());
+  const assistantSuggestedNextStep =
+    lastAssistantMessage &&
+    /\b(?:contact|ask|account manager|gestor|manager|solicita|request|access|admin|acceso|contatta|chiedi|contactez|demandez|accès)\b/.test(
+      normalizeIntentText(lastAssistantMessage.content),
+    );
+  return Boolean(assistantSuggestedNextStep && nextStepReported.test(message));
 }
 
 function isGreeting(message: string): boolean {

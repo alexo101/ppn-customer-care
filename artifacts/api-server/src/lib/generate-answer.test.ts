@@ -23,6 +23,88 @@ describe("generateAnswer", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it("recognizes a Spanish confirmation of the recommended next step without retrieval", async () => {
+    const generate = vi.fn();
+    const result = await generateAnswer(
+      "todo ok le he pedido a mi gestor que me ponga de admin",
+      [
+        { sender: "user", content: "No veo la sección Ingresos." },
+        {
+          sender: "assistant",
+          content: "Contacta con tu account manager para que te dé acceso.",
+        },
+        {
+          sender: "user",
+          content: "todo ok le he pedido a mi gestor que me ponga de admin",
+        },
+      ],
+      {},
+      [],
+      { generate } as AnswerProvider,
+      { agent_language: "es" },
+    );
+
+    expect(generate).not.toHaveBeenCalled();
+    expect(result.resolutionStatus).toBe("resolved");
+    expect(result.shouldAskResolution).toBe(false);
+    expect(result.responseText).toBe(
+      "Me alegra haber podido ayudarte. Si necesitas algo más, aquí estoy.",
+    );
+    expect(result.responseText).not.toMatch(/valorar|rate/i);
+  });
+
+  it("uses recent assistant guidance to recognize a reported next step", async () => {
+    const result = await generateAnswer(
+      "Ya le he pedido a mi gestor que me ponga de admin.",
+      [
+        {
+          sender: "assistant",
+          content: "Contacta con tu account manager para que te dé acceso.",
+        },
+        {
+          sender: "user",
+          content: "Ya le he pedido a mi gestor que me ponga de admin.",
+        },
+      ],
+      {},
+      [],
+      undefined,
+      { agent_language: "es" },
+    );
+
+    expect(result.resolutionStatus).toBe("resolved");
+    expect(result.responseText).toContain("Me alegra haber podido ayudarte.");
+  });
+
+  it.each([
+    "Gracias, pero sigo sin ver Ingresos.",
+    "Todo ok, ¿cómo descargo la factura?",
+    "Gracias, necesito descargar la factura.",
+    "No está resuelto.",
+  ])("keeps unresolved or mixed messages in the answer flow: %s", async (message) => {
+    const generate = vi.fn().mockResolvedValue({
+      responseText: "I can help with that.",
+      answerable: true,
+      replyLanguage: "en",
+      model: "gpt-test",
+      totalTokens: 4,
+      promptAssembled: "assembled",
+    });
+    const result = await generateAnswer(
+      message,
+      [
+        { sender: "assistant", content: "Go to the Ingresos section." },
+        { sender: "user", content: message },
+      ],
+      {},
+      [chunk],
+      { generate } as AnswerProvider,
+    );
+
+    expect(generate).toHaveBeenCalled();
+    expect(result.resolutionStatus).not.toBe("resolved");
+  });
+
   it("uses the agent language for deterministic replies even when the visitor writes in English", async () => {
     const spanishGreeting = await generateAnswer(
       "Hello",

@@ -109,7 +109,10 @@ export async function answerFromKnowledge(input: {
   };
 
   const liveIntent = detectLiveClientIntent(input.message, input.history);
-  if (isDeterministicReply(input.message) && liveIntent.kind === "none") {
+  if (
+    isDeterministicReply(input.message, input.history) &&
+    liveIntent.kind === "none"
+  ) {
     stages[1].status = "completed";
     stages[1].details = { eligible_articles: 0, skipped: true };
     stages[2].status = "completed";
@@ -493,7 +496,9 @@ export async function answerFromKnowledge(input: {
     input.history,
     input.person.attributes,
     retrievedChunks,
-    requiresAnswerProvider(input.message) ? createAnswerProvider() : undefined,
+    requiresAnswerProvider(input.message, input.history)
+      ? createAnswerProvider()
+      : undefined,
     {
       ...input.context,
       agent_language: agentLanguage,
