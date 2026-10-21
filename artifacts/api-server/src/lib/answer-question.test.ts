@@ -143,6 +143,28 @@ describe("answerFromKnowledge", () => {
     expect(result.assistantMetadata).toEqual({ citations: [] });
   });
 
+  it("recognizes that the user will pass on the advice without searching the knowledge base", async () => {
+    const message = "Vale ok se lo digo, gracias";
+    const result = await answerFromKnowledge({
+      ...baseInput,
+      message,
+      history: [
+        { sender: "assistant", content: "Contacta con tu account manager para que te dé acceso." },
+        { sender: "user", content: message },
+      ],
+      context: { agent_language: "es" },
+    });
+
+    expect(listEligiblePublishedArticles).not.toHaveBeenCalled();
+    expect(retrieveRelevantChunks).not.toHaveBeenCalled();
+    expect(createAnswerProvider).not.toHaveBeenCalled();
+    expect(result.resolutionStatus).toBe("resolved");
+    expect(result.responseText).toBe(
+      "Me alegra haber podido ayudarte. Si necesitas algo más, aquí estoy.",
+    );
+    expect(result.assistantMetadata).toEqual({ citations: [] });
+  });
+
   it("resolves a standalone thank-you without searching or offering escalation", async () => {
     const message = "Thanks for your help!";
     const result = await answerFromKnowledge({

@@ -234,7 +234,7 @@ function isResolution(message: string, history: HistoryMessage[]): boolean {
   if (standaloneAcknowledgment.test(message)) return true;
 
   const nextStepReported =
-    /\b(?:he pedido|le he pedido|ya pedi|ya he pedido|he contactado|he escrito|ya contacte|ya he contactado|me he puesto en contacto|i asked|i have asked|i've asked|i contacted|i have contacted|i've contacted|i reached out|j'ai demande|j'ai contacte|je l'ai contacte|ho chiesto|ho contattato|ho scritto)\b/;
+    /\b(?:he pedido|le he pedido|ya pedi|ya he pedido|he contactado|he escrito|ya contacte|ya he contactado|me he puesto en contacto|se lo digo|se lo dire|se lo voy a decir|se lo comento|se lo comentare|voy a hablar con mi gestor|hablo con mi gestor|lo consulto con mi gestor|i asked|i have asked|i've asked|i contacted|i have contacted|i've contacted|i reached out|i'll tell them|i will tell them|j'ai demande|j'ai contacte|je l'ai contacte|ho chiesto|ho contattato|ho scritto)\b/;
   const explicitPositiveLead =
     /^(?:todo (?:esta|va|bien|ok)|perfecto|genial|vale|de acuerdo|great|perfect|got it|that works|all good|sounds good|okay|ok|gracias|thanks|thank you|merci|grazie)(?=$|[\s,!.…])/;
   if (explicitPositiveLead.test(message) && nextStepReported.test(message)) {

@@ -55,7 +55,7 @@ describe("generateAnswer", () => {
 
   it("uses recent assistant guidance to recognize a reported next step", async () => {
     const result = await generateAnswer(
-      "Ya le he pedido a mi gestor que me ponga de admin.",
+      "Vale ok se lo digo, gracias",
       [
         {
           sender: "assistant",
@@ -63,7 +63,7 @@ describe("generateAnswer", () => {
         },
         {
           sender: "user",
-          content: "Ya le he pedido a mi gestor que me ponga de admin.",
+          content: "Vale ok se lo digo, gracias",
         },
       ],
       {},
