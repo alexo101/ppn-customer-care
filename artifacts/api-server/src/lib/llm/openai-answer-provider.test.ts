@@ -64,6 +64,31 @@ describe("bounded answer recovery", () => {
     usage: { total_tokens },
   });
 
+  it("uses gpt-6-luna when no answer model override is configured", async () => {
+    const previousAnswerModel = process.env.ANSWER_MODEL;
+    delete process.env.ANSWER_MODEL;
+    try {
+      const create = vi.fn().mockResolvedValue(completion(validAnswer, "stop"));
+      const provider = new OpenAIAnswerProvider({
+        client: {
+          chat: { completions: { create } },
+        } as unknown as OpenAI,
+      });
+
+      await provider.generate(input);
+
+      expect(create.mock.calls[0]?.[0]).toMatchObject({
+        model: "gpt-6-luna",
+      });
+    } finally {
+      if (previousAnswerModel === undefined) {
+        delete process.env.ANSWER_MODEL;
+      } else {
+        process.env.ANSWER_MODEL = previousAnswerModel;
+      }
+    }
+  });
+
   it("retries truncated output once with the same evidence and a larger bounded output budget", async () => {
     const create = vi.fn()
       .mockResolvedValueOnce(completion(null, "length", 8))
