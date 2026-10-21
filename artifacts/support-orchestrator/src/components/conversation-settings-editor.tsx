@@ -25,8 +25,6 @@ import { TemplatedMessageField } from "@/components/templated-message-field";
 import { toast } from "@/hooks/use-toast";
 import {
   MAX_AUTO_CLOSE_MINUTES,
-  splitAutoCloseTotalMinutes,
-  toAutoCloseTotalMinutes,
 } from "@/lib/conversation-settings";
 import {
   DEFAULT_ESCALATION_MESSAGE,
@@ -66,6 +64,7 @@ const EMOJIS = [
 ];
 
 const CLOSING_MESSAGE_MAX = 2000;
+const WARNING_MESSAGE_MAX = 2000;
 
 function clamp(value: number, min: number, max: number) {
   if (Number.isNaN(value)) return min;
@@ -118,8 +117,10 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
     },
   });
   const updateSettings = useUpdateAgentConversationSettings();
-  const [minutes, setMinutes] = useState(60);
-  const [closingMessage, setClosingMessage] = useState("");
+  const [minutes, setMinutes] = useState(0);
+  const [autoCloseMinutes, setAutoCloseMinutes] = useState(60);
+  const [warningMessage, setWarningMessage] = useState("");
+  const [autoCloseMessage, setAutoCloseMessage] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState(DEFAULT_WELCOME_MESSAGE);
   const [escalationMessage, setEscalationMessage] = useState(
     DEFAULT_ESCALATION_MESSAGE,
@@ -133,14 +134,10 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
 
   useEffect(() => {
     if (!data) return;
-    setMinutes(
-      toAutoCloseTotalMinutes(
-        data.autoCloseDays,
-        data.autoCloseHours,
-        data.autoCloseMinutes,
-      ),
-    );
-    setClosingMessage(data.closingMessage);
+    setMinutes(data.warningAfterMinutes);
+    setAutoCloseMinutes(data.autoCloseAfterMinutes);
+    setWarningMessage(data.warningMessage);
+    setAutoCloseMessage(data.autoCloseMessage);
     setWelcomeMessage(
       hasRequiredWelcomeTokens(data.welcomeMessage)
         ? data.welcomeMessage
@@ -152,33 +149,34 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
         : DEFAULT_ESCALATION_MESSAGE,
     );
     selectionRef.current = {
-      start: data.closingMessage.length,
-      end: data.closingMessage.length,
+      start: data.autoCloseMessage.length,
+      end: data.autoCloseMessage.length,
     };
   }, [data]);
 
   const saving = updateSettings.isPending;
-  const autoCloseDisabled = minutes === 0;
+  const warningDisabled = minutes === 0;
+  const autoCloseDisabled = autoCloseMinutes === 0;
 
   const rememberSelection = () => {
     const field = textareaRef.current;
     if (!field) return;
     selectionRef.current = {
-      start: field.selectionStart ?? closingMessage.length,
-      end: field.selectionEnd ?? closingMessage.length,
+      start: field.selectionStart ?? autoCloseMessage.length,
+      end: field.selectionEnd ?? autoCloseMessage.length,
     };
   };
 
   const insertEmoji = (emoji: string) => {
     const { start, end } = selectionRef.current;
     const next =
-      `${closingMessage.slice(0, start)}${emoji}${closingMessage.slice(end)}`.slice(
+      `${autoCloseMessage.slice(0, start)}${emoji}${autoCloseMessage.slice(end)}`.slice(
         0,
         CLOSING_MESSAGE_MAX,
       );
     const cursor = Math.min(start + emoji.length, next.length);
     selectionRef.current = { start: cursor, end: cursor };
-    setClosingMessage(next);
+    setAutoCloseMessage(next);
     setEmojiOpen(false);
     requestAnimationFrame(() => {
       const field = textareaRef.current;
@@ -205,9 +203,23 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
       });
       return;
     }
+    if (
+      minutes > 0 &&
+      autoCloseMinutes > 0 &&
+      autoCloseMinutes <= minutes
+    ) {
+      toast({
+        title: "Auto-close time must be later than the warning",
+        description: "Set the close timer to more minutes than the warning timer.",
+        variant: "destructive",
+      });
+      return;
+    }
     const input: AgentConversationSettingsInput = {
-      ...splitAutoCloseTotalMinutes(minutes),
-      closingMessage: closingMessage.slice(0, CLOSING_MESSAGE_MAX),
+      warningAfterMinutes: minutes,
+      warningMessage: warningMessage.slice(0, WARNING_MESSAGE_MAX),
+      autoCloseAfterMinutes: autoCloseMinutes,
+      autoCloseMessage: autoCloseMessage.slice(0, CLOSING_MESSAGE_MAX),
       welcomeMessage: welcomeMessage.slice(0, WELCOME_MESSAGE_MAX),
       escalationMessage: escalationMessage.slice(0, ESCALATION_MESSAGE_MAX),
     };
@@ -271,12 +283,12 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Auto-close conversations">
+      <SettingsSection title="Warning to close">
         <div className="space-y-2">
-          <Label>Close after inactivity</Label>
+          <Label>Warn after inactivity</Label>
           <div className="flex max-w-xs gap-3">
             <DurationField
-              id="auto-close-minutes"
+              id="warning-after-minutes"
               label="Minutes"
               value={minutes}
               min={0}
@@ -285,23 +297,66 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
               onChange={setMinutes}
             />
           </div>
-          {autoCloseDisabled ? (
+          {warningDisabled ? (
             <p className="text-xs text-muted-foreground">
-              Auto-close is currently disabled.
+              The inactivity warning is currently disabled.
             </p>
           ) : null}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="closing-message">Closing message</Label>
+          <Label htmlFor="warning-message">Warning message</Label>
+          <Textarea
+            id="warning-message"
+            value={warningMessage}
+            onChange={(event) =>
+              setWarningMessage(
+                event.target.value.slice(0, WARNING_MESSAGE_MAX),
+              )
+            }
+            disabled={!canEdit}
+            rows={3}
+            maxLength={WARNING_MESSAGE_MAX}
+            placeholder="This conversation is still open. Reply here if you need more help."
+          />
+          <p className="text-xs text-muted-foreground">
+            Sent once after the selected period without activity. A new reply
+            restarts the inactivity timer.
+          </p>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="Auto close conversation">
+        <div className="space-y-2">
+          <Label>Close after inactivity</Label>
+          <div className="flex max-w-xs gap-3">
+            <DurationField
+              id="auto-close-after-minutes"
+              label="Minutes"
+              value={autoCloseMinutes}
+              min={0}
+              max={MAX_AUTO_CLOSE_MINUTES}
+              disabled={!canEdit}
+              onChange={setAutoCloseMinutes}
+            />
+          </div>
+          {autoCloseDisabled ? (
+            <p className="text-xs text-muted-foreground">
+              Automatic closure is currently disabled.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="auto-close-message">Final message</Label>
           <div className="rounded-md border border-input shadow-sm focus-within:ring-1 focus-within:ring-ring">
             <Textarea
-              id="closing-message"
+              id="auto-close-message"
               ref={textareaRef}
-              value={closingMessage}
+              value={autoCloseMessage}
               onChange={(event) => {
                 const value = event.target.value.slice(0, CLOSING_MESSAGE_MAX);
-                setClosingMessage(value);
+                setAutoCloseMessage(value);
                 selectionRef.current = {
                   start: event.target.selectionStart ?? value.length,
                   end: event.target.selectionEnd ?? value.length,
@@ -314,7 +369,7 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
               disabled={!canEdit}
               rows={4}
               maxLength={CLOSING_MESSAGE_MAX}
-              placeholder="This conversation has been closed. Message us again if you need more help. 👋"
+              placeholder="This conversation has been closed after a period of inactivity. 👋"
               className="border-0 shadow-none focus-visible:ring-0 min-h-[96px] resize-none"
             />
             <div className="flex items-center justify-end px-1 pb-1">
@@ -326,7 +381,7 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
                     size="sm"
                     className="h-8 gap-1.5 text-muted-foreground"
                     disabled={!canEdit}
-                    aria-label="Add emoji to closing message"
+                    aria-label="Add emoji to final message"
                   >
                     <Smile className="h-4 w-4" />
                     Add emoji
@@ -357,8 +412,8 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            This text, including any emojis you add, is sent as the last message
-            when the conversation closes.
+            This message is sent when the conversation closes. A thumbs-up or
+            thumbs-down rating prompt appears below it.
           </p>
         </div>
       </SettingsSection>

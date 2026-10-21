@@ -384,16 +384,15 @@ export const GetAgentConversationSettingsParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const getAgentConversationSettingsResponseAutoCloseDaysMin = 0;
-export const getAgentConversationSettingsResponseAutoCloseDaysMax = 365;
+export const getAgentConversationSettingsResponseWarningAfterMinutesMin = 0;
+export const getAgentConversationSettingsResponseWarningAfterMinutesMax = 527039;
 
-export const getAgentConversationSettingsResponseAutoCloseHoursMin = 0;
-export const getAgentConversationSettingsResponseAutoCloseHoursMax = 23;
+export const getAgentConversationSettingsResponseWarningMessageMax = 2000;
 
-export const getAgentConversationSettingsResponseAutoCloseMinutesMin = 0;
-export const getAgentConversationSettingsResponseAutoCloseMinutesMax = 59;
+export const getAgentConversationSettingsResponseAutoCloseAfterMinutesMin = 0;
+export const getAgentConversationSettingsResponseAutoCloseAfterMinutesMax = 527039;
 
-export const getAgentConversationSettingsResponseClosingMessageMax = 2000;
+export const getAgentConversationSettingsResponseAutoCloseMessageMax = 2000;
 
 export const getAgentConversationSettingsResponseWelcomeMessageMax = 2000;
 
@@ -403,10 +402,10 @@ export const getAgentConversationSettingsResponseEscalationMessageMax = 2000;
 
 export const GetAgentConversationSettingsResponse = zod.object({
   "agentId": zod.string(),
-  "autoCloseDays": zod.number().min(getAgentConversationSettingsResponseAutoCloseDaysMin).max(getAgentConversationSettingsResponseAutoCloseDaysMax),
-  "autoCloseHours": zod.number().min(getAgentConversationSettingsResponseAutoCloseHoursMin).max(getAgentConversationSettingsResponseAutoCloseHoursMax),
-  "autoCloseMinutes": zod.number().min(getAgentConversationSettingsResponseAutoCloseMinutesMin).max(getAgentConversationSettingsResponseAutoCloseMinutesMax),
-  "closingMessage": zod.string().max(getAgentConversationSettingsResponseClosingMessageMax),
+  "warningAfterMinutes": zod.number().min(getAgentConversationSettingsResponseWarningAfterMinutesMin).max(getAgentConversationSettingsResponseWarningAfterMinutesMax),
+  "warningMessage": zod.string().max(getAgentConversationSettingsResponseWarningMessageMax),
+  "autoCloseAfterMinutes": zod.number().min(getAgentConversationSettingsResponseAutoCloseAfterMinutesMin).max(getAgentConversationSettingsResponseAutoCloseAfterMinutesMax),
+  "autoCloseMessage": zod.string().max(getAgentConversationSettingsResponseAutoCloseMessageMax),
   "welcomeMessage": zod.string().max(getAgentConversationSettingsResponseWelcomeMessageMax),
   "escalationMessage": zod.string().max(getAgentConversationSettingsResponseEscalationMessageMax)
 })
@@ -419,16 +418,15 @@ export const UpdateAgentConversationSettingsParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const updateAgentConversationSettingsBodyAutoCloseDaysMin = 0;
-export const updateAgentConversationSettingsBodyAutoCloseDaysMax = 365;
+export const updateAgentConversationSettingsBodyWarningAfterMinutesMin = 0;
+export const updateAgentConversationSettingsBodyWarningAfterMinutesMax = 527039;
 
-export const updateAgentConversationSettingsBodyAutoCloseHoursMin = 0;
-export const updateAgentConversationSettingsBodyAutoCloseHoursMax = 23;
+export const updateAgentConversationSettingsBodyWarningMessageMax = 2000;
 
-export const updateAgentConversationSettingsBodyAutoCloseMinutesMin = 0;
-export const updateAgentConversationSettingsBodyAutoCloseMinutesMax = 59;
+export const updateAgentConversationSettingsBodyAutoCloseAfterMinutesMin = 0;
+export const updateAgentConversationSettingsBodyAutoCloseAfterMinutesMax = 527039;
 
-export const updateAgentConversationSettingsBodyClosingMessageMax = 2000;
+export const updateAgentConversationSettingsBodyAutoCloseMessageMax = 2000;
 
 export const updateAgentConversationSettingsBodyWelcomeMessageMax = 2000;
 
@@ -437,24 +435,23 @@ export const updateAgentConversationSettingsBodyEscalationMessageMax = 2000;
 
 
 export const UpdateAgentConversationSettingsBody = zod.object({
-  "autoCloseDays": zod.number().min(updateAgentConversationSettingsBodyAutoCloseDaysMin).max(updateAgentConversationSettingsBodyAutoCloseDaysMax),
-  "autoCloseHours": zod.number().min(updateAgentConversationSettingsBodyAutoCloseHoursMin).max(updateAgentConversationSettingsBodyAutoCloseHoursMax),
-  "autoCloseMinutes": zod.number().min(updateAgentConversationSettingsBodyAutoCloseMinutesMin).max(updateAgentConversationSettingsBodyAutoCloseMinutesMax),
-  "closingMessage": zod.string().max(updateAgentConversationSettingsBodyClosingMessageMax),
+  "warningAfterMinutes": zod.number().min(updateAgentConversationSettingsBodyWarningAfterMinutesMin).max(updateAgentConversationSettingsBodyWarningAfterMinutesMax),
+  "warningMessage": zod.string().max(updateAgentConversationSettingsBodyWarningMessageMax),
+  "autoCloseAfterMinutes": zod.number().min(updateAgentConversationSettingsBodyAutoCloseAfterMinutesMin).max(updateAgentConversationSettingsBodyAutoCloseAfterMinutesMax),
+  "autoCloseMessage": zod.string().max(updateAgentConversationSettingsBodyAutoCloseMessageMax),
   "welcomeMessage": zod.string().max(updateAgentConversationSettingsBodyWelcomeMessageMax),
   "escalationMessage": zod.string().max(updateAgentConversationSettingsBodyEscalationMessageMax)
 })
 
-export const updateAgentConversationSettingsResponseAutoCloseDaysMin = 0;
-export const updateAgentConversationSettingsResponseAutoCloseDaysMax = 365;
+export const updateAgentConversationSettingsResponseWarningAfterMinutesMin = 0;
+export const updateAgentConversationSettingsResponseWarningAfterMinutesMax = 527039;
 
-export const updateAgentConversationSettingsResponseAutoCloseHoursMin = 0;
-export const updateAgentConversationSettingsResponseAutoCloseHoursMax = 23;
+export const updateAgentConversationSettingsResponseWarningMessageMax = 2000;
 
-export const updateAgentConversationSettingsResponseAutoCloseMinutesMin = 0;
-export const updateAgentConversationSettingsResponseAutoCloseMinutesMax = 59;
+export const updateAgentConversationSettingsResponseAutoCloseAfterMinutesMin = 0;
+export const updateAgentConversationSettingsResponseAutoCloseAfterMinutesMax = 527039;
 
-export const updateAgentConversationSettingsResponseClosingMessageMax = 2000;
+export const updateAgentConversationSettingsResponseAutoCloseMessageMax = 2000;
 
 export const updateAgentConversationSettingsResponseWelcomeMessageMax = 2000;
 
@@ -464,10 +461,10 @@ export const updateAgentConversationSettingsResponseEscalationMessageMax = 2000;
 
 export const UpdateAgentConversationSettingsResponse = zod.object({
   "agentId": zod.string(),
-  "autoCloseDays": zod.number().min(updateAgentConversationSettingsResponseAutoCloseDaysMin).max(updateAgentConversationSettingsResponseAutoCloseDaysMax),
-  "autoCloseHours": zod.number().min(updateAgentConversationSettingsResponseAutoCloseHoursMin).max(updateAgentConversationSettingsResponseAutoCloseHoursMax),
-  "autoCloseMinutes": zod.number().min(updateAgentConversationSettingsResponseAutoCloseMinutesMin).max(updateAgentConversationSettingsResponseAutoCloseMinutesMax),
-  "closingMessage": zod.string().max(updateAgentConversationSettingsResponseClosingMessageMax),
+  "warningAfterMinutes": zod.number().min(updateAgentConversationSettingsResponseWarningAfterMinutesMin).max(updateAgentConversationSettingsResponseWarningAfterMinutesMax),
+  "warningMessage": zod.string().max(updateAgentConversationSettingsResponseWarningMessageMax),
+  "autoCloseAfterMinutes": zod.number().min(updateAgentConversationSettingsResponseAutoCloseAfterMinutesMin).max(updateAgentConversationSettingsResponseAutoCloseAfterMinutesMax),
+  "autoCloseMessage": zod.string().max(updateAgentConversationSettingsResponseAutoCloseMessageMax),
   "welcomeMessage": zod.string().max(updateAgentConversationSettingsResponseWelcomeMessageMax),
   "escalationMessage": zod.string().max(updateAgentConversationSettingsResponseEscalationMessageMax)
 })
@@ -811,7 +808,9 @@ export const ListConversationsResponseItem = zod.object({
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "agentId": zod.string().nullish(),
-  "npsScore": zod.number().min(1).max(listConversationsResponseNpsScoreMax).nullish()
+  "npsScore": zod.number().min(1).max(listConversationsResponseNpsScoreMax).nullish(),
+  "conversationRating": zod.union([zod.literal('positive'),zod.literal('negative'),zod.literal(null)]).nullish(),
+  "conversationRatingAt": zod.string().nullish()
 })
 export const ListConversationsResponse = zod.array(ListConversationsResponseItem)
 
@@ -836,7 +835,9 @@ export const CreateConversationResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "agentId": zod.string().nullish(),
-  "npsScore": zod.number().min(1).max(createConversationResponseNpsScoreMax).nullish()
+  "npsScore": zod.number().min(1).max(createConversationResponseNpsScoreMax).nullish(),
+  "conversationRating": zod.union([zod.literal('positive'),zod.literal('negative'),zod.literal(null)]).nullish(),
+  "conversationRatingAt": zod.string().nullish()
 })
 
 
@@ -859,7 +860,9 @@ export const GetConversationResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "agentId": zod.string().nullish(),
-  "npsScore": zod.number().min(1).max(getConversationResponseNpsScoreMax).nullish()
+  "npsScore": zod.number().min(1).max(getConversationResponseNpsScoreMax).nullish(),
+  "conversationRating": zod.union([zod.literal('positive'),zod.literal('negative'),zod.literal(null)]).nullish(),
+  "conversationRatingAt": zod.string().nullish()
 })
 
 
@@ -887,7 +890,9 @@ export const UpdateConversationResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "agentId": zod.string().nullish(),
-  "npsScore": zod.number().min(1).max(updateConversationResponseNpsScoreMax).nullish()
+  "npsScore": zod.number().min(1).max(updateConversationResponseNpsScoreMax).nullish(),
+  "conversationRating": zod.union([zod.literal('positive'),zod.literal('negative'),zod.literal(null)]).nullish(),
+  "conversationRatingAt": zod.string().nullish()
 })
 
 
@@ -1012,7 +1017,38 @@ export const SubmitConversationNpsResponse = zod.object({
   "resolvedAt": zod.string().nullish(),
   "createdAt": zod.string(),
   "agentId": zod.string().nullish(),
-  "npsScore": zod.number().min(1).max(submitConversationNpsResponseNpsScoreMax).nullish()
+  "npsScore": zod.number().min(1).max(submitConversationNpsResponseNpsScoreMax).nullish(),
+  "conversationRating": zod.union([zod.literal('positive'),zod.literal('negative'),zod.literal(null)]).nullish(),
+  "conversationRatingAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Submit a positive or negative rating after an automatic close
+ */
+export const SubmitConversationRatingParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const SubmitConversationRatingBody = zod.object({
+  "rating": zod.enum(['positive', 'negative'])
+})
+
+export const submitConversationRatingResponseNpsScoreMax = 10;
+
+
+
+export const SubmitConversationRatingResponse = zod.object({
+  "id": zod.string(),
+  "status": zod.string(),
+  "metadata": zod.record(zod.string(), zod.unknown()),
+  "lastActivityAt": zod.string(),
+  "resolvedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "agentId": zod.string().nullish(),
+  "npsScore": zod.number().min(1).max(submitConversationRatingResponseNpsScoreMax).nullish(),
+  "conversationRating": zod.union([zod.literal('positive'),zod.literal('negative'),zod.literal(null)]).nullish(),
+  "conversationRatingAt": zod.string().nullish()
 })
 
 

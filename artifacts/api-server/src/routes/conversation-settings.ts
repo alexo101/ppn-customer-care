@@ -7,6 +7,9 @@ import {
 import { requireAuth, requireEditor } from "../middlewares/requireAuth";
 import { getOwnedAgent } from "../lib/agents";
 import {
+  isValidInactivitySettings,
+} from "../lib/conversation-auto-close";
+import {
   ConversationSettingsError,
   getAgentConversationSettings,
   updateAgentConversationSettings,
@@ -47,6 +50,13 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
+    if (!isValidInactivitySettings(parsed.data)) {
+      res.status(400).json({
+        error:
+          "The auto-close timer must be longer than the warning timer when both are enabled.",
+      });
+      return;
+    }
     const agent = await getOwnedAgent(req.userId, params.data.id);
     if (!agent) {
       res.status(404).json({ error: "Agent not found." });
@@ -55,10 +65,10 @@ router.patch(
     try {
       res.json(
         await updateAgentConversationSettings(agent.id, {
-          autoCloseDays: parsed.data.autoCloseDays,
-          autoCloseHours: parsed.data.autoCloseHours,
-          autoCloseMinutes: parsed.data.autoCloseMinutes,
-          closingMessage: parsed.data.closingMessage,
+          warningAfterMinutes: parsed.data.warningAfterMinutes,
+          warningMessage: parsed.data.warningMessage,
+          autoCloseAfterMinutes: parsed.data.autoCloseAfterMinutes,
+          autoCloseMessage: parsed.data.autoCloseMessage,
           welcomeMessage: parsed.data.welcomeMessage,
           escalationMessage: parsed.data.escalationMessage,
         }),

@@ -7,6 +7,7 @@ import {
   useListMessages,
   useSendMessage,
   useEscalateConversation,
+  useSubmitConversationRating,
   getGetAgentAppearanceQueryKey,
   getGetAgentQueryKey,
   getGetConversationQueryKey,
@@ -30,6 +31,8 @@ import {
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
+import { hasAutoCloseConversationRating } from "@/lib/conversation-settings";
+import { ConversationRatingPrompt } from "@/components/chat/conversation-rating";
 import {
   agentLanguageCopy,
   normalizeAgentLanguage,
@@ -118,6 +121,7 @@ export function SupportChatPanel({
   const [dismissedEscalationMessageId, setDismissedEscalationMessageId] =
     useState<string | null>(null);
   const [escalationError, setEscalationError] = useState<AgentLanguageCopyKey | null>(null);
+  const [conversationRatingSent, setConversationRatingSent] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState<{
     content: string;
     // Ids already in the list when this send started. The API send response
@@ -136,6 +140,7 @@ export function SupportChatPanel({
   const { mutate: sendChatMessage, isPending: sendingMessage } =
     useSendMessage();
   const escalateConversation = useEscalateConversation();
+  const submitConversationRating = useSubmitConversationRating();
   const { data: convo, refetch: refetchConvo } = useGetConversation(
     convoId ?? "",
     {
@@ -196,6 +201,27 @@ export function SupportChatPanel({
         !pendingUserMessage.baselineIds.has(msg.id) &&
         msg.content.trim() === pendingUserMessage.content.trim(),
     );
+  const showConversationRating =
+    convo?.status === "closed" &&
+    hasAutoCloseConversationRating(convo.metadata);
+
+  useEffect(() => {
+    setConversationRatingSent(false);
+  }, [convoId]);
+
+  const sendConversationRating = (rating: "positive" | "negative") => {
+    if (!convoId || submitConversationRating.isPending || conversationRatingSent)
+      return;
+    submitConversationRating.mutate(
+      { id: convoId, data: { rating } },
+      {
+        onSuccess: () => {
+          setConversationRatingSent(true);
+          void refetchConvo();
+        },
+      },
+    );
+  };
 
   const beginThinking = (baseline: number) => {
     assistantBaselineRef.current = baseline;
@@ -615,6 +641,18 @@ export function SupportChatPanel({
                   >
                     {agentLanguageCopy(language, "tryAgain")}
                   </button>
+                </div>
+              )}
+
+              {showConversationRating && (
+                <div className="rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm">
+                  <ConversationRatingPrompt
+                    language={language}
+                    rating={convo?.conversationRating ?? null}
+                    submitted={conversationRatingSent}
+                    disabled={submitConversationRating.isPending}
+                    onSubmit={sendConversationRating}
+                  />
                 </div>
               )}
             </>

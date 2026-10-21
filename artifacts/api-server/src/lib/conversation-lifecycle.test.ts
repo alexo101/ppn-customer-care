@@ -1,16 +1,63 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { dbMock, analyticsMock, translateCustomerTemplateMock } = vi.hoisted(() => ({
-  dbMock: {
-    rows: [] as unknown[],
-    appearances: [] as unknown[],
-    select: vi.fn(),
-    insert: vi.fn(),
-    update: vi.fn(),
-  },
-  analyticsMock: vi.fn(),
-  translateCustomerTemplateMock: vi.fn(),
-}));
+const { dbMock, txMock, analyticsMock, translateCustomerTemplateMock } =
+  vi.hoisted(() => {
+    const state: {
+      conversation: Record<string, any> | null;
+      messages: Record<string, any>[];
+      pendingUpdate: Record<string, any> | null;
+    } = { conversation: null, messages: [], pendingUpdate: null };
+    const tx: Record<string, any> = {};
+    const db: Record<string, any> = {
+      state,
+      rows: [] as unknown[],
+      appearances: [] as unknown[],
+      select: vi.fn(),
+      transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
+        callback(tx),
+      ),
+    };
+
+    tx.select = vi.fn(() => {
+      const builder: Record<string, any> = {};
+      builder.from = () => builder;
+      builder.where = () => builder;
+      builder.limit = () => builder;
+      builder.for = async () => (state.conversation ? [state.conversation] : []);
+      return builder;
+    });
+    tx.insert = vi.fn(() => {
+      const builder: Record<string, any> = {};
+      builder.values = (values: Record<string, any>) => {
+        state.messages.push(values);
+        return builder;
+      };
+      builder.returning = async () => [{ id: `message-${state.messages.length}` }];
+      return builder;
+    });
+    tx.update = vi.fn(() => {
+      const builder: Record<string, any> = {};
+      builder.set = (values: Record<string, any>) => {
+        state.pendingUpdate = values;
+        return builder;
+      };
+      builder.where = async () => {
+        if (state.conversation && state.pendingUpdate) {
+          Object.assign(state.conversation, state.pendingUpdate);
+        }
+        state.pendingUpdate = null;
+        return [];
+      };
+      return builder;
+    });
+
+    return {
+      dbMock: db,
+      txMock: tx,
+      analyticsMock: vi.fn(),
+      translateCustomerTemplateMock: vi.fn(),
+    };
+  });
 
 vi.mock("drizzle-orm", () => ({
   and: vi.fn(() => ({})),
@@ -24,9 +71,12 @@ vi.mock("@workspace/db", () => ({
   conversationsTable: {
     id: "conversation.id",
     agentId: "conversation.agentId",
+    userId: "conversation.userId",
     status: "conversation.status",
     lastActivityAt: "conversation.lastActivityAt",
     metadata: "conversation.metadata",
+    conversationRating: "conversation.conversationRating",
+    npsScore: "conversation.npsScore",
   },
   agentConversationSettingsTable: { agentId: "settings.agentId" },
   appearanceSettingsTable: {
@@ -44,267 +94,258 @@ vi.mock("./welcome-message", () => ({
 vi.mock("./conversation-analytics", () => ({
   updateConversationAnalytics: analyticsMock,
 }));
+
 import {
-  autoCloseDurationMs,
-  isAutoClosed,
-  nextAutoCloseAction,
+  DEFAULT_CONVERSATION_SETTINGS,
+  hasAutoCloseFeedback,
+  isValidInactivitySettings,
+  nextInactivityAction,
   npsSubmitError,
   withAutoClosed,
 } from "./conversation-auto-close";
-import { closeInactiveConversations } from "./conversation-lifecycle";
+import {
+  closeInactiveConversations,
+  conversationRatingSubmitError,
+} from "./conversation-lifecycle";
 
-const hourAgo = new Date("2026-09-02T15:00:00.000Z");
 const now = new Date("2026-09-02T16:00:00.000Z");
-
-const defaultSettings = {
-  autoCloseDays: 0,
-  autoCloseHours: 1,
-  autoCloseMinutes: 0,
-  closingMessage: "Thanks, closing now.",
-  welcomeMessage:
-    "Hello {user_name}, you are speaking {agent_name} Ai Agent. How can I help you?",
-  escalationMessage: "Sorry {user_name}, I cannot answer that.",
+const lastActivityAt = new Date("2026-09-02T15:00:00.000Z");
+let selectCount = 0;
+const baseSettings = {
+  ...DEFAULT_CONVERSATION_SETTINGS,
+  warningAfterMinutes: 10,
+  warningMessage: "",
+  autoCloseAfterMinutes: 30,
+  autoCloseMessage: "",
 };
 
-describe("auto-close duration", () => {
-  it("returns zero when every unit is zero", () => {
-    expect(
-      autoCloseDurationMs({
-        autoCloseDays: 0,
-        autoCloseHours: 0,
-        autoCloseMinutes: 0,
-        closingMessage: "",
-        welcomeMessage: "",
-        escalationMessage: "",
-      }),
-    ).toBe(0);
-  });
+function setConversation(overrides: Record<string, unknown> = {}) {
+  const conversation = {
+    id: "conversation-1",
+    agentId: "agent-1",
+    userId: "owner-1",
+    status: "active",
+    lastActivityAt,
+    metadata: {},
+    conversationRating: null,
+    npsScore: null,
+    ...overrides,
+  };
+  dbMock.state.conversation = conversation;
+  dbMock.rows = [{ conversation, settings: baseSettings }];
+}
 
-  it("combines days, hours, and minutes", () => {
-    expect(
-      autoCloseDurationMs({
-        autoCloseDays: 1,
-        autoCloseHours: 2,
-        autoCloseMinutes: 30,
-        closingMessage: "",
-        welcomeMessage: "",
-        escalationMessage: "",
-      }),
-    ).toBe(((24 + 2) * 60 + 30) * 60 * 1000);
-  });
-});
+function selectBuilder(result: unknown, firstQuery: boolean) {
+  const builder: Record<string, any> = {};
+  builder.from = () => builder;
+  builder.leftJoin = () => builder;
+  builder.where = () => (firstQuery ? Promise.resolve(result) : builder);
+  builder.orderBy = async () => result;
+  return builder;
+}
 
-describe("nextAutoCloseAction", () => {
-  it("skips closed and escalated conversations", () => {
+describe("inactivity action", () => {
+  it("uses an independent warning and close threshold and lets close win if both passed", () => {
     expect(
-      nextAutoCloseAction({
-        status: "closed",
-        lastActivityAt: hourAgo,
-        settings: defaultSettings,
-        now,
-      }),
-    ).toBe("skip");
-    expect(
-      nextAutoCloseAction({
-        status: "escalated",
-        lastActivityAt: hourAgo,
-        settings: defaultSettings,
-        now,
-      }),
-    ).toBe("skip");
-  });
-
-  it("skips when the configured duration is zero", () => {
-    expect(
-      nextAutoCloseAction({
+      nextInactivityAction({
         status: "active",
-        lastActivityAt: hourAgo,
-        settings: { ...defaultSettings, autoCloseHours: 0 },
-        now,
+        lastActivityAt,
+        settings: baseSettings,
+        now: new Date(lastActivityAt.getTime() + 15 * 60 * 1000),
       }),
-    ).toBe("skip");
-  });
-
-  it("skips when the conversation is still inside the idle window", () => {
+    ).toBe("warn");
     expect(
-      nextAutoCloseAction({
+      nextInactivityAction({
         status: "active",
-        lastActivityAt: new Date("2026-09-02T15:30:00.000Z"),
-        settings: defaultSettings,
-        now,
-      }),
-    ).toBe("skip");
-  });
-
-  it("closes immediately after the idle window", () => {
-    expect(
-      nextAutoCloseAction({
-        status: "active",
-        lastActivityAt: hourAgo,
-        settings: defaultSettings,
+        lastActivityAt,
+        settings: baseSettings,
         now,
       }),
     ).toBe("close");
   });
-});
 
-describe("auto-close metadata", () => {
-  it("marks a conversation as auto-closed and clears leftover confirmation flags", () => {
-    const closed = withAutoClosed({
-      subject: "Help",
-      awaitingAutoCloseConfirmation: true,
-      autoClosePromptedAt: now.toISOString(),
-    });
-    expect(isAutoClosed(closed)).toBe(true);
-    expect(closed).toEqual({ subject: "Help", autoClosed: true });
-  });
-});
-
-describe("npsSubmitError", () => {
-  it("returns null when the conversation is missing", () => {
-    expect(npsSubmitError(null)).toBeNull();
-  });
-
-  it("rejects open conversations", () => {
+  it("does not repeat a warning for the same activity timestamp", () => {
     expect(
-      npsSubmitError({
+      nextInactivityAction({
         status: "active",
-        npsScore: null,
-        metadata: { autoClosed: true },
+        lastActivityAt,
+        settings: baseSettings,
+        warningForLastActivityAt: lastActivityAt.toISOString(),
+        now: new Date(lastActivityAt.getTime() + 15 * 60 * 1000),
       }),
-    ).toMatch(/closed/i);
+    ).toBe("skip");
   });
 
-  it("rejects conversations that were not auto-closed", () => {
+  it("skips disabled timers and closed or escalated conversations", () => {
     expect(
-      npsSubmitError({
-        status: "closed",
-        npsScore: null,
-        metadata: {},
+      nextInactivityAction({
+        status: "active",
+        lastActivityAt,
+        settings: {
+          ...baseSettings,
+          warningAfterMinutes: 0,
+          autoCloseAfterMinutes: 0,
+        },
+        now,
       }),
-    ).toMatch(/automatic close/i);
+    ).toBe("skip");
+    expect(
+      nextInactivityAction({
+        status: "closed",
+        lastActivityAt,
+        settings: baseSettings,
+        now,
+      }),
+    ).toBe("skip");
+    expect(
+      nextInactivityAction({
+        status: "escalated",
+        lastActivityAt,
+        settings: baseSettings,
+        now,
+      }),
+    ).toBe("skip");
   });
 
-  it("rejects a second rating", () => {
+  it("keeps the default one-hour automatic close without enabling a warning", () => {
     expect(
-      npsSubmitError({
+      nextInactivityAction({
+        status: "active",
+        lastActivityAt,
+        settings: DEFAULT_CONVERSATION_SETTINGS,
+        now: new Date(lastActivityAt.getTime() + 59 * 60 * 1000),
+      }),
+    ).toBe("skip");
+    expect(
+      nextInactivityAction({
+        status: "active",
+        lastActivityAt,
+        settings: DEFAULT_CONVERSATION_SETTINGS,
+        now: now,
+      }),
+    ).toBe("close");
+  });
+
+  it("requires a close timer later than an enabled warning timer", () => {
+    expect(
+      isValidInactivitySettings({
+        warningAfterMinutes: 10,
+        autoCloseAfterMinutes: 10,
+      }),
+    ).toBe(false);
+    expect(
+      isValidInactivitySettings({
+        warningAfterMinutes: 10,
+        autoCloseAfterMinutes: 11,
+      }),
+    ).toBe(true);
+    expect(
+      isValidInactivitySettings({
+        warningAfterMinutes: 0,
+        autoCloseAfterMinutes: 10,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("auto-close metadata and ratings", () => {
+  it("marks new auto-closed conversations for one thumbs rating", () => {
+    const closed = withAutoClosed({ topic: "help" });
+    expect(closed).toMatchObject({
+      topic: "help",
+      autoClosed: true,
+      autoCloseFeedback: true,
+    });
+    expect(hasAutoCloseFeedback(closed)).toBe(true);
+    expect(npsSubmitError({
+      status: "closed",
+      npsScore: null,
+      metadata: closed,
+    })).toMatch(/thumbs/i);
+    expect(
+      conversationRatingSubmitError({
         status: "closed",
-        npsScore: 8,
-        metadata: { autoClosed: true },
+        metadata: closed,
+        conversationRating: null,
+      }),
+    ).toBeNull();
+    expect(
+      conversationRatingSubmitError({
+        status: "closed",
+        metadata: closed,
+        conversationRating: "positive",
       }),
     ).toMatch(/already/i);
   });
 
-  it("allows a first score after automatic close", () => {
+  it("does not enable thumbs feedback for older auto-closed conversations", () => {
     expect(
-      npsSubmitError({
+      conversationRatingSubmitError({
         status: "closed",
-        npsScore: null,
         metadata: { autoClosed: true },
+        conversationRating: null,
       }),
-    ).toBeNull();
+    ).toMatch(/only available/i);
   });
 });
 
-describe("closeInactiveConversations", () => {
+describe("inactive conversation sweep", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMock.rows = [
-      {
-        conversation: {
-          id: "conversation-1",
-          agentId: "agent-1",
-          status: "active",
-          lastActivityAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
-          metadata: {},
-        },
-        settings: {
-          autoCloseDays: 0,
-          autoCloseHours: 1,
-          autoCloseMinutes: 0,
-          closingMessage: "",
-          welcomeMessage: "",
-          escalationMessage: "",
-        },
-      },
-    ];
-    dbMock.appearances = [
-      { agentId: "agent-1", language: "es" },
-      { agentId: "agent-1", language: "en" },
-    ];
-    let selectCount = 0;
+    selectCount = 0;
+    dbMock.state.messages = [];
+    dbMock.state.pendingUpdate = null;
+    setConversation();
     dbMock.select.mockImplementation(() => {
-      const result = selectCount++ === 0 ? dbMock.rows : dbMock.appearances;
-      const builder = {
-        from: vi.fn(() => builder),
-        leftJoin: vi.fn(() => builder),
-        where: vi.fn(() =>
-          result === dbMock.rows ? Promise.resolve(result) : builder,
-        ),
-        orderBy: vi.fn(() => Promise.resolve(result)),
-      };
-      return builder;
+      const firstQuery = selectCount++ % 2 === 0;
+      return selectBuilder(
+        firstQuery ? dbMock.rows : dbMock.appearances,
+        firstQuery,
+      );
     });
-    dbMock.update.mockImplementation(() => {
-      const builder = {
-        set: vi.fn(() => builder),
-        where: vi.fn().mockResolvedValue(undefined),
-      };
-      return builder;
-    });
-    dbMock.insert.mockImplementation(() => {
-      const builder = {
-        values: vi.fn(() => builder),
-        returning: vi.fn().mockResolvedValue([{ id: "assistant-message" }]),
-      };
-      return builder;
-    });
-    translateCustomerTemplateMock.mockReset();
-    translateCustomerTemplateMock.mockResolvedValue("Hasta luego.");
+    translateCustomerTemplateMock.mockImplementation(
+      async (_template: string, _locale: string, fallback: string) => fallback,
+    );
   });
 
-  it("silently closes when the configured closing message is blank", async () => {
+  it("sends a warning without closing, then closes without repeating a stale warning", async () => {
+    await expect(
+      closeInactiveConversations(
+        new Date(lastActivityAt.getTime() + 15 * 60 * 1000),
+      ),
+    ).resolves.toEqual({ warned: 1, closed: 0 });
+    expect(dbMock.state.messages).toHaveLength(1);
+    expect(dbMock.state.messages[0]).toMatchObject({
+      metadata: { kind: "inactivity_warning" },
+    });
+    expect(dbMock.state.conversation.status).toBe("active");
+    expect(dbMock.state.conversation.lastActivityAt).toEqual(lastActivityAt);
+
     await expect(closeInactiveConversations(now)).resolves.toEqual({
+      warned: 0,
       closed: 1,
     });
-    expect(dbMock.insert).not.toHaveBeenCalled();
-    expect(dbMock.update).toHaveBeenCalledOnce();
+    expect(dbMock.state.messages).toHaveLength(2);
+    expect(dbMock.state.messages[1]).toMatchObject({
+      metadata: { kind: "auto_close" },
+    });
+    expect(dbMock.state.conversation.status).toBe("closed");
+    expect(dbMock.state.conversation.metadata).toMatchObject({
+      autoClosed: true,
+      autoCloseFeedback: true,
+      autoCloseFlow: "warning_rating_v1",
+    });
     expect(analyticsMock).toHaveBeenCalledWith("conversation-1");
   });
 
-  it("uses the newest agent appearance language when duplicate settings remain", async () => {
-    dbMock.rows = [
-      {
-        conversation: {
-          id: "conversation-1",
-          agentId: "agent-1",
-          status: "active",
-          lastActivityAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
-          metadata: {},
-        },
-        settings: { ...defaultSettings, closingMessage: "See you later." },
-      },
-    ];
-    let selectCount = 0;
-    dbMock.select.mockImplementation(() => {
-      const result = selectCount++ === 0 ? dbMock.rows : dbMock.appearances;
-      const builder = {
-        from: vi.fn(() => builder),
-        leftJoin: vi.fn(() => builder),
-        where: vi.fn(() =>
-          result === dbMock.rows ? Promise.resolve(result) : builder,
-        ),
-        orderBy: vi.fn(() => Promise.resolve(result)),
-      };
-      return builder;
+  it("closes directly when the sweep misses both thresholds", async () => {
+    await expect(closeInactiveConversations(now)).resolves.toEqual({
+      warned: 0,
+      closed: 1,
     });
-
-    await closeInactiveConversations(now);
-
-    expect(translateCustomerTemplateMock).toHaveBeenCalledWith(
-      "See you later.",
-      "es",
-      expect.any(String),
-    );
+    expect(dbMock.state.messages).toHaveLength(1);
+    expect(dbMock.state.messages[0]).toMatchObject({
+      metadata: { kind: "auto_close" },
+    });
   });
 });

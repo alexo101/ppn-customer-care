@@ -8,6 +8,7 @@ import {
   useSendMessage,
   useCreateConversation,
   useSubmitFeedback,
+  useSubmitConversationRating,
   getListConversationsQueryKey
 } from '@workspace/api-client-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -41,6 +42,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useAppearance } from '@/components/appearance-provider';
+import { ConversationRatingPrompt } from '@/components/chat/conversation-rating';
+import { hasAutoCloseConversationRating } from '@/lib/conversation-settings';
 
 export default function Chat({ agentId }: { agentId?: string }) {
   const search = useSearch();
@@ -190,16 +193,18 @@ function ActiveChat({
   setDebugOpen: (v: boolean) => void;
 }) {
   const { appearance } = useAppearance();
-  const { data: convo } = useGetConversation(conversationId);
+  const { data: convo, refetch: refetchConvo } = useGetConversation(conversationId);
   const { data: messages = [], refetch: refetchMessages } = useListMessages(conversationId);
   const { data: logs = [], refetch: refetchLogs } = useListConversationLogs(conversationId);
   
   const sendMessage = useSendMessage();
   const submitFeedback = useSubmitFeedback();
+  const submitConversationRating = useSubmitConversationRating();
   const [input, setInput] = useState('');
   const [feedbackRating, setFeedbackRating] = useState<"positive" | "negative" | null>(null);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [conversationRatingSent, setConversationRatingSent] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   
   const queryClient = useQueryClient();
@@ -214,9 +219,25 @@ function ActiveChat({
     setFeedbackRating(null);
     setFeedbackComment("");
     setFeedbackSent(false);
+    setConversationRatingSent(false);
   }, [conversationId]);
 
   const latestAssistant = [...messages].reverse().find((message) => message.sender === "assistant");
+  const showConversationRating =
+    convo?.status === "closed" &&
+    hasAutoCloseConversationRating(convo.metadata);
+  const sendConversationRating = (rating: "positive" | "negative") => {
+    if (submitConversationRating.isPending || conversationRatingSent) return;
+    submitConversationRating.mutate(
+      { id: conversationId, data: { rating } },
+      {
+        onSuccess: () => {
+          setConversationRatingSent(true);
+          void refetchConvo();
+        },
+      },
+    );
+  };
   const sendFeedback = (rating: "positive" | "negative") => {
     if (!latestAssistant || submitFeedback.isPending) return;
     if (rating === "negative" && feedbackRating !== "negative") {
@@ -318,6 +339,18 @@ function ActiveChat({
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Thinking…
                 </div>
+              </div>
+            )}
+
+            {showConversationRating && (
+              <div className="rounded-lg border border-border bg-card p-3">
+                <ConversationRatingPrompt
+                  language={appearance?.communicationLanguage}
+                  rating={convo?.conversationRating ?? null}
+                  submitted={conversationRatingSent}
+                  disabled={submitConversationRating.isPending}
+                  onSubmit={sendConversationRating}
+                />
               </div>
             )}
           </div>

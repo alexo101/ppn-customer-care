@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { hasAutoCloseConversationRating } from "@/lib/conversation-settings";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -238,19 +239,20 @@ export function MonitoringEditor({ agentId }: { agentId: string }) {
                 <TableHead className="text-xs">Subject</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs">Last active</TableHead>
+                <TableHead className="text-xs">Rating</TableHead>
                 <TableHead className="w-[50px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading && filteredConversations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-xs text-muted-foreground">
+                  <TableCell colSpan={6} className="text-xs text-muted-foreground">
                     Loading conversations...
                   </TableCell>
                 </TableRow>
               ) : filteredConversations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-xs text-muted-foreground">
+                  <TableCell colSpan={6} className="text-xs text-muted-foreground">
                     No deployed conversations match these filters.
                   </TableCell>
                 </TableRow>
@@ -266,6 +268,24 @@ export function MonitoringEditor({ agentId }: { agentId: string }) {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {format(new Date(convo.lastActivityAt), "MMM d, HH:mm")}
+                    </TableCell>
+                    <TableCell>
+                      {hasAutoCloseConversationRating(convo.metadata) ? (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-xs capitalize",
+                            convo.conversationRating === "positive" &&
+                              "border-emerald-500/30 text-emerald-600",
+                            convo.conversationRating === "negative" &&
+                              "border-destructive/30 text-destructive",
+                          )}
+                        >
+                          {convo.conversationRating ?? "Not rated"}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Button variant="ghost" size="icon" className="h-6 w-6" asChild>

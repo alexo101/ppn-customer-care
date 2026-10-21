@@ -16,7 +16,7 @@ import {
 
 export {
   DEFAULT_CONVERSATION_SETTINGS,
-  autoCloseDurationMs,
+  inactivityDurationMs,
   type ConversationSettingsValues,
 } from "./conversation-auto-close";
 
@@ -41,10 +41,10 @@ export function toAgentConversationSettings(
 ): AgentConversationSettingsDto {
   return {
     agentId: row.agentId,
-    autoCloseDays: row.autoCloseDays,
-    autoCloseHours: row.autoCloseHours,
-    autoCloseMinutes: row.autoCloseMinutes,
-    closingMessage: row.closingMessage,
+    warningAfterMinutes: row.warningAfterMinutes,
+    warningMessage: row.warningMessage,
+    autoCloseAfterMinutes: row.autoCloseAfterMinutes,
+    autoCloseMessage: row.autoCloseMessage,
     welcomeMessage: row.welcomeMessage,
     escalationMessage: row.escalationMessage,
   };
@@ -125,10 +125,10 @@ export async function updateAgentConversationSettings(
   const [row] = await db
     .update(agentConversationSettingsTable)
     .set({
-      autoCloseDays: Math.trunc(input.autoCloseDays),
-      autoCloseHours: Math.trunc(input.autoCloseHours),
-      autoCloseMinutes: Math.trunc(input.autoCloseMinutes),
-      closingMessage: input.closingMessage,
+      warningAfterMinutes: Math.trunc(input.warningAfterMinutes),
+      warningMessage: input.warningMessage,
+      autoCloseAfterMinutes: Math.trunc(input.autoCloseAfterMinutes),
+      autoCloseMessage: input.autoCloseMessage,
       welcomeMessage: input.welcomeMessage,
       escalationMessage: input.escalationMessage,
       updatedAt: new Date(),

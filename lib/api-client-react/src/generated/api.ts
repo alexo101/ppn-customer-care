@@ -37,6 +37,7 @@ import type {
   ArticleUpdate,
   Conversation,
   ConversationInput,
+  ConversationRatingInput,
   ConversationUpdate,
   CurrentMember,
   DeploymentToken,
@@ -2867,6 +2868,78 @@ export const useSubmitConversationNps = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getSubmitConversationNpsMutationOptions(options));
+    }
+
+export const getSubmitConversationRatingUrl = (id: string,) => {
+
+
+
+
+  return `/api/conversations/${id}/rating`
+}
+
+/**
+ * @summary Submit a positive or negative rating after an automatic close
+ */
+export const submitConversationRating = async (id: string,
+    conversationRatingInput: ConversationRatingInput, options?: Parameters<typeof customFetch>[1]): Promise<Conversation> => {
+
+  return customFetch<Conversation>(getSubmitConversationRatingUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(conversationRatingInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitConversationRatingMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitConversationRating>>, TError,{id: string;data: BodyType<ConversationRatingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitConversationRating>>, TError,{id: string;data: BodyType<ConversationRatingInput>}, TContext> => {
+
+const mutationKey = ['submitConversationRating'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitConversationRating>>, {id: string;data: BodyType<ConversationRatingInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  submitConversationRating(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitConversationRatingMutationResult = NonNullable<Awaited<ReturnType<typeof submitConversationRating>>>
+    export type SubmitConversationRatingMutationBody = BodyType<ConversationRatingInput>
+    export type SubmitConversationRatingMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Submit a positive or negative rating after an automatic close
+ */
+export const useSubmitConversationRating = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitConversationRating>>, TError,{id: string;data: BodyType<ConversationRatingInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitConversationRating>>,
+        TError,
+        {id: string;data: BodyType<ConversationRatingInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitConversationRatingMutationOptions(options));
     }
 
 export const getListConversationLogsUrl = (id: string,) => {

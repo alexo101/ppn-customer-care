@@ -33,3 +33,12 @@ export function isAutoClosedConversation(metadata: unknown): boolean {
       (metadata as { autoClosed?: unknown }).autoClosed === true,
   );
 }
+
+export function hasAutoCloseConversationRating(metadata: unknown): boolean {
+  return Boolean(
+    metadata &&
+      typeof metadata === "object" &&
+      !Array.isArray(metadata) &&
+      (metadata as { autoCloseFeedback?: unknown }).autoCloseFeedback === true,
+  );
+}

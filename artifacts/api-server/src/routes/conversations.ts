@@ -25,6 +25,8 @@ import {
   ListQuestionsQueryParams,
   SubmitConversationNpsBody,
   SubmitConversationNpsParams,
+  SubmitConversationRatingBody,
+  SubmitConversationRatingParams,
   EscalateConversationBody,
 } from "@workspace/api-zod";
 import { getOwnedAgent } from "../lib/agents";
@@ -46,6 +48,7 @@ import {
 import {
   ConversationLifecycleError,
   submitConversationNps,
+  submitConversationRating,
 } from "../lib/conversation-lifecycle";
 
 const router: IRouter = Router();
@@ -423,31 +426,53 @@ router.post(
       return;
     }
 
-    // Verify ownership before allowing message to be sent
-    const [conv] = await db
-      .select()
-      .from(conversationsTable)
-      .where(
-        and(
-          eq(conversationsTable.id, params.data.id),
-          eq(conversationsTable.userId, req.userId),
-        ),
-      );
+    // Lock the conversation while accepting the user message so an inactivity
+    // sweep cannot close it between the ownership check and activity update.
+    const start = await db.transaction(async (tx) => {
+      const [conversation] = await tx
+        .select()
+        .from(conversationsTable)
+        .where(
+          and(
+            eq(conversationsTable.id, params.data.id),
+            eq(conversationsTable.userId, req.userId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (!conversation) return { error: "not_found" as const };
+      if (conversation.status === "closed") return { error: "closed" as const };
 
-    if (!conv) {
+      const [message] = await tx
+        .insert(messagesTable)
+        .values({
+          conversationId: conversation.id,
+          sender: "user",
+          content: parsed.data.content,
+        })
+        .returning();
+      const [updatedConversation] = await tx
+        .update(conversationsTable)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(conversationsTable.id, conversation.id))
+        .returning();
+      return {
+        conversation: updatedConversation ?? conversation,
+        message,
+        error: null,
+      };
+    });
+
+    if (start.error === "not_found") {
       res.status(404).json({ error: "Conversation not found" });
       return;
     }
-
-    // Save user message
-    const [userMsg] = await db
-      .insert(messagesTable)
-      .values({
-        conversationId: conv.id,
-        sender: "user",
-        content: parsed.data.content,
-      })
-      .returning();
+    if (start.error === "closed") {
+      res.status(409).json({ error: "This conversation is already closed." });
+      return;
+    }
+    const conv = start.conversation;
+    const userMsg = start.message;
 
     if (conv.status === "escalated") {
       await db
@@ -761,6 +786,42 @@ router.post(
   },
 );
 
+// ── Submit binary conversation rating after auto-close ────────────────────
+router.post(
+  "/conversations/:id/rating",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const params = SubmitConversationRatingParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = SubmitConversationRatingBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    try {
+      const row = await submitConversationRating(
+        params.data.id,
+        req.userId,
+        parsed.data.rating,
+      );
+      if (!row) {
+        res.status(404).json({ error: "Conversation not found" });
+        return;
+      }
+      res.json(toConversation(row));
+    } catch (error) {
+      if (error instanceof ConversationLifecycleError) {
+        res.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      throw error;
+    }
+  },
+);
+
 // ── List conversation logs ────────────────────────────────────────────────
 router.get(
   "/conversations/:id/logs",
@@ -1009,6 +1070,8 @@ function toConversation(row: typeof conversationsTable.$inferSelect) {
     createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
     agentId: row.agentId ?? null,
     npsScore: row.npsScore ?? null,
+    conversationRating: row.conversationRating ?? null,
+    conversationRatingAt: row.conversationRatingAt?.toISOString() ?? null,
   };
 }
 

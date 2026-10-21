@@ -85,6 +85,12 @@ const FALLBACK_MESSAGES = {
     it: "Questa conversazione è stata chiusa dopo un periodo di inattività.",
     fr: "Cette conversation a été clôturée après une période d’inactivité.",
   },
+  inactivityWarning: {
+    en: "This conversation is still open. Reply here if you need more help; otherwise, it will close after the configured idle period.",
+    es: "Esta conversación sigue abierta. Responde aquí si necesitas más ayuda; si no, se cerrará tras el tiempo de inactividad configurado.",
+    it: "Questa conversazione è ancora aperta. Rispondi qui se hai bisogno di ulteriore aiuto; altrimenti, verrà chiusa dopo il periodo di inattività configurato.",
+    fr: "Cette conversation est toujours ouverte. Répondez ici si vous avez besoin d’aide ; sinon, elle sera clôturée après la période d’inactivité définie.",
+  },
   welcome: {
     en: "Hello {user_name}, you are speaking {agent_name}. How can I help you?",
     es: "Hola {user_name}, estás hablando con {agent_name}. ¿Cómo puedo ayudarte?",

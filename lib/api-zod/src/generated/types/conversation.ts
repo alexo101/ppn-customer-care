@@ -5,6 +5,7 @@
  * Customer Support AI Orchestrator API
  * OpenAPI spec version: 0.1.0
  */
+import type { ConversationConversationRating } from './conversationConversationRating';
 import type { ConversationMetadata } from './conversationMetadata';
 
 export interface Conversation {
@@ -23,4 +24,8 @@ export interface Conversation {
      * @nullable
      */
   npsScore?: number | null;
+  /** @nullable */
+  conversationRating?: ConversationConversationRating;
+  /** @nullable */
+  conversationRatingAt?: string | null;
 }

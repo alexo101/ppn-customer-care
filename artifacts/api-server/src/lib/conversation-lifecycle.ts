@@ -11,17 +11,24 @@ import { logger } from "./logger";
 import { updateConversationAnalytics } from "./conversation-analytics";
 import {
   DEFAULT_CONVERSATION_SETTINGS,
+  hasAutoCloseFeedback,
+  isAutoClosed,
   isPlainMetadata,
-  nextAutoCloseAction,
+  nextInactivityAction,
   npsSubmitError,
   withAutoClosed,
+  type ConversationSettingsValues,
 } from "./conversation-auto-close";
 import { translateCustomerTemplate } from "./welcome-message";
 import { localizedCommunicationMessage, resolveReplyLocale } from "./reply-locale";
 
-export { nextAutoCloseAction, npsSubmitError } from "./conversation-auto-close";
+export {
+  nextInactivityAction,
+  npsSubmitError,
+} from "./conversation-auto-close";
 
-const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 30 * 1000;
+const NEW_AUTO_CLOSE_FLOW = "warning_rating_v1";
 
 export class ConversationLifecycleError extends Error {
   readonly statusCode: number;
@@ -33,53 +40,74 @@ export class ConversationLifecycleError extends Error {
   }
 }
 
+function conversationSettings(
+  row: typeof agentConversationSettingsTable.$inferSelect | null | undefined,
+): ConversationSettingsValues {
+  if (!row) return DEFAULT_CONVERSATION_SETTINGS;
+  return {
+    warningAfterMinutes: row.warningAfterMinutes,
+    warningMessage: row.warningMessage,
+    autoCloseAfterMinutes: row.autoCloseAfterMinutes,
+    autoCloseMessage: row.autoCloseMessage,
+    welcomeMessage: row.welcomeMessage,
+    escalationMessage: row.escalationMessage,
+  };
+}
+
+function warningForLastActivityAt(metadata: unknown): string | null {
+  if (!isPlainMetadata(metadata)) return null;
+  return typeof metadata.inactivityWarningFor === "string"
+    ? metadata.inactivityWarningFor
+    : null;
+}
+
 async function insertAssistantMessage(
+  executor: Pick<typeof db, "insert">,
   conversationId: string,
   content: string,
-  metadata: Record<string, unknown> = {},
+  kind: string,
 ) {
   const trimmed = content.trim();
   if (!trimmed) return null;
-  const [row] = await db
+  const [row] = await executor
     .insert(messagesTable)
     .values({
       conversationId,
       sender: "assistant",
       content: trimmed,
-      metadata,
+      metadata: { kind },
     })
     .returning();
   return row ?? null;
 }
 
-async function closeConversation(
-  conversation: Conversation,
-  closingMessage: string,
-  now: Date,
-) {
-  if (closingMessage.trim()) {
-    await insertAssistantMessage(conversation.id, closingMessage, {
-      kind: "auto_close",
-    });
-  }
-  const metadata = withAutoClosed(
-    isPlainMetadata(conversation.metadata) ? conversation.metadata : {},
+export async function translateWarningMessage(
+  template: string,
+  language: unknown,
+): Promise<string> {
+  const locale = resolveReplyLocale(language);
+  return translateCustomerTemplate(
+    template,
+    locale,
+    localizedCommunicationMessage("inactivityWarning", locale),
   );
-  await db
-    .update(conversationsTable)
-    .set({
-      status: "closed",
-      resolvedAt: now,
-      lastActivityAt: now,
-      metadata,
-    })
-    .where(eq(conversationsTable.id, conversation.id));
-  await updateConversationAnalytics(conversation.id);
+}
+
+export async function translateClosingMessage(
+  template: string,
+  language: unknown,
+): Promise<string> {
+  const locale = resolveReplyLocale(language);
+  return translateCustomerTemplate(
+    template,
+    locale,
+    localizedCommunicationMessage("closing", locale),
+  );
 }
 
 export async function closeInactiveConversations(
   now = new Date(),
-): Promise<{ closed: number }> {
+): Promise<{ warned: number; closed: number }> {
   const rows = await db
     .select({
       conversation: conversationsTable,
@@ -125,52 +153,158 @@ export async function closeInactiveConversations(
     }
   }
 
+  let warned = 0;
   let closed = 0;
   for (const row of rows) {
-    const settings = row.settings
-      ? {
-          autoCloseDays: row.settings.autoCloseDays,
-          autoCloseHours: row.settings.autoCloseHours,
-          autoCloseMinutes: row.settings.autoCloseMinutes,
-          closingMessage: row.settings.closingMessage,
-          welcomeMessage: row.settings.welcomeMessage,
-          escalationMessage: row.settings.escalationMessage,
-        }
-      : DEFAULT_CONVERSATION_SETTINGS;
-    const action = nextAutoCloseAction({
-      status: row.conversation.status,
-      lastActivityAt: row.conversation.lastActivityAt,
+    const settings = conversationSettings(row.settings);
+    const conversation = row.conversation;
+    const initialAction = nextInactivityAction({
+      status: conversation.status,
+      lastActivityAt: conversation.lastActivityAt,
       settings,
+      warningForLastActivityAt: warningForLastActivityAt(
+        conversation.metadata,
+      ),
       now,
     });
-    if (action === "close") {
-      const language = resolveReplyLocale(
-        row.conversation.agentId
-          ? languageByAgent.get(row.conversation.agentId)
-          : undefined,
+    if (initialAction === "skip") continue;
+
+    const language = resolveReplyLocale(
+      conversation.agentId
+        ? languageByAgent.get(conversation.agentId)
+        : undefined,
+    );
+    // Prepare both messages before locking the conversation. Time may cross
+    // from the warning threshold to the close threshold while a sweep runs.
+    const [warningMessage, closingMessage] = await Promise.all([
+      translateWarningMessage(settings.warningMessage, language),
+      translateClosingMessage(settings.autoCloseMessage, language),
+    ]);
+
+    const result = await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select()
+        .from(conversationsTable)
+        .where(eq(conversationsTable.id, conversation.id))
+        .limit(1)
+        .for("update");
+      if (!locked) return "skip" as const;
+
+      const action = nextInactivityAction({
+        status: locked.status,
+        lastActivityAt: locked.lastActivityAt,
+        settings,
+        warningForLastActivityAt: warningForLastActivityAt(locked.metadata),
+        now,
+      });
+      if (action === "skip") return "skip" as const;
+
+      const metadata = isPlainMetadata(locked.metadata)
+        ? locked.metadata
+        : {};
+      if (action === "warn") {
+        await insertAssistantMessage(
+          tx,
+          locked.id,
+          warningMessage,
+          "inactivity_warning",
+        );
+        await tx
+          .update(conversationsTable)
+          .set({
+            metadata: {
+              ...metadata,
+              inactivityWarningFor: locked.lastActivityAt.toISOString(),
+            },
+          })
+          .where(eq(conversationsTable.id, locked.id));
+        return "warn" as const;
+      }
+
+      await insertAssistantMessage(
+        tx,
+        locked.id,
+        closingMessage,
+        "auto_close",
       );
-      const closingMessage = await translateClosingMessage(
-        settings.closingMessage,
-        language,
-      );
-      await closeConversation(row.conversation, closingMessage, now);
+      const nextMetadata = withAutoClosed(metadata);
+      await tx
+        .update(conversationsTable)
+        .set({
+          status: "closed",
+          resolvedAt: now,
+          lastActivityAt: now,
+          metadata: { ...nextMetadata, autoCloseFlow: NEW_AUTO_CLOSE_FLOW },
+        })
+        .where(eq(conversationsTable.id, locked.id));
+      return "close" as const;
+    });
+
+    if (result === "warn") warned += 1;
+    if (result === "close") {
       closed += 1;
+      await updateConversationAnalytics(conversation.id);
     }
   }
-  return { closed };
+  return { warned, closed };
 }
 
-export async function translateClosingMessage(
-  template: string,
-  language: unknown,
-): Promise<string> {
-  if (!template.trim()) return "";
-  const locale = resolveReplyLocale(language);
-  return translateCustomerTemplate(
-    template,
-    locale,
-    localizedCommunicationMessage("closing", locale),
-  );
+export function conversationRatingSubmitError(
+  conversation: {
+    status: string;
+    metadata: unknown;
+    conversationRating: string | null;
+  } | null,
+): string | null {
+  if (!conversation) return null;
+  if (conversation.status !== "closed") {
+    return "A conversation can only be rated after it closes.";
+  }
+  if (
+    !isAutoClosed(conversation.metadata) ||
+    !hasAutoCloseFeedback(conversation.metadata)
+  ) {
+    return "Conversation ratings are only available after an automatic close.";
+  }
+  if (conversation.conversationRating != null) {
+    return "A rating has already been submitted.";
+  }
+  return null;
+}
+
+export async function submitConversationRating(
+  conversationId: string,
+  userId: string,
+  rating: "positive" | "negative",
+): Promise<Conversation | null> {
+  return db.transaction(async (tx) => {
+    const [conversation] = await tx
+      .select()
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.id, conversationId),
+          eq(conversationsTable.userId, userId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!conversation) return null;
+
+    const error = conversationRatingSubmitError({
+      status: conversation.status,
+      metadata: conversation.metadata,
+      conversationRating: conversation.conversationRating,
+    });
+    if (error) throw new ConversationLifecycleError(error);
+
+    const [updated] = await tx
+      .update(conversationsTable)
+      .set({ conversationRating: rating, conversationRatingAt: new Date() })
+      .where(eq(conversationsTable.id, conversation.id))
+      .returning();
+    return updated ?? conversation;
+  });
 }
 
 export async function submitConversationNps(
@@ -195,9 +329,7 @@ export async function submitConversationNps(
     npsScore: conversation.npsScore,
     metadata: conversation.metadata,
   });
-  if (error) {
-    throw new ConversationLifecycleError(error);
-  }
+  if (error) throw new ConversationLifecycleError(error);
 
   const [updated] = await db
     .update(conversationsTable)
@@ -209,14 +341,22 @@ export async function submitConversationNps(
 
 export function startConversationLifecycleSweep(): NodeJS.Timeout | null {
   if (process.env.NODE_ENV === "test") return null;
+  let running = false;
   const sweep = async () => {
+    if (running) return;
+    running = true;
     try {
-      const { closed } = await closeInactiveConversations();
-      if (closed > 0) {
-        logger.info({ closed }, "Processed inactive conversations");
+      const { warned, closed } = await closeInactiveConversations();
+      if (warned > 0 || closed > 0) {
+        logger.info(
+          { warned, closed },
+          "Processed inactive conversation stages",
+        );
       }
     } catch (error) {
-      logger.error({ error }, "Failed to close inactive conversations");
+      logger.error({ error }, "Failed to process inactive conversations");
+    } finally {
+      running = false;
     }
   };
   const timer = setInterval(sweep, SWEEP_INTERVAL_MS);

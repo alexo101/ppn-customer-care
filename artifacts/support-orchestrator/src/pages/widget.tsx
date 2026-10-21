@@ -13,6 +13,7 @@ import {
   getListMessagesQueryKey,
   useSubmitFeedback,
   useSubmitConversationNps,
+  useSubmitConversationRating,
   useEscalateConversation,
 } from "@workspace/api-client-react";
 import {
@@ -41,7 +42,11 @@ import {
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
 import { NpsSurvey } from "@/components/chat/nps-survey";
-import { isAutoClosedConversation } from "@/lib/conversation-settings";
+import { ConversationRatingPrompt } from "@/components/chat/conversation-rating";
+import {
+  hasAutoCloseConversationRating,
+  isAutoClosedConversation,
+} from "@/lib/conversation-settings";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
 import { agentLanguageCopy, normalizeAgentLanguage } from "@/lib/agent-language";
 
@@ -86,6 +91,7 @@ export default function Widget() {
   const sendMessage = useSendMessage();
   const submitFeedback = useSubmitFeedback();
   const submitNps = useSubmitConversationNps();
+  const submitConversationRating = useSubmitConversationRating();
   const escalateConversation = useEscalateConversation();
 
   const { data: convo, refetch: refetchConvo } = useGetConversation(
@@ -113,6 +119,7 @@ export default function Widget() {
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [npsSent, setNpsSent] = useState(false);
+  const [conversationRatingSent, setConversationRatingSent] = useState(false);
   const [dismissedEscalationMessageId, setDismissedEscalationMessageId] =
     useState<string | null>(null);
   const [escalationError, setEscalationError] = useState<string | null>(null);
@@ -129,6 +136,7 @@ export default function Widget() {
     setFeedbackComment("");
     setFeedbackSent(false);
     setNpsSent(false);
+    setConversationRatingSent(false);
     setDismissedEscalationMessageId(null);
     setEscalationError(null);
   }, [convoId]);
@@ -232,7 +240,11 @@ export default function Widget() {
   const showNps =
     convo?.status === "closed" &&
     isAutoClosedConversation(convo.metadata) &&
+    !hasAutoCloseConversationRating(convo.metadata) &&
     (convo.npsScore == null || npsSent);
+  const showConversationRating =
+    convo?.status === "closed" &&
+    hasAutoCloseConversationRating(convo.metadata);
 
   const sendNps = (score: number) => {
     if (!convoId || submitNps.isPending || npsSent) return;
@@ -242,6 +254,20 @@ export default function Widget() {
         onSuccess: () => {
           setNpsSent(true);
           refetchConvo();
+        },
+      },
+    );
+  };
+
+  const sendConversationRating = (rating: "positive" | "negative") => {
+    if (!convoId || submitConversationRating.isPending || conversationRatingSent)
+      return;
+    submitConversationRating.mutate(
+      { id: convoId, data: { rating } },
+      {
+        onSuccess: () => {
+          setConversationRatingSent(true);
+          void refetchConvo();
         },
       },
     );
@@ -400,6 +426,18 @@ export default function Widget() {
                 submitted={npsSent || convo?.npsScore != null}
                 onSubmit={sendNps}
                 language={language}
+              />
+            </div>
+          )}
+
+          {showConversationRating && (
+            <div className="border-t border-border bg-background px-3 py-2">
+              <ConversationRatingPrompt
+                language={language}
+                rating={convo?.conversationRating ?? null}
+                submitted={conversationRatingSent}
+                disabled={submitConversationRating.isPending}
+                onSubmit={sendConversationRating}
               />
             </div>
           )}

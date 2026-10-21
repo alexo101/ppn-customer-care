@@ -10,21 +10,18 @@ export interface AgentConversationSettings {
   agentId: string;
   /**
      * @minimum 0
-     * @maximum 365
+     * @maximum 527039
      */
-  autoCloseDays: number;
-  /**
-     * @minimum 0
-     * @maximum 23
-     */
-  autoCloseHours: number;
-  /**
-     * @minimum 0
-     * @maximum 59
-     */
-  autoCloseMinutes: number;
+  warningAfterMinutes: number;
   /** @maxLength 2000 */
-  closingMessage: string;
+  warningMessage: string;
+  /**
+     * @minimum 0
+     * @maximum 527039
+     */
+  autoCloseAfterMinutes: number;
+  /** @maxLength 2000 */
+  autoCloseMessage: string;
   /** @maxLength 2000 */
   welcomeMessage: string;
   /** @maxLength 2000 */

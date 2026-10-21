@@ -7,10 +7,10 @@ export const agentConversationSettingsTable = pgTable(
     agentId: uuid("agent_id")
       .primaryKey()
       .references(() => agentsTable.id, { onDelete: "cascade" }),
-    autoCloseDays: integer("auto_close_days").notNull().default(0),
-    autoCloseHours: integer("auto_close_hours").notNull().default(1),
-    autoCloseMinutes: integer("auto_close_minutes").notNull().default(0),
-    closingMessage: text("closing_message").notNull().default(""),
+    warningAfterMinutes: integer("warning_after_minutes").notNull().default(0),
+    warningMessage: text("warning_message").notNull().default(""),
+    autoCloseAfterMinutes: integer("auto_close_after_minutes").notNull().default(60),
+    autoCloseMessage: text("auto_close_message").notNull().default(""),
     welcomeMessage: text("welcome_message")
       .notNull()
       .default(

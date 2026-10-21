@@ -916,6 +916,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /conversations/{id}/rating:
+    post:
+      operationId: submitConversationRating
+      tags: [conversations]
+      summary: Submit a positive or negative rating after an automatic close
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationRatingInput"
+      responses:
+        "200":
+          description: Updated conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "400":
+          description: Invalid or unavailable rating
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /conversations/{id}/logs:
     get:
       operationId: listConversationLogs
@@ -1909,19 +1946,19 @@ components:
       required:
         [
           agentId,
-          autoCloseDays,
-          autoCloseHours,
-          autoCloseMinutes,
-          closingMessage,
+          warningAfterMinutes,
+          warningMessage,
+          autoCloseAfterMinutes,
+          autoCloseMessage,
           welcomeMessage,
           escalationMessage,
         ]
       properties:
         agentId: { type: string }
-        autoCloseDays: { type: number, minimum: 0, maximum: 365 }
-        autoCloseHours: { type: number, minimum: 0, maximum: 23 }
-        autoCloseMinutes: { type: number, minimum: 0, maximum: 59 }
-        closingMessage: { type: string, maxLength: 2000 }
+        warningAfterMinutes: { type: number, minimum: 0, maximum: 527039 }
+        warningMessage: { type: string, maxLength: 2000 }
+        autoCloseAfterMinutes: { type: number, minimum: 0, maximum: 527039 }
+        autoCloseMessage: { type: string, maxLength: 2000 }
         welcomeMessage: { type: string, maxLength: 2000 }
         escalationMessage: { type: string, maxLength: 2000 }
 
@@ -1929,18 +1966,18 @@ components:
       type: object
       required:
         [
-          autoCloseDays,
-          autoCloseHours,
-          autoCloseMinutes,
-          closingMessage,
+          warningAfterMinutes,
+          warningMessage,
+          autoCloseAfterMinutes,
+          autoCloseMessage,
           welcomeMessage,
           escalationMessage,
         ]
       properties:
-        autoCloseDays: { type: number, minimum: 0, maximum: 365 }
-        autoCloseHours: { type: number, minimum: 0, maximum: 23 }
-        autoCloseMinutes: { type: number, minimum: 0, maximum: 59 }
-        closingMessage: { type: string, maxLength: 2000 }
+        warningAfterMinutes: { type: number, minimum: 0, maximum: 527039 }
+        warningMessage: { type: string, maxLength: 2000 }
+        autoCloseAfterMinutes: { type: number, minimum: 0, maximum: 527039 }
+        autoCloseMessage: { type: string, maxLength: 2000 }
         welcomeMessage: { type: string, maxLength: 2000 }
         escalationMessage: { type: string, maxLength: 2000 }
 
@@ -2154,6 +2191,11 @@ components:
           type: ["number", "null"]
           minimum: 1
           maximum: 10
+        conversationRating:
+          type: ["string", "null"]
+          enum: [positive, negative, null]
+        conversationRatingAt:
+          type: ["string", "null"]
 
     ConversationInput:
       type: object
@@ -2372,6 +2414,14 @@ components:
           type: number
           minimum: 1
           maximum: 10
+
+    ConversationRatingInput:
+      type: object
+      required: [rating]
+      properties:
+        rating:
+          type: string
+          enum: [positive, negative]
 
     # ── Orchestrator ──────────────────────────────────────────────────────
     OrchestratorStage:

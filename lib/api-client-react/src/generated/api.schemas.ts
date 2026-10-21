@@ -124,21 +124,18 @@ export interface AgentConversationSettings {
   agentId: string;
   /**
      * @minimum 0
-     * @maximum 365
+     * @maximum 527039
      */
-  autoCloseDays: number;
-  /**
-     * @minimum 0
-     * @maximum 23
-     */
-  autoCloseHours: number;
-  /**
-     * @minimum 0
-     * @maximum 59
-     */
-  autoCloseMinutes: number;
+  warningAfterMinutes: number;
   /** @maxLength 2000 */
-  closingMessage: string;
+  warningMessage: string;
+  /**
+     * @minimum 0
+     * @maximum 527039
+     */
+  autoCloseAfterMinutes: number;
+  /** @maxLength 2000 */
+  autoCloseMessage: string;
   /** @maxLength 2000 */
   welcomeMessage: string;
   /** @maxLength 2000 */
@@ -148,21 +145,18 @@ export interface AgentConversationSettings {
 export interface AgentConversationSettingsInput {
   /**
      * @minimum 0
-     * @maximum 365
+     * @maximum 527039
      */
-  autoCloseDays: number;
-  /**
-     * @minimum 0
-     * @maximum 23
-     */
-  autoCloseHours: number;
-  /**
-     * @minimum 0
-     * @maximum 59
-     */
-  autoCloseMinutes: number;
+  warningAfterMinutes: number;
   /** @maxLength 2000 */
-  closingMessage: string;
+  warningMessage: string;
+  /**
+     * @minimum 0
+     * @maximum 527039
+     */
+  autoCloseAfterMinutes: number;
+  /** @maxLength 2000 */
+  autoCloseMessage: string;
   /** @maxLength 2000 */
   welcomeMessage: string;
   /** @maxLength 2000 */
@@ -323,6 +317,17 @@ export interface AgentUpdate {
 
 export type ConversationMetadata = { [key: string]: unknown };
 
+/**
+ * @nullable
+ */
+export type ConversationConversationRating = typeof ConversationConversationRating[keyof typeof ConversationConversationRating] | null;
+
+
+export const ConversationConversationRating = {
+  positive: 'positive',
+  negative: 'negative',
+} as const;
+
 export interface Conversation {
   id: string;
   status: string;
@@ -339,6 +344,10 @@ export interface Conversation {
      * @nullable
      */
   npsScore?: number | null;
+  /** @nullable */
+  conversationRating?: ConversationConversationRating;
+  /** @nullable */
+  conversationRatingAt?: string | null;
 }
 
 export type ConversationInputMetadata = { [key: string]: unknown };
@@ -498,6 +507,18 @@ export interface NpsInput {
      * @maximum 10
      */
   score: number;
+}
+
+export type ConversationRatingInputRating = typeof ConversationRatingInputRating[keyof typeof ConversationRatingInputRating];
+
+
+export const ConversationRatingInputRating = {
+  positive: 'positive',
+  negative: 'negative',
+} as const;
+
+export interface ConversationRatingInput {
+  rating: ConversationRatingInputRating;
 }
 
 export interface OrchestratorLog {
