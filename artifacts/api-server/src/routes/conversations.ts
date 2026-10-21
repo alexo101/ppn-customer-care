@@ -786,7 +786,7 @@ router.post(
   },
 );
 
-// ── Submit binary conversation rating after auto-close ────────────────────
+// ── Submit binary conversation rating after an inactivity warning ────────
 router.post(
   "/conversations/:id/rating",
   requireAuth,

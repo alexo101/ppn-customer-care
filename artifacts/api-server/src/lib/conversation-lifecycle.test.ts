@@ -41,13 +41,15 @@ const { dbMock, txMock, analyticsMock, translateCustomerTemplateMock } =
         state.pendingUpdate = values;
         return builder;
       };
-      builder.where = async () => {
+      builder.where = () => {
         if (state.conversation && state.pendingUpdate) {
           Object.assign(state.conversation, state.pendingUpdate);
         }
         state.pendingUpdate = null;
-        return [];
+        return builder;
       };
+      builder.returning = async () =>
+        state.conversation ? [state.conversation] : [];
       return builder;
     });
 
@@ -98,6 +100,7 @@ vi.mock("./conversation-analytics", () => ({
 import {
   DEFAULT_CONVERSATION_SETTINGS,
   hasAutoCloseFeedback,
+  hasInactivityWarning,
   isValidInactivitySettings,
   nextInactivityAction,
   npsSubmitError,
@@ -106,6 +109,7 @@ import {
 import {
   closeInactiveConversations,
   conversationRatingSubmitError,
+  submitConversationRating,
 } from "./conversation-lifecycle";
 
 const now = new Date("2026-09-02T16:00:00.000Z");
@@ -249,19 +253,32 @@ describe("inactivity action", () => {
 });
 
 describe("auto-close metadata and ratings", () => {
-  it("marks new auto-closed conversations for one thumbs rating", () => {
-    const closed = withAutoClosed({ topic: "help" });
+  it("keeps warning eligibility and feedback metadata when the conversation closes", () => {
+    const warningAt = lastActivityAt.toISOString();
+    const closed = withAutoClosed({
+      topic: "help",
+      inactivityWarningFor: warningAt,
+    });
     expect(closed).toMatchObject({
       topic: "help",
       autoClosed: true,
       autoCloseFeedback: true,
+      inactivityWarningFor: warningAt,
     });
     expect(hasAutoCloseFeedback(closed)).toBe(true);
+    expect(hasInactivityWarning(closed)).toBe(true);
     expect(npsSubmitError({
       status: "closed",
       npsScore: null,
       metadata: closed,
     })).toMatch(/thumbs/i);
+    expect(
+      conversationRatingSubmitError({
+        status: "active",
+        metadata: { inactivityWarningFor: warningAt },
+        conversationRating: null,
+      }),
+    ).toBeNull();
     expect(
       conversationRatingSubmitError({
         status: "closed",
@@ -278,14 +295,56 @@ describe("auto-close metadata and ratings", () => {
     ).toMatch(/already/i);
   });
 
-  it("does not enable thumbs feedback for older auto-closed conversations", () => {
+  it("does not enable thumbs feedback for a closure without an inactivity warning", () => {
+    const closed = withAutoClosed({ topic: "help" });
+    expect(closed).not.toHaveProperty("autoCloseFeedback");
+    expect(
+      conversationRatingSubmitError({
+        status: "closed",
+        metadata: closed,
+        conversationRating: null,
+      }),
+    ).toMatch(/inactivity warning/i);
+    expect(
+      npsSubmitError({
+        status: "closed",
+        npsScore: null,
+        metadata: closed,
+      }),
+    ).toBeNull();
+  });
+
+  it("stores one rating while a warned conversation is open without changing activity time", async () => {
+    const warningAt = lastActivityAt.toISOString();
+    setConversation({
+      status: "active",
+      metadata: { inactivityWarningFor: warningAt, autoCloseFeedback: true },
+    });
+
+    await expect(
+      submitConversationRating("conversation-1", "owner-1", "positive"),
+    ).resolves.toMatchObject({ conversationRating: "positive" });
+    expect(dbMock.state.conversation?.lastActivityAt).toEqual(lastActivityAt);
+    await expect(
+      submitConversationRating("conversation-1", "owner-1", "negative"),
+    ).rejects.toMatchObject({ name: "ConversationLifecycleError" });
+  });
+
+  it("rejects escalated and older auto-closed conversations without warning records", () => {
     expect(
       conversationRatingSubmitError({
         status: "closed",
         metadata: { autoClosed: true },
         conversationRating: null,
       }),
-    ).toMatch(/only available/i);
+    ).toMatch(/inactivity warning/i);
+    expect(
+      conversationRatingSubmitError({
+        status: "escalated",
+        metadata: { inactivityWarningFor: lastActivityAt.toISOString() },
+        conversationRating: null,
+      }),
+    ).toMatch(/escalated/i);
   });
 });
 
@@ -334,6 +393,7 @@ describe("inactive conversation sweep", () => {
       autoClosed: true,
       autoCloseFeedback: true,
       autoCloseFlow: "warning_rating_v1",
+      inactivityWarningFor: lastActivityAt.toISOString(),
     });
     expect(analyticsMock).toHaveBeenCalledWith("conversation-1");
   });
@@ -347,5 +407,11 @@ describe("inactive conversation sweep", () => {
     expect(dbMock.state.messages[0]).toMatchObject({
       metadata: { kind: "auto_close" },
     });
+    expect(dbMock.state.conversation?.metadata).not.toHaveProperty(
+      "inactivityWarningFor",
+    );
+    expect(dbMock.state.conversation?.metadata).not.toHaveProperty(
+      "autoCloseFeedback",
+    );
   });
 });

@@ -42,3 +42,33 @@ export function hasAutoCloseConversationRating(metadata: unknown): boolean {
       (metadata as { autoCloseFeedback?: unknown }).autoCloseFeedback === true,
   );
 }
+
+export function hasInactivityWarning(metadata: unknown): boolean {
+  return Boolean(
+    metadata &&
+      typeof metadata === "object" &&
+      !Array.isArray(metadata) &&
+      typeof (metadata as { inactivityWarningFor?: unknown })
+        .inactivityWarningFor === "string" &&
+      (metadata as { inactivityWarningFor: string }).inactivityWarningFor
+        .length > 0,
+  );
+}
+
+export function latestInactivityWarningMessageId(
+  messages: Array<{ id: string; metadata: unknown }>,
+): string | null {
+  let latestId: string | null = null;
+  for (const message of messages) {
+    const metadata = message.metadata;
+    if (
+      metadata &&
+      typeof metadata === "object" &&
+      !Array.isArray(metadata) &&
+      (metadata as { kind?: unknown }).kind === "inactivity_warning"
+    ) {
+      latestId = message.id;
+    }
+  }
+  return latestId;
+}

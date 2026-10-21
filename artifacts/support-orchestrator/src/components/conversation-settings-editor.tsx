@@ -321,7 +321,8 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
           />
           <p className="text-xs text-muted-foreground">
             Sent once after the selected period without activity. A new reply
-            restarts the inactivity timer.
+            restarts the inactivity timer. The localized thumbs-up/down
+            question appears with this warning.
           </p>
         </div>
       </SettingsSection>
@@ -412,8 +413,8 @@ export function ConversationSettingsEditor({ agentId }: { agentId: string }) {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            This message is sent when the conversation closes. A thumbs-up or
-            thumbs-down rating prompt appears below it.
+            This message is sent when the conversation closes. The thumbs-up or
+            thumbs-down question appears with the inactivity warning instead.
           </p>
         </div>
       </SettingsSection>

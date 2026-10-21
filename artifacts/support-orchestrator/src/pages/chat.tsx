@@ -43,7 +43,10 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useAppearance } from '@/components/appearance-provider';
 import { ConversationRatingPrompt } from '@/components/chat/conversation-rating';
-import { hasAutoCloseConversationRating } from '@/lib/conversation-settings';
+import {
+  hasInactivityWarning,
+  latestInactivityWarningMessageId,
+} from '@/lib/conversation-settings';
 
 export default function Chat({ agentId }: { agentId?: string }) {
   const search = useSearch();
@@ -223,9 +226,11 @@ function ActiveChat({
   }, [conversationId]);
 
   const latestAssistant = [...messages].reverse().find((message) => message.sender === "assistant");
+  const ratingWarningMessageId = latestInactivityWarningMessageId(messages);
   const showConversationRating =
-    convo?.status === "closed" &&
-    hasAutoCloseConversationRating(convo.metadata);
+    ratingWarningMessageId !== null &&
+    hasInactivityWarning(convo?.metadata) &&
+    convo?.status !== "escalated";
   const sendConversationRating = (rating: "positive" | "negative") => {
     if (submitConversationRating.isPending || conversationRatingSent) return;
     submitConversationRating.mutate(
@@ -324,6 +329,18 @@ function ActiveChat({
                         : "bg-card border-border rounded-tl-sm text-card-foreground shadow-sm"
                     )}>
                       {msg.content}
+                      {showConversationRating &&
+                        msg.id === ratingWarningMessageId && (
+                          <div className="mt-3 border-t border-border pt-2">
+                            <ConversationRatingPrompt
+                              language={appearance?.communicationLanguage}
+                              rating={convo?.conversationRating ?? null}
+                              submitted={conversationRatingSent}
+                              disabled={submitConversationRating.isPending}
+                              onSubmit={sendConversationRating}
+                            />
+                          </div>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -342,17 +359,6 @@ function ActiveChat({
               </div>
             )}
 
-            {showConversationRating && (
-              <div className="rounded-lg border border-border bg-card p-3">
-                <ConversationRatingPrompt
-                  language={appearance?.communicationLanguage}
-                  rating={convo?.conversationRating ?? null}
-                  submitted={conversationRatingSent}
-                  disabled={submitConversationRating.isPending}
-                  onSubmit={sendConversationRating}
-                />
-              </div>
-            )}
           </div>
         </ScrollArea>
 

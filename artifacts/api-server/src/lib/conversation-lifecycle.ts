@@ -11,8 +11,7 @@ import { logger } from "./logger";
 import { updateConversationAnalytics } from "./conversation-analytics";
 import {
   DEFAULT_CONVERSATION_SETTINGS,
-  hasAutoCloseFeedback,
-  isAutoClosed,
+  hasInactivityWarning,
   isPlainMetadata,
   nextInactivityAction,
   npsSubmitError,
@@ -215,6 +214,7 @@ export async function closeInactiveConversations(
             metadata: {
               ...metadata,
               inactivityWarningFor: locked.lastActivityAt.toISOString(),
+              autoCloseFeedback: true,
             },
           })
           .where(eq(conversationsTable.id, locked.id));
@@ -257,14 +257,11 @@ export function conversationRatingSubmitError(
   } | null,
 ): string | null {
   if (!conversation) return null;
-  if (conversation.status !== "closed") {
-    return "A conversation can only be rated after it closes.";
+  if (conversation.status === "escalated") {
+    return "An escalated conversation cannot be rated.";
   }
-  if (
-    !isAutoClosed(conversation.metadata) ||
-    !hasAutoCloseFeedback(conversation.metadata)
-  ) {
-    return "Conversation ratings are only available after an automatic close.";
+  if (!hasInactivityWarning(conversation.metadata)) {
+    return "Conversation ratings are only available after an inactivity warning.";
   }
   if (conversation.conversationRating != null) {
     return "A rating has already been submitted.";

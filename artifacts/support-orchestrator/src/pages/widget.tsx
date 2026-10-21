@@ -45,7 +45,9 @@ import { NpsSurvey } from "@/components/chat/nps-survey";
 import { ConversationRatingPrompt } from "@/components/chat/conversation-rating";
 import {
   hasAutoCloseConversationRating,
+  hasInactivityWarning,
   isAutoClosedConversation,
+  latestInactivityWarningMessageId,
 } from "@/lib/conversation-settings";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
 import { agentLanguageCopy, normalizeAgentLanguage } from "@/lib/agent-language";
@@ -242,9 +244,11 @@ export default function Widget() {
     isAutoClosedConversation(convo.metadata) &&
     !hasAutoCloseConversationRating(convo.metadata) &&
     (convo.npsScore == null || npsSent);
+  const ratingWarningMessageId = latestInactivityWarningMessageId(messages);
   const showConversationRating =
-    convo?.status === "closed" &&
-    hasAutoCloseConversationRating(convo.metadata);
+    ratingWarningMessageId !== null &&
+    hasInactivityWarning(convo?.metadata) &&
+    convo?.status !== "escalated";
 
   const sendNps = (score: number) => {
     if (!convoId || submitNps.isPending || npsSent) return;
@@ -403,6 +407,18 @@ export default function Widget() {
                           )}
                         </div>
                       )}
+                      {showConversationRating &&
+                        msg.id === ratingWarningMessageId && (
+                          <div className="mt-3 border-t border-black/10 pt-2">
+                            <ConversationRatingPrompt
+                              language={language}
+                              rating={convo?.conversationRating ?? null}
+                              submitted={conversationRatingSent}
+                              disabled={submitConversationRating.isPending}
+                              onSubmit={sendConversationRating}
+                            />
+                          </div>
+                        )}
                     </div>
                   </div>
                 );
@@ -426,18 +442,6 @@ export default function Widget() {
                 submitted={npsSent || convo?.npsScore != null}
                 onSubmit={sendNps}
                 language={language}
-              />
-            </div>
-          )}
-
-          {showConversationRating && (
-            <div className="border-t border-border bg-background px-3 py-2">
-              <ConversationRatingPrompt
-                language={language}
-                rating={convo?.conversationRating ?? null}
-                submitted={conversationRatingSent}
-                disabled={submitConversationRating.isPending}
-                onSubmit={sendConversationRating}
               />
             </div>
           )}

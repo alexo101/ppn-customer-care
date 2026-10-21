@@ -31,7 +31,10 @@ import {
   DEFAULT_CTA_COLOR,
 } from "@/lib/appearance-theme";
 import { latestEscalationOffer } from "@/lib/conversation-actions";
-import { hasAutoCloseConversationRating } from "@/lib/conversation-settings";
+import {
+  hasInactivityWarning,
+  latestInactivityWarningMessageId,
+} from "@/lib/conversation-settings";
 import { ConversationRatingPrompt } from "@/components/chat/conversation-rating";
 import {
   agentLanguageCopy,
@@ -201,9 +204,11 @@ export function SupportChatPanel({
         !pendingUserMessage.baselineIds.has(msg.id) &&
         msg.content.trim() === pendingUserMessage.content.trim(),
     );
+  const ratingWarningMessageId = latestInactivityWarningMessageId(messages);
   const showConversationRating =
-    convo?.status === "closed" &&
-    hasAutoCloseConversationRating(convo.metadata);
+    ratingWarningMessageId !== null &&
+    hasInactivityWarning(convo?.metadata) &&
+    convo?.status !== "escalated";
 
   useEffect(() => {
     setConversationRatingSent(false);
@@ -596,6 +601,18 @@ export function SupportChatPanel({
                           )}
                         </div>
                       )}
+                      {showConversationRating &&
+                        msg.id === ratingWarningMessageId && (
+                          <div className="mt-3 border-t border-black/10 pt-2">
+                            <ConversationRatingPrompt
+                              language={language}
+                              rating={convo?.conversationRating ?? null}
+                              submitted={conversationRatingSent}
+                              disabled={submitConversationRating.isPending}
+                              onSubmit={sendConversationRating}
+                            />
+                          </div>
+                        )}
                     </div>
                   </div>
                 );
@@ -644,17 +661,6 @@ export function SupportChatPanel({
                 </div>
               )}
 
-              {showConversationRating && (
-                <div className="rounded-xl border border-black/5 bg-white px-4 py-3 shadow-sm">
-                  <ConversationRatingPrompt
-                    language={language}
-                    rating={convo?.conversationRating ?? null}
-                    submitted={conversationRatingSent}
-                    disabled={submitConversationRating.isPending}
-                    onSubmit={sendConversationRating}
-                  />
-                </div>
-              )}
             </>
           )}
         </div>

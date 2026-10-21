@@ -45,16 +45,23 @@ export function withAutoClosed(
   const next = { ...metadata };
   delete next.awaitingAutoCloseConfirmation;
   delete next.autoClosePromptedAt;
-  delete next.inactivityWarningFor;
   return {
     ...next,
     autoClosed: true,
-    autoCloseFeedback: true,
+    ...(hasInactivityWarning(next) ? { autoCloseFeedback: true } : {}),
   };
 }
 
 export function hasAutoCloseFeedback(metadata: unknown): boolean {
   return isPlainMetadata(metadata) && metadata.autoCloseFeedback === true;
+}
+
+export function hasInactivityWarning(metadata: unknown): boolean {
+  return (
+    isPlainMetadata(metadata) &&
+    typeof metadata.inactivityWarningFor === "string" &&
+    metadata.inactivityWarningFor.length > 0
+  );
 }
 
 export function npsSubmitError(
